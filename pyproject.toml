@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tell-language"
+version = "0.2.0"
+description = "Tell, a sentence-first programming language with Python and native runtimes"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Tell Language contributors" }]
+
+[project.scripts]
+tell = "tell.__main__:main"
+
+[tool.setuptools]
+packages = ["tell"]

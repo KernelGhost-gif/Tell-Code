@@ -1,0 +1,11 @@
+Note: Functions can call themselves, which is called recursion.
+
+To factorial with number:
+    If number is at most 1:
+        Give back 1.
+    End if.
+    Give back number times factorial(number minus 1).
+End function.
+
+Let answer be the result of factorial with 6.
+Say "6 factorial is {answer}.".

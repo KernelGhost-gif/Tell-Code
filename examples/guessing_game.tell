@@ -1,0 +1,18 @@
+Note: A tiny number guessing game. The answer is fixed to keep the example predictable.
+
+Let secret be 7.
+Let guess be 0.
+
+While guess is not equal to secret:
+    Ask "Guess a number from 1 to 10: " and save the answer as raw_guess.
+    Set guess to number(raw_guess).
+    If guess is less than secret:
+        Say "Too low. Try again.".
+    Otherwise:
+        If guess is greater than secret:
+            Say "Too high. Try again.".
+        End if.
+    End if.
+End while.
+
+Say "You got it!".

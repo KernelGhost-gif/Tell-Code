@@ -1,0 +1,35 @@
+Note: A small tour of Tell's core features.
+
+Let name be "Ada".
+Let score be 7.
+Let numbers be [2, 4, 6, 8].
+
+If score is greater than 5:
+    Say "Welcome, {name}. Your score is {score}.".
+Otherwise:
+    Say "Keep practising, {name}.".
+End if.
+
+Let size be the length of numbers.
+Say "The list has {size} items.".
+
+Add 10 to numbers.
+Say numbers.
+
+For each number in numbers:
+    Say number times 2.
+End loop.
+
+Repeat 3 times:
+    Say "Loop number {the current repetition number}.".
+End repeat.
+
+To multiply(first, second):
+    Give back first times second.
+End function.
+
+Let answer be the result of multiply with 6 and 7.
+Say "Six times seven is {answer}.".
+
+Use the math library as maths.
+Say maths.sqrt(81).

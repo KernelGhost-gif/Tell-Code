@@ -1,0 +1,4 @@
+Note: Your first Tell program.
+
+Let name be "world".
+Say "Hello, {name}!".
