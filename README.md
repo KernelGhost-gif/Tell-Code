@@ -32,7 +32,7 @@ You are an adult.
 
 ## Run Tell without Python
 
-Download the executable for your operating system from the `dist/` folder or the GitHub Actions build artifact.
+Download the executable for your operating system from the `releases/` folder or the GitHub Actions build artifact.
 
 | File | Platform |
 |---|---|
@@ -243,7 +243,7 @@ Install Go 1.22 or newer and run:
 ./scripts/build-all.sh
 ```
 
-The script uses `CGO_ENABLED=0`, so the outputs do not depend on a C runtime or external Go installation. It creates the six executables in `dist/` and writes a `SHA256SUMS` file.
+The script uses `CGO_ENABLED=0`, so the outputs do not depend on a C runtime or external Go installation. It creates the six executables in `releases/` and writes a `SHA256SUMS` file.
 
 ### Run the tests
 
@@ -266,7 +266,7 @@ Tell-Code/
 ├── scripts/                # Build and test helpers
 ├── tell/                   # Python interpreter
 ├── tests/                  # Python interpreter tests
-├── dist/                   # Prebuilt native executables
+├── releases/                   # Prebuilt native executables
 ├── tell.py                 # Python convenience launcher
 └── pyproject.toml           # Python package metadata
 ```

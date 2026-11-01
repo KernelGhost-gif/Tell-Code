@@ -4,7 +4,7 @@ __pycache__/
 .venv/
 venv/
 build/
-dist/*.tmp
+releases/*.tmp
 *.tell-cache
 .DS_Store
 *.test
