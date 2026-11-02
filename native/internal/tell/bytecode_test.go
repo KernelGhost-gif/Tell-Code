@@ -122,6 +122,19 @@ End loop.`
 	}
 }
 
+func TestBytecodeCompilesTellMethodCallsFromExpressionAST(t *testing.T) {
+	source := `Create a class called Greeter:
+    To greet with name:
+        Say "Hello, {name}!".
+    End function.
+End class.
+Let greeter be a new Greeter.
+Tell greeter to greet with "Ada".`
+	if got, want := runCompiled(t, source), "Hello, Ada!\n"; got != want {
+		t.Fatalf("compiled Tell-method output = %q, want %q", got, want)
+	}
+}
+
 func TestBytecodeCheckThatAssertion(t *testing.T) {
 	if got, want := runCompiled(t, "Check that 2 plus 2 is equal to 4.\nSay \"passed\"."), "passed\n"; got != want {
 		t.Fatalf("asserting program output = %q, want %q", got, want)

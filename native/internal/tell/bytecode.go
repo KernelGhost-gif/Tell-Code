@@ -201,7 +201,13 @@ func (c *bytecodeCompiler) statements(nodes []node) error {
 			c.code[instruction].Name = instructionName
 			c.code[instruction].Count = classIndex
 		case "statement":
-			if err := c.statement(statement.text); err != nil {
+			var err error
+			if statement.simple != nil {
+				err = c.compileSimpleStatement(statement.simple)
+			} else {
+				err = c.statement(statement.text)
+			}
+			if err != nil {
 				return fail("cannot compile line %d: %v", statement.line, err)
 			}
 		case "if":
@@ -342,6 +348,69 @@ func (c *bytecodeCompiler) popLoop() bytecodeLoop {
 	loop := c.loops[index]
 	c.loops = c.loops[:index]
 	return loop
+}
+
+func (c *bytecodeCompiler) compileSimpleStatement(statement *simpleStatement) error {
+	if statement.hasExpression {
+		if err := c.compileExpression(foldBytecodeExpression(statement.expression)); err != nil {
+			return err
+		}
+	}
+	switch statement.kind {
+	case "let":
+		if len(statement.names) > 1 {
+			instruction := c.emit("MULTI_DECLARE")
+			c.code[instruction].ArgNames = append([]string(nil), statement.names...)
+			c.code[instruction].Constant = statement.constant
+			return nil
+		}
+		instruction := c.emit("DECLARE")
+		c.code[instruction].Name = statement.names[0]
+		c.code[instruction].Type = statement.annotation
+		c.code[instruction].Constant = statement.constant
+	case "set":
+		if len(statement.names) > 1 {
+			instruction := c.emit("MULTI_ASSIGN")
+			c.code[instruction].ArgNames = append([]string(nil), statement.names...)
+			return nil
+		}
+		instruction := c.emit("ASSIGN")
+		c.code[instruction].Name = statement.names[0]
+	case "print":
+		c.emit("PRINT")
+	case "expression":
+		c.emit("POP")
+	case "check":
+		instruction := c.emit("ASSERT")
+		c.code[instruction].Name = statement.source
+	case "return":
+		if !c.inFunction {
+			return fail("give back can only be used inside a function")
+		}
+		if !statement.hasExpression {
+			c.emit("PUSH")
+		}
+		c.emit("RETURN")
+	case "raise":
+		c.emit("RAISE")
+	case "break", "continue":
+		if len(c.loops) == 0 {
+			return fail("loop %s used outside a loop", statement.kind)
+		}
+		loop := &c.loops[len(c.loops)-1]
+		for depth := loop.tryDepth; depth < c.tryDepth; depth++ {
+			c.emit("TRY_POP")
+		}
+		jump := c.emit("JUMP")
+		if statement.kind == "break" {
+			loop.breakJumps = append(loop.breakJumps, jump)
+		} else {
+			loop.continueJumps = append(loop.continueJumps, jump)
+		}
+	default:
+		return fail("unknown parsed statement %q", statement.kind)
+	}
+	return nil
 }
 
 func (c *bytecodeCompiler) statement(source string) error {
@@ -629,19 +698,7 @@ func (c *bytecodeCompiler) compileModule(importPath string) (string, error) {
 }
 
 func parseBytecodeExpression(source string) (expression, error) {
-	tokens, err := lex(source)
-	if err != nil {
-		return nil, err
-	}
-	parser := &expressionParser{tokens: tokens}
-	result, err := parser.parse()
-	if err != nil {
-		return nil, err
-	}
-	if parser.peek() != "eof" {
-		return nil, fail("unexpected %q in expression", parser.tokens[parser.pos].text)
-	}
-	return result, nil
+	return parseTellExpressionAt(source, 1, 1)
 }
 
 func (c *bytecodeCompiler) expression(source string) error {

@@ -46,6 +46,16 @@ type node struct {
 	condition, name, base    string
 	params                   []string
 	body, otherwise, handler []node
+	simple                   *simpleStatement
+}
+
+type simpleStatement struct {
+	kind, source  string
+	names         []string
+	annotation    string
+	constant      bool
+	expression    expression
+	hasExpression bool
 }
 type parser struct {
 	lines    []string
@@ -229,6 +239,137 @@ func parseLoopNames(source string) ([]string, bool) {
 		seen[names[index]] = true
 	}
 	return names, true
+}
+
+func parseSimpleStatement(source string, line, column int) *simpleStatement {
+	parseExpression := func(expressionText string) (expression, bool) {
+		expressionText = strings.TrimSpace(expressionText)
+		if expressionText == "" {
+			return nil, false
+		}
+		offset := strings.LastIndex(source, expressionText)
+		if offset < 0 {
+			offset = 0
+		}
+		parsed, err := parseTellExpressionAt(expressionText, line, column+utf8.RuneCountInString(source[:offset]))
+		return parsed, err == nil
+	}
+	if rest, ok := prefixFold(source, "let "); ok {
+		constant := false
+		if tail, isConstant := prefixFold(rest, "constant "); isConstant {
+			rest, constant = tail, true
+		}
+		binding, expressionText, separated := splitFoldOnce(rest, " be ")
+		if separated {
+			name, annotation, annotated := splitFoldOnce(binding, " as ")
+			if !annotated {
+				name = binding
+			}
+			if strings.Contains(binding, ",") && !annotated {
+				if names, valid := parseLoopNames(binding); valid && len(names) > 1 {
+					if parsed, validExpression := parseExpression(expressionText); validExpression {
+						return &simpleStatement{kind: "let", names: names, constant: constant, expression: parsed, hasExpression: true}
+					}
+				}
+			} else if identifier(name) {
+				if parsed, validExpression := parseExpression(expressionText); validExpression {
+					return &simpleStatement{kind: "let", names: []string{name}, annotation: annotation, constant: constant, expression: parsed, hasExpression: true}
+				}
+			}
+		}
+	}
+	if rest, ok := prefixFold(source, "set "); ok {
+		name, expressionText, separated := splitFoldOnce(rest, " to ")
+		if separated {
+			if strings.Contains(name, ",") {
+				if names, valid := parseLoopNames(name); valid && len(names) > 1 {
+					if parsed, validExpression := parseExpression(expressionText); validExpression {
+						return &simpleStatement{kind: "set", names: names, expression: parsed, hasExpression: true}
+					}
+				}
+			} else if identifier(name) {
+				if parsed, validExpression := parseExpression(expressionText); validExpression {
+					return &simpleStatement{kind: "set", names: []string{name}, expression: parsed, hasExpression: true}
+				}
+			}
+		}
+	}
+	makeExpression := func(kind, prefix string) *simpleStatement {
+		expressionText, ok := prefixFold(source, prefix)
+		if !ok || strings.TrimSpace(expressionText) == "" {
+			return nil
+		}
+		expressionText = strings.TrimSpace(expressionText)
+		offset := strings.LastIndex(source, expressionText)
+		if offset < 0 {
+			offset = 0
+		}
+		parsed, err := parseTellExpressionAt(expressionText, line, column+utf8.RuneCountInString(source[:offset]))
+		if err != nil {
+			return nil
+		}
+		return &simpleStatement{kind: kind, source: expressionText, expression: parsed, hasExpression: true}
+	}
+	for _, prefix := range []string{"say ", "show ", "print "} {
+		if statement := makeExpression("print", prefix); statement != nil {
+			return statement
+		}
+	}
+	if statement := makeExpression("check", "check that "); statement != nil {
+		return statement
+	}
+	for _, prefix := range []string{"give back ", "return "} {
+		if statement := makeExpression("return", prefix); statement != nil {
+			return statement
+		}
+	}
+	if strings.EqualFold(source, "give back") || strings.EqualFold(source, "return") {
+		return &simpleStatement{kind: "return"}
+	}
+	if statement := makeExpression("raise", "raise an error saying "); statement != nil {
+		return statement
+	}
+	if rest, ok := prefixFold(source, "tell "); ok {
+		target, methodText, separated := splitFoldOnce(rest, " to ")
+		if separated && identifier(target) {
+			method, tail := firstWord(methodText)
+			if identifier(method) {
+				arguments := []callArgument{}
+				valid := true
+				if tail != "" {
+					argumentText, hasWith := prefixFold(tail, "with ")
+					if !hasWith {
+						valid = false
+					} else {
+						for _, argument := range splitAnd(argumentText) {
+							parsed, ok := parseExpression(argument)
+							if !ok {
+								valid = false
+								break
+							}
+							arguments = append(arguments, callArgument{value: parsed})
+						}
+					}
+				}
+				if valid {
+					callee := memberExpression{value: nameExpression{name: target}, member: method}
+					return &simpleStatement{kind: "expression", source: source, expression: callExpression{callee: callee, args: arguments}, hasExpression: true}
+				}
+			}
+		}
+	}
+	if strings.EqualFold(source, "stop this loop") || strings.EqualFold(source, "break out of this loop") {
+		return &simpleStatement{kind: "break"}
+	}
+	if strings.EqualFold(source, "skip to the next repetition") || strings.EqualFold(source, "continue to the next repetition") {
+		return &simpleStatement{kind: "continue"}
+	}
+	if source != "" {
+		if parsed, err := parseTellExpressionAt(source, line, column); err == nil {
+			return &simpleStatement{kind: "expression", source: source, expression: parsed, hasExpression: true}
+		}
+	}
+	return nil
 }
 
 func bindLoopValues(target *env, names []string, value any) error {
@@ -506,7 +647,9 @@ func (p *parser) block(stops map[string]bool) ([]node, string, error) {
 			out = append(out, node{kind: "try", body: body, handler: handler, line: lineNo, column: p.columnAt(lineNo)})
 			continue
 		}
-		out = append(out, node{kind: "statement", text: stripSentenceEnd(line), line: lineNo, column: p.columnAt(lineNo)})
+		text := stripSentenceEnd(line)
+		column := p.columnAt(lineNo)
+		out = append(out, node{kind: "statement", text: text, simple: parseSimpleStatement(text, lineNo, column), line: lineNo, column: column})
 	}
 	return out, "", nil
 }
@@ -1455,8 +1598,71 @@ func (r *runtime) execNode(n node, e *env) error {
 		}
 		e.set("error_message", err.Error())
 		return r.execute(n.handler, e)
+	case "statement":
+		if n.simple != nil {
+			return r.executeSimpleStatement(n.simple, e)
+		}
+		return r.statement(n.text, e)
 	}
 	return r.statement(n.text, e)
+}
+
+func (r *runtime) executeSimpleStatement(statement *simpleStatement, e *env) error {
+	var value any
+	var err error
+	if statement.hasExpression {
+		value, err = r.evalExpression(statement.expression, e)
+		if err != nil {
+			return err
+		}
+	}
+	switch statement.kind {
+	case "let":
+		if len(statement.names) > 1 {
+			values, ok := value.([]any)
+			if !ok {
+				return fail("multiple assignment expects a list")
+			}
+			return r.assignMany(e, statement.names, values, statement.constant)
+		}
+		if statement.constant || statement.annotation != "" {
+			return r.declare(e, statement.names[0], value, statement.annotation, statement.constant)
+		}
+		return r.assign(e, statement.names[0], value)
+	case "set":
+		if len(statement.names) > 1 {
+			values, ok := value.([]any)
+			if !ok {
+				return fail("multiple assignment expects a list")
+			}
+			return r.assignMany(e, statement.names, values, false)
+		}
+		return r.assign(e, statement.names[0], value)
+	case "print":
+		_, err = fmt.Fprintln(r.output, display(value))
+		return err
+	case "expression":
+		if r.echoResults {
+			e.set("_", value)
+			_, err = fmt.Fprintln(r.output, display(value))
+		}
+		return err
+	case "check":
+		if !truthy(value) {
+			return fail("check failed: %s", statement.source)
+		}
+	case "return":
+		return signal{kind: "return", value: value}
+	case "raise":
+		return fail("%s", display(value))
+	case "break":
+		return signal{kind: "break"}
+	case "continue":
+		return signal{kind: "continue"}
+	default:
+		return fail("unknown parsed statement %q", statement.kind)
+	}
+	return nil
 }
 
 var (
@@ -2749,18 +2955,9 @@ func sliceIndices(length int, start, end *any, step int) ([]int, error) {
 }
 
 func (r *runtime) eval(s string, e *env) (any, error) {
-	tokens, err := lex(s)
+	expr, err := parseTellExpressionAt(s, 1, 1)
 	if err != nil {
 		return nil, err
-	}
-	p := &expressionParser{tokens: tokens}
-	expr, err := p.parse()
-	if err != nil {
-		return nil, err
-	}
-	if p.peek() != "eof" {
-		unexpected := p.tokens[p.pos]
-		return nil, fail("unexpected %q at line %d, column %d in expression", unexpected.text, unexpected.line, unexpected.column)
 	}
 	return r.evalExpression(expr, e)
 }

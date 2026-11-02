@@ -59,6 +59,30 @@ type expressionParser struct {
 	pos    int
 }
 
+func parseTellExpressionAt(source string, sourceLine, sourceColumn int) (expression, error) {
+	tokens, err := lex(source)
+	if err != nil {
+		return nil, err
+	}
+	for index := range tokens {
+		originalLine := tokens[index].line
+		tokens[index].line += sourceLine - 1
+		if originalLine == 1 {
+			tokens[index].column += sourceColumn - 1
+		}
+	}
+	parser := &expressionParser{tokens: tokens}
+	result, err := parser.parse()
+	if err != nil {
+		return nil, err
+	}
+	if parser.peek() != "eof" {
+		unexpected := parser.tokens[parser.pos]
+		return nil, fail("unexpected %q at line %d, column %d in expression", unexpected.text, unexpected.line, unexpected.column)
+	}
+	return result, nil
+}
+
 func (p *expressionParser) syntaxError(message string) error {
 	current := p.tokens[p.pos]
 	return fail("%s at line %d, column %d", message, current.line, current.column)

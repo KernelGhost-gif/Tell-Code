@@ -221,6 +221,11 @@
     "error": "for each expects 2 values, got 1"
   },
   {
+    "name": "Tell method calls compile to expression ASTs",
+    "source": "Create a class called Greeter:\n    To greet with name:\n        Say \"Hello, {name}!\".\n    End function.\nEnd class.\nLet greeter be a new Greeter.\nTell greeter to greet with \"Ada\".",
+    "output": "Hello, Ada!\n"
+  },
+  {
     "name": "constructor supports default arguments",
     "source": "Create a class called Counter:\n    When creating a Counter with initial defaulting to 5:\n        Remember initial as this.value.\n    End constructor.\nEnd class.\nLet counter be a new Counter.\nSay counter.value.",
     "output": "5\n"

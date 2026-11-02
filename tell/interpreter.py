@@ -300,6 +300,57 @@ def _split_once_casefold(text: str, separator: str) -> tuple[str, str] | None:
     return None
 
 
+def _split_top_level_text(text: str, separator: str) -> list[str]:
+    parts: list[str] = []
+    quote: str | None = None
+    escaped = False
+    depth = 0
+    start = 0
+    index = 0
+    while index < len(text):
+        char = text[index]
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == quote:
+                quote = None
+        elif char in "'\"":
+            quote = char
+        elif char in "([{":
+            depth += 1
+        elif char in ")]}":
+            depth -= 1
+        elif depth == 0 and text[index:index + len(separator)].casefold() == separator.casefold():
+            parts.append(text[start:index].strip())
+            index += len(separator) - 1
+            start = index + 1
+        index += 1
+    parts.append(text[start:].strip())
+    return parts
+
+
+def _translate_expression_text(expression: str) -> str:
+    text = expression.strip()
+    new_object = re.fullmatch(r"(?:a\s+)?new\s+((?:[^\W\d]|_)\w*)(?:\s+with\s+(.+))?", text, re.I)
+    if new_object:
+        arguments = _split_top_level_text(new_object.group(2), " and ") if new_object.group(2) else []
+        text = f"{new_object.group(1)}({', '.join(arguments)})"
+    result_match = re.fullmatch(r"the result of\s+((?:[^\W\d]|_)\w*)\s+with\s+(.+)", text, re.I)
+    if result_match:
+        args = _split_top_level_text(result_match.group(2), " and ")
+        text = f"{result_match.group(1)}({', '.join(args)})"
+    for pattern, replacement in (
+        (r"^the length of\s+(.+)$", r"len(\1)"),
+        (r"^the square root of\s+(.+)$", r"sqrt(\1)"),
+        (r"^the absolute value of\s+(.+)$", r"abs(\1)"),
+        (r"^the type of\s+(.+)$", r"type_of(\1)"),
+    ):
+        text = re.sub(pattern, replacement, text, flags=re.I)
+    return text
+
+
 def _first_identifier(text: str) -> tuple[str, str]:
     text = text.strip()
     if not text or not (text[0].isalpha() or text[0] == "_"):
@@ -399,6 +450,109 @@ class Parser:
             return 1
         line = self.lines[line_no - 1]
         return len(line) - len(line.lstrip(" \t")) + 1
+
+    @staticmethod
+    def _parse_simple_statement(text: str) -> dict[str, Any] | None:
+        def parsed_expression(expression: str) -> TellExpr | None:
+            if not expression:
+                return None
+            try:
+                return parse_expression(_translate_expression_text(expression))
+            except ExpressionSyntaxError:
+                return None
+
+        rest = _take_prefix(text, "let ")
+        if rest is not None:
+            constant = False
+            constant_rest = _take_prefix(rest, "constant ")
+            if constant_rest is not None:
+                rest, constant = constant_rest, True
+            parts = _split_once_casefold(rest, " be ")
+            if parts:
+                binding = _split_once_casefold(parts[0], " as ")
+                name, annotation = binding if binding else (parts[0], None)
+                if "," in parts[0] and binding is None:
+                    names = [target.strip() for target in parts[0].split(",")]
+                    valid = len(names) > 1 and all(
+                        re.fullmatch(r"(?:[^\W\d]|_)\w*", target) for target in names
+                    ) and len(set(names)) == len(names)
+                    expression = parsed_expression(parts[1])
+                    if valid and expression is not None:
+                        return {"kind": "let", "names": names, "constant": constant, "expression": expression}
+                elif re.fullmatch(r"(?:[^\W\d]|_)\w*", name):
+                    expression = parsed_expression(parts[1])
+                    if expression is not None:
+                        return {"kind": "let", "names": [name], "annotation": annotation, "constant": constant, "expression": expression}
+
+        rest = _take_prefix(text, "set ")
+        parts = _split_once_casefold(rest, " to ") if rest is not None else None
+        if parts:
+            if "," in parts[0]:
+                names = [target.strip() for target in parts[0].split(",")]
+                valid = len(names) > 1 and all(
+                    re.fullmatch(r"(?:[^\W\d]|_)\w*", target) for target in names
+                ) and len(set(names)) == len(names)
+            else:
+                names = [parts[0]]
+                valid = bool(re.fullmatch(r"(?:[^\W\d]|_)\w*", parts[0]))
+            expression = parsed_expression(parts[1])
+            if valid and expression is not None:
+                return {"kind": "set", "names": names, "expression": expression}
+
+        rest = _take_prefix(text, "tell ")
+        parts = _split_once_casefold(rest, " to ") if rest is not None else None
+        if parts and re.fullmatch(r"(?:[^\W\d]|_)\w*", parts[0]):
+            method, tail = _first_identifier(parts[1])
+            if method:
+                arguments: list[TellExpr] = []
+                if tail:
+                    args_text = _take_prefix(tail, "with ")
+                    if args_text is None:
+                        method = ""
+                    else:
+                        try:
+                            arguments = [parse_expression(_translate_expression_text(arg)) for arg in _split_top_level_text(args_text, " and ")]
+                        except ExpressionSyntaxError:
+                            method = ""
+                if method:
+                    callee = TellExpr("member", method, (TellExpr("name", parts[0]),))
+                    return {
+                        "kind": "expression",
+                        "source": text,
+                        "expression": TellExpr("call", children=(callee, *arguments), names=(None,) * len(arguments)),
+                    }
+
+        for prefixes, kind in (
+            (("say ", "show ", "print "), "print"),
+            (("check that ",), "check"),
+            (("give back ", "return "), "return"),
+            (("raise an error saying ",), "raise"),
+        ):
+            for prefix in prefixes:
+                expression = _take_prefix(text, prefix)
+                if expression is None or not expression:
+                    continue
+                try:
+                    tree = parse_expression(expression)
+                except ExpressionSyntaxError:
+                    continue
+                return {"kind": kind, "source": expression, "expression": tree}
+        if any(_take_prefix(text, prefix) is not None for prefix in ("say ", "show ", "print ", "check that ", "give back ", "return ", "raise an error saying ")):
+            return None
+        if text.casefold() in {"give back", "return"}:
+            return {"kind": "return", "source": "", "expression": None}
+        if text.casefold() in {"stop this loop", "break out of this loop"}:
+            return {"kind": "break", "source": "", "expression": None}
+        if text.casefold() in {"skip to the next repetition", "continue to the next repetition"}:
+            return {"kind": "continue", "source": "", "expression": None}
+        if text:
+            try:
+                expression = parse_expression(_translate_expression_text(text))
+            except ExpressionSyntaxError:
+                pass
+            else:
+                return {"kind": "expression", "source": text, "expression": expression}
+        return None
 
     @staticmethod
     def clean(line: str) -> str:
@@ -572,7 +726,9 @@ class Parser:
                 nodes.append(Node("try", {"body": body, "handler": handler}, line_no, self._source_column(line_no)))
                 continue
 
-            nodes.append(Node("statement", {"text": self._remove_sentence_end(line)}, line_no, self._source_column(line_no)))
+            statement_text = self._remove_sentence_end(line)
+            simple = self._parse_simple_statement(statement_text)
+            nodes.append(Node("statement", {"text": statement_text, "simple": simple}, line_no, self._source_column(line_no)))
 
         return nodes, None
 
@@ -754,59 +910,10 @@ class Interpreter:
 
     @staticmethod
     def _split_top_level(text: str, separator: str) -> list[str]:
-        parts: list[str] = []
-        quote: str | None = None
-        escaped = False
-        depth = 0
-        start = 0
-        i = 0
-        while i < len(text):
-            ch = text[i]
-            if quote:
-                if escaped:
-                    escaped = False
-                elif ch == "\\":
-                    escaped = True
-                elif ch == quote:
-                    quote = None
-            else:
-                if ch in "'\"":
-                    quote = ch
-                elif ch in "([{":
-                    depth += 1
-                elif ch in ")]}":
-                    depth -= 1
-                elif depth == 0 and text[i:i + len(separator)].lower() == separator.lower():
-                    parts.append(text[start:i].strip())
-                    i += len(separator) - 1
-                    start = i + 1
-            i += 1
-        parts.append(text[start:].strip())
-        return parts
+        return _split_top_level_text(text, separator)
 
     def translate_expression(self, expression: str) -> str:
-        text = expression.strip()
-        new_object = re.fullmatch(r"(?:a\s+)?new\s+((?:[^\W\d]|_)\w*)(?:\s+with\s+(.+))?", text, re.I)
-        if new_object:
-            arguments = self._split_top_level(new_object.group(2), " and ") if new_object.group(2) else []
-            text = f"{new_object.group(1)}({', '.join(arguments)})"
-        # Natural-language function result: "the result of add with 2 and 3".
-        result_match = re.fullmatch(r"the result of\s+((?:[^\W\d]|_)\w*)\s+with\s+(.+)", text, re.I)
-        if result_match:
-            args = self._split_top_level(result_match.group(2), " and ")
-            text = f"{result_match.group(1)}({', '.join(args)})"
-
-        # Common phrases that read naturally but have direct expression equivalents.
-        prefix_patterns = [
-            (r"^the length of\s+(.+)$", r"len(\1)"),
-            (r"^the square root of\s+(.+)$", r"sqrt(\1)"),
-            (r"^the absolute value of\s+(.+)$", r"abs(\1)"),
-            (r"^the type of\s+(.+)$", r"type_of(\1)"),
-        ]
-        for pattern, replacement in prefix_patterns:
-            text = re.sub(pattern, replacement, text, flags=re.I)
-
-        return text
+        return _translate_expression_text(expression)
 
     @staticmethod
     def _normalize_expression_words(text: str) -> str:
@@ -1241,6 +1348,43 @@ class Interpreter:
                 env.set("error_message", str(exc))
                 self.execute(data["handler"], env)
             return
+        simple = data.get("simple")
+        if simple is not None:
+            expression = simple["expression"]
+            value = self._eval_expression(expression, env) if expression is not None else None
+            if simple["kind"] == "let":
+                names = simple["names"]
+                if len(names) > 1:
+                    self.assign_many(env, names, value, simple["constant"])
+                elif simple["constant"] or simple.get("annotation") is not None:
+                    self.declare(env, names[0], value, simple.get("annotation"), simple["constant"])
+                else:
+                    self.assign(env, names[0], value)
+            elif simple["kind"] == "set":
+                if len(simple["names"]) > 1:
+                    self.assign_many(env, simple["names"], value)
+                else:
+                    self.assign(env, simple["names"][0], value)
+            elif simple["kind"] == "print":
+                self.output_fn(display(value))
+            elif simple["kind"] == "expression":
+                if self.echo_expressions:
+                    env.set("_", value)
+                    self.output_fn(display(value))
+            elif simple["kind"] == "check":
+                if not value:
+                    raise TellError(f"Check failed: {simple['source']}.")
+            elif simple["kind"] == "return":
+                raise ReturnSignal(value)
+            elif simple["kind"] == "raise":
+                raise TellError(str(value))
+            elif simple["kind"] == "break":
+                raise BreakSignal()
+            elif simple["kind"] == "continue":
+                raise ContinueSignal()
+            else:
+                raise TellError(f"Unknown parsed statement {simple['kind']!r}.")
+            return
         self.execute_statement(data["text"], env)
 
     def _matches_type(self, type_name: str, value: Any, env: Environment) -> bool:
@@ -1305,6 +1449,27 @@ class Interpreter:
         if annotation is not None:
             self._check_type(annotation, value, env, name)
         env.set(name, value)
+
+    def assign_many(self, env: Environment, names: list[str], values: Any, constant: bool = False) -> None:
+        if not isinstance(values, list):
+            raise TellError("Multiple assignment expects a list.")
+        if len(values) != len(names):
+            raise TellError(f"Multiple assignment expected {len(names)} values, got {len(values)}.")
+        for target, value in zip(names, values):
+            if constant:
+                if target in env.constants:
+                    raise TellError(f"Constant {target!r} cannot be redeclared.")
+            elif target in env.constants:
+                raise TellError(f"Constant {target!r} cannot be reassigned.")
+            annotation = env.types.get(target)
+            if annotation is not None:
+                self._check_type(annotation, value, env, target)
+        if constant:
+            for target, value in zip(names, values):
+                self.declare(env, target, value, None, True)
+        else:
+            for target, value in zip(names, values):
+                env.set(target, value)
 
     def execute_statement(self, statement: str, env: Environment) -> None:
         expression = _take_prefix(statement, "check that ")

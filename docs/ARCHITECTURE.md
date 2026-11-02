@@ -2,12 +2,12 @@
 
 ## Current implementation
 
-Both runtimes parse block headers with explicit prefix and delimiter routines, including nested otherwise-if chains. Ordinary statements still use line patterns and regular expressions.
+Both runtimes parse block headers with explicit prefix and delimiter routines, including nested otherwise-if chains. The parser now builds expression ASTs for common `Let`, `Set`, output, assertion, return, raise, loop-control, bare expression, and `Tell object to method` statements. Other statements still use the line-oriented compatibility recognizers.
 
 Tell has two independent runtimes:
 
-- `native/internal/tell` is a Go interpreter compiled into standalone binaries. It parses statements line by line, builds statement nodes for blocks, recognizes simple statements with regular expressions, and parses expressions into an immutable AST before evaluation. Its expression lexer recognizes human-language operators directly, supports Unicode expression identifiers and carries offsets plus Unicode-aware line/column coordinates. A few prefix and object-construction phrases remain syntax rewrites.
-- `tell/interpreter.py` parses line-oriented blocks into nodes, uses its own Tell lexer, Pratt parser, and expression nodes for the shared expression grammar, and keeps a restricted Python-AST fallback for legacy Python-compatible expressions. It does not use Python `eval`.
+- `native/internal/tell` is a Go interpreter compiled into standalone binaries. Its block parser retains source line/column information and represents migrated statements with a `simpleStatement` containing a parsed expression AST. The runtime evaluates that AST directly; the bytecode compiler also lowers it directly rather than reparsing the statement text. Remaining statement families still use compatibility recognizers. Its expression lexer recognizes human-language operators directly, supports Unicode expression identifiers, and records offsets and Unicode-aware line/column coordinates. A few prefix and object-construction phrases remain syntax rewrites.
+- `tell/interpreter.py` parses line-oriented blocks into nodes with typed dictionaries for migrated statements, and uses its own Tell lexer, Pratt parser, and expression nodes for the shared expression grammar. A restricted Python-AST fallback remains for legacy Python-compatible forms, without using Python `eval`.
 
 Both runtimes own separate environments, built-ins, class/instance implementations, module loaders, and standard-library adapters. Local modules execute in an environment parented by the runtime globals, export public top-level bindings, and are cached by resolved file path per interpreter. `conformance/core.json` is the shared executable corpus. Each runtime test runner executes those same programs and compares output against the declared expected output.
 
@@ -16,9 +16,9 @@ Both runtimes own separate environments, built-ins, class/instance implementatio
 ```text
 Tell source
   -> line/block parser
-  -> statement nodes and source line numbers
-  -> statement pattern dispatch
-  -> expression parsing/evaluation
+  -> block nodes and typed common-statement nodes
+  -> expression AST built during parsing for typed statements
+  -> AST evaluation (or compatibility statement dispatch for unmigrated forms)
   -> runtime environment and built-ins
 ```
 
@@ -36,10 +36,10 @@ The Python `Interpreter` retains its global environment between `run` calls. The
 
 ## Architectural priorities
 
-1. Replace phrase rewriting with explicit expression tokens and AST nodes in both runtimes, retaining source spans.
-2. Define language-level values and operations in the specification, then align numeric, collection, error, and library behavior through the conformance corpus.
+1. Continue migrating I/O, module, collection-mutation, object, and library statements from raw text recognizers into typed statement nodes; add full source spans and parser recovery.
+2. Replace expression phrase rewriting with explicit tokens in both runtimes while retaining the English operator grammar.
 3. Separate parser, AST, diagnostics, runtime, standard library, and CLI code into focused modules/packages.
-4. Build semantic analysis and a stable IR, then migrate the bytecode compiler from its current syntax-limited direct lowering.
-5. Add new features only with shared positive and negative conformance programs.
+4. Build shared semantic analysis and a stable IR, then expand bytecode lowering from the current syntax-limited subset.
+5. Align numeric, collection, error, and library behavior with cross-runtime conformance cases as each statement family moves to the AST.
 
 See [ENGINEERING_AUDIT.md](ENGINEERING_AUDIT.md) for measured gaps and current validation evidence.

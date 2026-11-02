@@ -53,6 +53,27 @@ func TestSharedConformanceCorpus(t *testing.T) {
 	}
 }
 
+func TestParserBuildsExpressionASTsForCommonStatements(t *testing.T) {
+	nodes, err := parse("Let answer be 1 plus 2.\nSet answer to answer plus 1.\nSay answer.", "ast.tell")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nodes) != 3 || nodes[0].simple == nil || nodes[0].simple.kind != "let" || nodes[0].simple.expression == nil {
+		t.Fatalf("expected a parsed let statement with an expression AST, got %#v", nodes)
+	}
+	if nodes[1].simple == nil || nodes[1].simple.kind != "set" || nodes[2].simple == nil || nodes[2].simple.kind != "print" {
+		t.Fatalf("common statements were not represented as typed nodes: %#v", nodes)
+	}
+	constructed, err := parse("Let box be a new Box.", "ast.tell")
+	if err != nil || constructed[0].simple == nil || constructed[0].simple.expression == nil {
+		t.Fatalf("natural object construction did not produce a parsed statement: %#v, %v", constructed, err)
+	}
+	told, err := parse("Tell box to open with \"wide\".", "ast.tell")
+	if err != nil || told[0].simple == nil || told[0].simple.kind != "expression" {
+		t.Fatalf("Tell method sentence did not produce an expression AST: %#v, %v", told, err)
+	}
+}
+
 func TestMultipleAssignmentValidatesBeforeMutating(t *testing.T) {
 	runtime := newRuntime("test.tell", nil, &bytes.Buffer{}, DefaultExecutionLimits())
 	runtime.global.set("first", float64(1))

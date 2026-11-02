@@ -11,6 +11,16 @@ from tell.interpreter import format_source
 
 
 class TellLanguageTests(unittest.TestCase):
+    def test_parser_builds_expression_asts_for_common_statements(self):
+        nodes = Parser('Let answer be 1 plus 2.\nSet answer to answer plus 1.\nSay answer.').parse()
+        self.assertEqual([node.data["simple"]["kind"] for node in nodes], ["let", "set", "print"])
+        self.assertEqual(nodes[0].data["simple"]["expression"].kind, "binary")
+        self.assertEqual(nodes[1].data["simple"]["names"], ["answer"])
+        constructed = Parser("Let box be a new Box.").parse()[0]
+        self.assertEqual(constructed.data["simple"]["expression"].kind, "call")
+        told = Parser('Tell box to open with "wide".').parse()[0]
+        self.assertEqual(told.data["simple"]["expression"].kind, "call")
+
     def run_tell(self, source, answers=None):
         output = []
         inputs = iter(answers or [])
