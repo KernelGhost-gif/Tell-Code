@@ -38,6 +38,20 @@ End If.`
 	}
 }
 
+func TestBytecodeCompilesMemberAssignmentFromAST(t *testing.T) {
+	source := `Create a class called Person:
+    When creating a Person with name:
+        Remember name as this.name.
+    End constructor.
+End class.
+Let person be a new Person with "before".
+Set person.name to "after".
+Say person.name.`
+	if got, want := runCompiled(t, source), "after\n"; got != want {
+		t.Fatalf("compiled member assignment output = %q, want %q", got, want)
+	}
+}
+
 func TestBytecodeCompilesCSVStandardLibrary(t *testing.T) {
 	source := `Use the csv library as tables.
 Let rows be tables.parse("name,score\nAda,42\n").

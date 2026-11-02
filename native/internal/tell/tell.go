@@ -55,6 +55,7 @@ type simpleStatement struct {
 	annotation    string
 	constant      bool
 	expression    expression
+	target        expression
 	hasExpression bool
 }
 type parser struct {
@@ -290,6 +291,12 @@ func parseSimpleStatement(source string, line, column int) *simpleStatement {
 			} else if identifier(name) {
 				if parsed, validExpression := parseExpression(expressionText); validExpression {
 					return &simpleStatement{kind: "set", names: []string{name}, expression: parsed, hasExpression: true}
+				}
+			} else if parsedTarget, validTarget := parseExpression(name); validTarget {
+				if _, isMember := parsedTarget.(memberExpression); isMember {
+					if parsedValue, validValue := parseExpression(expressionText); validValue {
+						return &simpleStatement{kind: "set_member", source: name, target: parsedTarget, expression: parsedValue, hasExpression: true}
+					}
 				}
 			}
 		}
@@ -1638,6 +1645,17 @@ func (r *runtime) executeSimpleStatement(statement *simpleStatement, e *env) err
 			return r.assignMany(e, statement.names, values, false)
 		}
 		return r.assign(e, statement.names[0], value)
+	case "set_member":
+		memberTarget := statement.target.(memberExpression)
+		target, targetErr := r.evalExpression(memberTarget.value, e)
+		if targetErr != nil {
+			return targetErr
+		}
+		instance, ok := target.(*userInstance)
+		if !ok {
+			return fail("property assignment requires a Tell instance")
+		}
+		instance.fields[memberTarget.member] = value
 	case "print":
 		_, err = fmt.Fprintln(r.output, display(value))
 		return err

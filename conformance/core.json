@@ -226,6 +226,11 @@
     "output": "Hello, Ada!\n"
   },
   {
+    "name": "instance property assignment uses parsed member target",
+    "source": "Create a class called Person:\n    When creating a Person with name:\n        Remember name as this.name.\n    End constructor.\nEnd class.\nLet person be a new Person with \"before\".\nSet person.name to \"after\".\nSay person.name.",
+    "output": "after\n"
+  },
+  {
     "name": "constructor supports default arguments",
     "source": "Create a class called Counter:\n    When creating a Counter with initial defaulting to 5:\n        Remember initial as this.value.\n    End constructor.\nEnd class.\nLet counter be a new Counter.\nSay counter.value.",
     "output": "5\n"

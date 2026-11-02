@@ -64,6 +64,10 @@ func TestParserBuildsExpressionASTsForCommonStatements(t *testing.T) {
 	if nodes[1].simple == nil || nodes[1].simple.kind != "set" || nodes[2].simple == nil || nodes[2].simple.kind != "print" {
 		t.Fatalf("common statements were not represented as typed nodes: %#v", nodes)
 	}
+	memberAssignment, err := parse("Set box.name to \"Ada\".", "ast.tell")
+	if err != nil || memberAssignment[0].simple == nil || memberAssignment[0].simple.kind != "set_member" || memberAssignment[0].simple.target == nil {
+		t.Fatalf("member assignment did not produce a target AST: %#v, %v", memberAssignment, err)
+	}
 	constructed, err := parse("Let box be a new Box.", "ast.tell")
 	if err != nil || constructed[0].simple == nil || constructed[0].simple.expression == nil {
 		t.Fatalf("natural object construction did not produce a parsed statement: %#v, %v", constructed, err)

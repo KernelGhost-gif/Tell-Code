@@ -498,6 +498,9 @@ class Parser:
             expression = parsed_expression(parts[1])
             if valid and expression is not None:
                 return {"kind": "set", "names": names, "expression": expression}
+            target = parsed_expression(parts[0])
+            if target is not None and target.kind == "member" and expression is not None:
+                return {"kind": "set_member", "source": parts[0], "target": target, "expression": expression}
 
         rest = _take_prefix(text, "tell ")
         parts = _split_once_casefold(rest, " to ") if rest is not None else None
@@ -1365,6 +1368,11 @@ class Interpreter:
                     self.assign_many(env, simple["names"], value)
                 else:
                     self.assign(env, simple["names"][0], value)
+            elif simple["kind"] == "set_member":
+                target = self._eval_expression(simple["target"].children[0], env)
+                if not isinstance(target, TellInstance):
+                    raise TellError("Property assignment requires a Tell instance.")
+                target.fields[simple["target"].value] = value
             elif simple["kind"] == "print":
                 self.output_fn(display(value))
             elif simple["kind"] == "expression":

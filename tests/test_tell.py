@@ -20,6 +20,9 @@ class TellLanguageTests(unittest.TestCase):
         self.assertEqual(constructed.data["simple"]["expression"].kind, "call")
         told = Parser('Tell box to open with "wide".').parse()[0]
         self.assertEqual(told.data["simple"]["expression"].kind, "call")
+        member_assignment = Parser('Set box.name to "Ada".').parse()[0]
+        self.assertEqual(member_assignment.data["simple"]["kind"], "set_member")
+        self.assertEqual(member_assignment.data["simple"]["target"].kind, "member")
 
     def run_tell(self, source, answers=None):
         output = []

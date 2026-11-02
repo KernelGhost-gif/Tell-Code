@@ -351,7 +351,7 @@ func (c *bytecodeCompiler) popLoop() bytecodeLoop {
 }
 
 func (c *bytecodeCompiler) compileSimpleStatement(statement *simpleStatement) error {
-	if statement.hasExpression {
+	if statement.hasExpression && statement.kind != "set_member" {
 		if err := c.compileExpression(foldBytecodeExpression(statement.expression)); err != nil {
 			return err
 		}
@@ -376,6 +376,16 @@ func (c *bytecodeCompiler) compileSimpleStatement(statement *simpleStatement) er
 		}
 		instruction := c.emit("ASSIGN")
 		c.code[instruction].Name = statement.names[0]
+	case "set_member":
+		target := statement.target.(memberExpression)
+		if err := c.compileExpression(target.value); err != nil {
+			return err
+		}
+		if err := c.compileExpression(foldBytecodeExpression(statement.expression)); err != nil {
+			return err
+		}
+		instruction := c.emit("SET_MEMBER")
+		c.code[instruction].Name = target.member
 	case "print":
 		c.emit("PRINT")
 	case "expression":
