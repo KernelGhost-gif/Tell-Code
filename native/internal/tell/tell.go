@@ -16,9 +16,22 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 const maxLoopIterations = 1_000_000
+const maxFunctionCallDepth = 64
+
+// ExecutionLimits bounds loops, range construction, and nested Tell calls.
+type ExecutionLimits struct {
+	MaxFunctionCallDepth int
+	MaxLoopIterations    int
+}
+
+func DefaultExecutionLimits() ExecutionLimits {
+	return ExecutionLimits{MaxFunctionCallDepth: maxFunctionCallDepth, MaxLoopIterations: maxLoopIterations}
+}
 
 type Error struct{ Message string }
 
@@ -27,8 +40,8 @@ func fail(format string, args ...any) error { return &Error{Message: fmt.Sprintf
 
 type node struct {
 	kind, text               string
-	line                     int
-	condition, name          string
+	line, column             int
+	condition, name, base    string
 	params                   []string
 	body, otherwise, handler []node
 }
@@ -66,6 +79,211 @@ func stripSentenceEnd(s string) string {
 	s = strings.TrimSpace(s)
 	return strings.TrimSpace(strings.TrimSuffix(s, "."))
 }
+
+func blockHeader(line string) (string, bool) {
+	line = strings.TrimSpace(line)
+	if !strings.HasSuffix(line, ":") {
+		return "", false
+	}
+	return strings.TrimSpace(line[:len(line)-1]), true
+}
+
+func prefixFold(text, prefix string) (string, bool) {
+	if len(text) < len(prefix) || !strings.EqualFold(text[:len(prefix)], prefix) {
+		return "", false
+	}
+	return strings.TrimSpace(text[len(prefix):]), true
+}
+
+func splitFoldOnce(text, delimiter string) (string, string, bool) {
+	quote := byte(0)
+	escaped := false
+	depth := 0
+	for i := 0; i+len(delimiter) <= len(text); i++ {
+		c := text[i]
+		if quote != 0 {
+			if escaped {
+				escaped = false
+			} else if c == '\\' {
+				escaped = true
+			} else if c == quote {
+				quote = 0
+			}
+			continue
+		}
+		if c == '\'' || c == '"' {
+			quote = c
+			continue
+		}
+		switch c {
+		case '(', '[', '{':
+			depth++
+		case ')', ']', '}':
+			if depth > 0 {
+				depth--
+			}
+		}
+		if depth == 0 && strings.EqualFold(text[i:i+len(delimiter)], delimiter) {
+			return strings.TrimSpace(text[:i]), strings.TrimSpace(text[i+len(delimiter):]), true
+		}
+	}
+	return "", "", false
+}
+
+func firstWord(text string) (string, string) {
+	text = strings.TrimSpace(text)
+	end := 0
+	for end < len(text) {
+		r, width := utf8.DecodeRuneInString(text[end:])
+		if !identifierRune(r) {
+			break
+		}
+		end += width
+	}
+	return text[:end], strings.TrimSpace(text[end:])
+}
+
+func parseClassHeader(header string) (name, base string, ok bool) {
+	rest, ok := prefixFold(header, "create a class called ")
+	if !ok {
+		return "", "", false
+	}
+	name, tail, hasBase := splitFoldOnce(rest, " based on ")
+	if !hasBase {
+		name = rest
+	} else {
+		base = tail
+	}
+	if !identifier(name) || (hasBase && !identifier(base)) {
+		return "", "", false
+	}
+	return name, base, true
+}
+
+func parseConstructorHeader(header string) (name string, params []string, ok bool) {
+	rest, ok := prefixFold(header, "when creating ")
+	if !ok {
+		return "", nil, false
+	}
+	articleRest := rest
+	rest, hasArticle := prefixFold(articleRest, "an ")
+	if !hasArticle {
+		rest, hasArticle = prefixFold(articleRest, "a ")
+	}
+	if !hasArticle {
+		return "", nil, false
+	}
+	name, tail := firstWord(rest)
+	if !identifier(name) {
+		return "", nil, false
+	}
+	if tail != "" {
+		tail, ok = prefixFold(tail, "with ")
+		if !ok {
+			return "", nil, false
+		}
+		params = splitAnd(tail)
+		for _, param := range params {
+			if !identifier(param) {
+				return "", nil, false
+			}
+		}
+	}
+	return name, params, true
+}
+
+func parseFunctionHeader(header string) (name string, params []string, ok bool) {
+	rest, ok := prefixFold(header, "to ")
+	if !ok {
+		rest, ok = prefixFold(header, "define a function called ")
+	}
+	if !ok {
+		return "", nil, false
+	}
+	name, tail := firstWord(rest)
+	if !identifier(name) {
+		return "", nil, false
+	}
+	if strings.HasPrefix(tail, "(") && strings.HasSuffix(tail, ")") {
+		inner := strings.TrimSpace(tail[1 : len(tail)-1])
+		if inner != "" {
+			params = splitTop(inner, ",")
+		}
+	} else if tail != "" {
+		tail, ok = prefixFold(tail, "with ")
+		if !ok {
+			return "", nil, false
+		}
+		params = splitAnd(tail)
+	}
+	for _, param := range params {
+		if !identifier(param) {
+			return "", nil, false
+		}
+	}
+	return name, params, true
+}
+
+func (p *parser) ifBlock(condition string, lineNo int) (node, error) {
+	body, stop, err := p.block(map[string]bool{
+		"otherwise:": true, "otherwise-if": true, "end if.": true,
+	})
+	if err != nil {
+		return node{}, err
+	}
+	result := node{kind: "if", condition: strings.TrimSpace(condition), body: body, line: lineNo, column: p.columnAt(lineNo)}
+	if stop == "end if." {
+		return result, nil
+	}
+	if stop == "otherwise:" {
+		other, otherStop, err := p.block(map[string]bool{"otherwise-if": true, "end if.": true})
+		if err != nil {
+			return node{}, err
+		}
+		if strings.HasPrefix(strings.ToLower(otherStop), "otherwise if ") {
+			nestedHeader, _ := blockHeader(otherStop)
+			nestedCondition, ok := prefixFold(nestedHeader, "otherwise if ")
+			if !ok {
+				return node{}, fail("invalid Otherwise if block on line %d", p.index)
+			}
+			nested, err := p.ifBlock(nestedCondition, p.index)
+			if err != nil {
+				return node{}, err
+			}
+			result.otherwise = []node{nested}
+			return result, nil
+		}
+		if otherStop != "end if." {
+			return node{}, fail("if block on line %d needs 'End if.'", lineNo)
+		}
+		result.otherwise = other
+		return result, nil
+	}
+	if strings.HasPrefix(strings.ToLower(stop), "otherwise if ") {
+		nestedHeader, _ := blockHeader(stop)
+		nestedCondition, ok := prefixFold(nestedHeader, "otherwise if ")
+		if !ok {
+			return node{}, fail("invalid Otherwise if block on line %d", p.index)
+		}
+		nested, err := p.ifBlock(nestedCondition, p.index)
+		if err != nil {
+			return node{}, err
+		}
+		result.otherwise = []node{nested}
+		return result, nil
+	}
+	return node{}, fail("if block on line %d needs 'End if.'", lineNo)
+}
+
+func (p *parser) columnAt(lineNo int) int {
+	if lineNo < 1 || lineNo > len(p.lines) {
+		return 1
+	}
+	line := p.lines[lineNo-1]
+	trimmed := strings.TrimLeft(line, " \t")
+	return utf8.RuneCountInString(line[:len(line)-len(trimmed)]) + 1
+}
+
 func (p *parser) block(stops map[string]bool) ([]node, string, error) {
 	var out []node
 	for p.index < len(p.lines) {
@@ -77,31 +295,52 @@ func (p *parser) block(stops map[string]bool) ([]node, string, error) {
 			continue
 		}
 		low := strings.ToLower(line)
+		if stops["otherwise-if"] && strings.HasPrefix(low, "otherwise if ") && strings.HasSuffix(line, ":") {
+			return out, line, nil
+		}
 		if stops[low] {
 			return out, low, nil
 		}
-		if low == "end if." || low == "end while." || low == "end repeat." || low == "end loop." || low == "end function." || low == "end try." || low == "otherwise:" || low == "if something goes wrong:" {
+		header, hasHeader := blockHeader(line)
+		if low == "end if." || low == "end while." || low == "end repeat." || low == "end loop." || low == "end function." || low == "end try." || low == "end constructor." || low == "end class." || low == "otherwise:" || low == "if something goes wrong:" {
 			return nil, "", fail("unexpected block ending %q on line %d", line, lineNo)
 		}
-		if m := reIf.FindStringSubmatch(line); m != nil {
-			body, stop, err := p.block(map[string]bool{"otherwise:": true, "end if.": true})
+		if name, base, ok := parseClassHeader(header); hasHeader && ok {
+			body, stop, err := p.block(map[string]bool{"end class.": true})
 			if err != nil {
 				return nil, "", err
 			}
-			var other []node
-			if stop == "otherwise:" {
-				other, stop, err = p.block(map[string]bool{"end if.": true})
-				if err != nil {
-					return nil, "", err
+			if stop != "end class." {
+				return nil, "", fail("class %q on line %d needs 'End class.'", name, lineNo)
+			}
+			for _, member := range body {
+				if member.kind != "function" && member.kind != "constructor" {
+					return nil, "", fail("class %q can contain only methods and a constructor", name)
 				}
 			}
-			if stop != "end if." {
-				return nil, "", fail("if block on line %d needs 'End if.'", lineNo)
-			}
-			out = append(out, node{kind: "if", condition: strings.TrimSpace(m[1]), body: body, otherwise: other, line: lineNo})
+			out = append(out, node{kind: "class", name: name, base: base, body: body, line: lineNo, column: p.columnAt(lineNo)})
 			continue
 		}
-		if m := reWhile.FindStringSubmatch(line); m != nil {
+		if name, params, ok := parseConstructorHeader(header); hasHeader && ok {
+			body, stop, err := p.block(map[string]bool{"end constructor.": true})
+			if err != nil {
+				return nil, "", err
+			}
+			if stop != "end constructor." {
+				return nil, "", fail("constructor on line %d needs 'End constructor.'", lineNo)
+			}
+			out = append(out, node{kind: "constructor", name: name, params: params, body: body, line: lineNo, column: p.columnAt(lineNo)})
+			continue
+		}
+		if condition, ok := prefixFold(header, "if "); hasHeader && ok && condition != "" {
+			conditional, err := p.ifBlock(condition, lineNo)
+			if err != nil {
+				return nil, "", err
+			}
+			out = append(out, conditional)
+			continue
+		}
+		if condition, ok := prefixFold(header, "while "); hasHeader && ok && condition != "" {
 			body, stop, err := p.block(map[string]bool{"end while.": true})
 			if err != nil {
 				return nil, "", err
@@ -109,10 +348,12 @@ func (p *parser) block(stops map[string]bool) ([]node, string, error) {
 			if stop != "end while." {
 				return nil, "", fail("while block on line %d needs 'End while.'", lineNo)
 			}
-			out = append(out, node{kind: "while", condition: strings.TrimSpace(m[1]), body: body, line: lineNo})
+			out = append(out, node{kind: "while", condition: strings.TrimSpace(condition), body: body, line: lineNo, column: p.columnAt(lineNo)})
 			continue
 		}
-		if m := reRepeat.FindStringSubmatch(line); m != nil {
+		repeatHeader, repeatOK := prefixFold(header, "repeat ")
+		repeatEnd := strings.LastIndex(strings.ToLower(repeatHeader), " times")
+		if hasHeader && repeatOK && repeatEnd > 0 && strings.EqualFold(strings.TrimSpace(repeatHeader[repeatEnd:]), "times") {
 			body, stop, err := p.block(map[string]bool{"end repeat.": true})
 			if err != nil {
 				return nil, "", err
@@ -120,10 +361,12 @@ func (p *parser) block(stops map[string]bool) ([]node, string, error) {
 			if stop != "end repeat." {
 				return nil, "", fail("repeat block on line %d needs 'End repeat.'", lineNo)
 			}
-			out = append(out, node{kind: "repeat", condition: strings.TrimSpace(m[1]), body: body, line: lineNo})
+			out = append(out, node{kind: "repeat", condition: strings.TrimSpace(repeatHeader[:repeatEnd]), body: body, line: lineNo, column: p.columnAt(lineNo)})
 			continue
 		}
-		if m := reFor.FindStringSubmatch(line); m != nil {
+		forHeader, forOK := prefixFold(header, "for each ")
+		loopName, items, hasIn := splitFoldOnce(forHeader, " in ")
+		if hasHeader && forOK && hasIn && identifier(loopName) && items != "" {
 			body, stop, err := p.block(map[string]bool{"end loop.": true})
 			if err != nil {
 				return nil, "", err
@@ -131,30 +374,10 @@ func (p *parser) block(stops map[string]bool) ([]node, string, error) {
 			if stop != "end loop." {
 				return nil, "", fail("for-each block on line %d needs 'End loop.'", lineNo)
 			}
-			out = append(out, node{kind: "for", name: m[1], condition: strings.TrimSpace(m[2]), body: body, line: lineNo})
+			out = append(out, node{kind: "for", name: loopName, condition: items, body: body, line: lineNo, column: p.columnAt(lineNo)})
 			continue
 		}
-		if m := reFunction.FindStringSubmatch(line); m != nil {
-			name := m[1]
-			tail := strings.TrimSpace(m[2])
-			var params []string
-			if strings.HasPrefix(tail, "(") && strings.HasSuffix(tail, ")") {
-				inner := strings.TrimSpace(tail[1 : len(tail)-1])
-				if inner != "" {
-					for _, x := range strings.Split(inner, ",") {
-						params = append(params, strings.TrimSpace(x))
-					}
-				}
-			} else if strings.HasPrefix(strings.ToLower(tail), "with ") {
-				params = splitAnd(tail[5:])
-			} else if tail != "" {
-				params = splitAnd(tail)
-			}
-			for _, x := range params {
-				if !identifier(x) {
-					return nil, "", fail("function parameter %q on line %d is not a valid name", x, lineNo)
-				}
-			}
+		if name, params, ok := parseFunctionHeader(header); hasHeader && ok {
 			body, stop, err := p.block(map[string]bool{"end function.": true})
 			if err != nil {
 				return nil, "", err
@@ -162,7 +385,7 @@ func (p *parser) block(stops map[string]bool) ([]node, string, error) {
 			if stop != "end function." {
 				return nil, "", fail("function %q on line %d needs 'End function.'", name, lineNo)
 			}
-			out = append(out, node{kind: "function", name: name, params: params, body: body, line: lineNo})
+			out = append(out, node{kind: "function", name: name, params: params, body: body, line: lineNo, column: p.columnAt(lineNo)})
 			continue
 		}
 		if low == "try:" {
@@ -180,10 +403,10 @@ func (p *parser) block(stops map[string]bool) ([]node, string, error) {
 			if stop != "end try." {
 				return nil, "", fail("try block on line %d needs 'End try.'", lineNo)
 			}
-			out = append(out, node{kind: "try", body: body, handler: handler, line: lineNo})
+			out = append(out, node{kind: "try", body: body, handler: handler, line: lineNo, column: p.columnAt(lineNo)})
 			continue
 		}
-		out = append(out, node{kind: "statement", text: stripSentenceEnd(line), line: lineNo})
+		out = append(out, node{kind: "statement", text: stripSentenceEnd(line), line: lineNo, column: p.columnAt(lineNo)})
 	}
 	return out, "", nil
 }
@@ -200,12 +423,7 @@ func parse(source, filename string) ([]node, error) {
 }
 
 var (
-	reIf         = regexp.MustCompile(`(?i)^if\s+(.+):\s*$`)
-	reWhile      = regexp.MustCompile(`(?i)^while\s+(.+):\s*$`)
-	reRepeat     = regexp.MustCompile(`(?i)^repeat\s+(.+?)\s+times\s*:\s*$`)
-	reFor        = regexp.MustCompile(`(?i)^for each\s+([A-Za-z_]\w*)\s+in\s+(.+?)\s*:\s*$`)
-	reFunction   = regexp.MustCompile(`(?i)^(?:to|define a function called)\s+([A-Za-z_]\w*)\s*(.*?)\s*:\s*$`)
-	reIdentifier = regexp.MustCompile(`^[A-Za-z_]\w*$`)
+	reIdentifier = regexp.MustCompile(`^[\p{L}_][\p{L}\p{N}_]*$`)
 )
 
 func identifier(s string) bool   { return reIdentifier.MatchString(s) }
@@ -248,11 +466,15 @@ func splitTop(s, sep string) []string {
 }
 
 type env struct {
-	values map[string]any
-	parent *env
+	values    map[string]any
+	parent    *env
+	constants map[string]bool
+	types     map[string]string
 }
 
-func newEnv(parent *env) *env { return &env{values: map[string]any{}, parent: parent} }
+func newEnv(parent *env) *env {
+	return &env{values: map[string]any{}, parent: parent, constants: map[string]bool{}, types: map[string]string{}}
+}
 func (e *env) get(name string) (any, error) {
 	if v, ok := e.values[name]; ok {
 		return v, nil
@@ -265,12 +487,23 @@ func (e *env) get(name string) (any, error) {
 func (e *env) set(name string, v any) { e.values[name] = v }
 
 type callable func([]any) (any, error)
+type namedCallable func([]any, map[string]any) (any, error)
 type userFunction struct {
 	name    string
 	params  []string
 	body    []node
 	closure *env
 	runtime *runtime
+}
+type userClass struct {
+	name        string
+	methods     map[string]*userFunction
+	constructor *userFunction
+	base        *userClass
+}
+type userInstance struct {
+	class  *userClass
+	fields map[string]any
 }
 type signal struct {
 	kind  string
@@ -280,39 +513,185 @@ type signal struct {
 func (s signal) Error() string { return s.kind }
 
 type runtime struct {
-	filename string
-	global   *env
-	reader   *bufio.Reader
-	output   io.Writer
+	filename        string
+	global          *env
+	reader          *bufio.Reader
+	output          io.Writer
+	echoResults     bool
+	callDepth       int
+	limits          ExecutionLimits
+	modules         map[string]map[string]any
+	bytecodeModules map[string]BytecodeProgram
+	loading         map[string]bool
 }
 
-func newRuntime(filename string, input io.Reader, output io.Writer) *runtime {
+func typeMatches(typeName string, value any, e *env) (bool, error) {
+	switch strings.ToLower(typeName) {
+	case "any":
+		return true, nil
+	case "nothing":
+		return value == nil, nil
+	case "boolean":
+		_, ok := value.(bool)
+		return ok, nil
+	case "number":
+		switch value.(type) {
+		case float64, int, int64:
+			return true, nil
+		}
+		return false, nil
+	case "text":
+		_, ok := value.(string)
+		return ok, nil
+	case "list":
+		_, ok := value.([]any)
+		return ok, nil
+	case "dictionary":
+		_, ok := value.(map[string]any)
+		return ok, nil
+	case "function":
+		switch value.(type) {
+		case callable, namedCallable, *userFunction:
+			return true, nil
+		}
+		return false, nil
+	case "class":
+		switch value.(type) {
+		case *userClass, *bytecodeClassValue:
+			return true, nil
+		default:
+			return false, nil
+		}
+	default:
+		candidate, err := e.get(typeName)
+		if err != nil {
+			return false, fail("unknown type annotation %q", typeName)
+		}
+		switch class := candidate.(type) {
+		case *userClass:
+			instance, ok := value.(*userInstance)
+			if !ok {
+				return false, nil
+			}
+			for current := instance.class; current != nil; current = current.base {
+				if current == class {
+					return true, nil
+				}
+			}
+			return false, nil
+		case *bytecodeClassValue:
+			instance, ok := value.(*bytecodeInstance)
+			if !ok {
+				return false, nil
+			}
+			for current := instance.class; current != nil; current = current.base {
+				if current == class {
+					return true, nil
+				}
+			}
+			return false, nil
+		default:
+			return false, fail("%q is not a type", typeName)
+		}
+	}
+}
+
+func (r *runtime) checkType(annotation string, value any, e *env, name string) error {
+	match, err := typeMatches(annotation, value, e)
+	if err != nil {
+		return err
+	}
+	if !match {
+		return fail("type mismatch for %q: expected %s, got %s", name, annotation, typeName(value))
+	}
+	return nil
+}
+
+func (r *runtime) declare(e *env, name string, value any, typeName string, constant bool) error {
+	if e.constants[name] {
+		return fail("constant %q cannot be redeclared", name)
+	}
+	if typeName != "" {
+		if previous, exists := e.types[name]; exists && !strings.EqualFold(previous, typeName) {
+			return fail("%q is already annotated as %s", name, previous)
+		}
+		if err := r.checkType(typeName, value, e, name); err != nil {
+			return err
+		}
+		e.types[name] = typeName
+	}
+	if constant {
+		e.constants[name] = true
+	}
+	e.set(name, value)
+	return nil
+}
+
+func (r *runtime) assign(e *env, name string, value any) error {
+	if e.constants[name] {
+		return fail("constant %q cannot be reassigned", name)
+	}
+	if typeName, ok := e.types[name]; ok {
+		if err := r.checkType(typeName, value, e, name); err != nil {
+			return err
+		}
+	}
+	e.set(name, value)
+	return nil
+}
+
+func newRuntime(filename string, input io.Reader, output io.Writer, limits ExecutionLimits) *runtime {
 	if input == nil {
 		input = os.Stdin
 	}
 	if output == nil {
 		output = os.Stdout
 	}
-	r := &runtime{filename: filename, reader: bufio.NewReader(input), output: output}
+	reader, ok := input.(*bufio.Reader)
+	if !ok {
+		reader = bufio.NewReader(input)
+	}
+	defaults := DefaultExecutionLimits()
+	if limits.MaxFunctionCallDepth <= 0 {
+		limits.MaxFunctionCallDepth = defaults.MaxFunctionCallDepth
+	}
+	if limits.MaxLoopIterations <= 0 {
+		limits.MaxLoopIterations = defaults.MaxLoopIterations
+	}
+	r := &runtime{filename: filename, reader: reader, output: output, limits: limits, modules: make(map[string]map[string]any), loading: make(map[string]bool)}
 	r.global = newEnv(nil)
 	r.installBuiltins(r.global)
 	return r
 }
 func Check(source, filename string) error { _, err := parse(source, filename); return err }
-func Run(source, filename string) error {
-	return RunWithIO(source, filename, os.Stdin, os.Stdout)
+
+// Session executes multiple source units in one persistent global environment.
+type Session struct{ runtime *runtime }
+
+// SetEchoExpressions makes bare expression statements display their result.
+// Interactive shells enable this; file execution leaves it disabled.
+func (s *Session) SetEchoExpressions(enabled bool) { s.runtime.echoResults = enabled }
+
+func NewSession(input io.Reader, output io.Writer) *Session {
+	return NewSessionWithLimits(input, output, DefaultExecutionLimits())
 }
-func RunWithIO(source, filename string, input io.Reader, output io.Writer) error {
+
+func NewSessionWithLimits(input io.Reader, output io.Writer, limits ExecutionLimits) *Session {
+	return &Session{runtime: newRuntime("<memory>", input, output, limits)}
+}
+
+func (s *Session) Exec(source, filename string) error {
 	nodes, err := parse(source, filename)
 	if err != nil {
 		return err
 	}
-	r := newRuntime(filename, input, output)
+	r := s.runtime
+	r.filename = filename
 	err = r.execute(nodes, r.global)
 	if err != nil {
-		var s signal
-		if errors.As(err, &s) {
-			switch s.kind {
+		var signalErr signal
+		if errors.As(err, &signalErr) {
+			switch signalErr.kind {
 			case "return":
 				return fail("give back can only be used inside a function")
 			case "break", "continue":
@@ -321,6 +700,13 @@ func RunWithIO(source, filename string, input io.Reader, output io.Writer) error
 		}
 	}
 	return err
+}
+
+func Run(source, filename string) error {
+	return RunWithIO(source, filename, os.Stdin, os.Stdout)
+}
+func RunWithIO(source, filename string, input io.Reader, output io.Writer) error {
+	return NewSession(input, output).Exec(source, filename)
 }
 func (r *runtime) installBuiltins(e *env) {
 	wrap := func(f func([]any) (any, error)) any { return callable(f) }
@@ -479,7 +865,7 @@ func (r *runtime) installBuiltins(e *env) {
 		}
 		out := []any{}
 		for i := start; (step > 0 && i < end) || (step < 0 && i > end); i += step {
-			if len(out) >= maxLoopIterations {
+			if len(out) >= r.limits.MaxLoopIterations {
 				return nil, fail("range is too large")
 			}
 			out = append(out, float64(i))
@@ -616,8 +1002,16 @@ func typeName(v any) string {
 		return "list"
 	case map[string]any:
 		return "dictionary"
-	case callable, *userFunction:
+	case callable, namedCallable, *userFunction:
 		return "function"
+	case *userClass:
+		return "class"
+	case *userInstance:
+		return v.(*userInstance).class.name
+	case *bytecodeClassValue:
+		return "class"
+	case *bytecodeInstance:
+		return v.(*bytecodeInstance).class.name
 	}
 	return "value"
 }
@@ -686,7 +1080,7 @@ func (r *runtime) execute(nodes []node, e *env) error {
 			if errors.As(err, &s) {
 				return err
 			}
-			return fail("%s:%d: %v", r.filename, n.line, err)
+			return fail("%s:%d:%d: %v", r.filename, n.line, n.column, err)
 		}
 	}
 	return nil
@@ -703,7 +1097,8 @@ func (r *runtime) execNode(n node, e *env) error {
 		}
 		return r.execute(n.otherwise, e)
 	case "while":
-		for i := 0; i < maxLoopIterations; i++ {
+		iterations := 0
+		for {
 			v, err := r.eval(n.condition, e)
 			if err != nil {
 				return err
@@ -711,6 +1106,10 @@ func (r *runtime) execNode(n node, e *env) error {
 			if !truthy(v) {
 				return nil
 			}
+			if iterations >= r.limits.MaxLoopIterations {
+				return fail("this loop exceeded the configured limit of %d iterations", r.limits.MaxLoopIterations)
+			}
+			iterations++
 			err = r.execute(n.body, e)
 			if err != nil {
 				var s signal
@@ -723,7 +1122,6 @@ func (r *runtime) execNode(n node, e *env) error {
 				return err
 			}
 		}
-		return fail("this loop ran over one million times; stopped to prevent a runaway program")
 	case "repeat":
 		v, err := r.eval(n.condition, e)
 		if err != nil {
@@ -734,8 +1132,8 @@ func (r *runtime) execNode(n node, e *env) error {
 			return err
 		}
 		count := int(f)
-		if count < 0 || count > maxLoopIterations {
-			return fail("repeat count must be between 0 and 1,000,000")
+		if count < 0 || count > r.limits.MaxLoopIterations {
+			return fail("repeat count must be between 0 and %d", r.limits.MaxLoopIterations)
 		}
 		for i := 1; i <= count; i++ {
 			e.set("_repeat_index", float64(i))
@@ -760,15 +1158,21 @@ func (r *runtime) execNode(n node, e *env) error {
 		items, ok := v.([]any)
 		if !ok {
 			if s, yes := v.(string); yes {
-				items = []any{}
+				items = make([]any, 0, r.limits.MaxLoopIterations+1)
 				for _, c := range s {
 					items = append(items, string(c))
+					if len(items) > r.limits.MaxLoopIterations {
+						break
+					}
 				}
 			} else {
 				return fail("for each needs a list or text value")
 			}
 		}
-		for _, item := range items {
+		for index, item := range items {
+			if index >= r.limits.MaxLoopIterations {
+				return fail("for-each loop exceeded the configured limit of %d iterations", r.limits.MaxLoopIterations)
+			}
 			e.set(n.name, item)
 			e.set("_current_item", item)
 			err := r.execute(n.body, e)
@@ -787,6 +1191,43 @@ func (r *runtime) execNode(n node, e *env) error {
 	case "function":
 		e.set(n.name, &userFunction{name: n.name, params: n.params, body: n.body, closure: e, runtime: r})
 		return nil
+	case "class":
+		class := &userClass{name: n.name, methods: make(map[string]*userFunction)}
+		if n.base != "" {
+			value, err := e.get(n.base)
+			if err != nil {
+				return err
+			}
+			base, ok := value.(*userClass)
+			if !ok {
+				return fail("base type %q is not a class", n.base)
+			}
+			class.base = base
+			class.constructor = base.constructor
+		}
+		hasConstructor := false
+		for _, member := range n.body {
+			function := &userFunction{name: member.name, params: member.params, body: member.body, closure: e, runtime: r}
+			if member.kind == "constructor" {
+				if strings.ToLower(member.name) != strings.ToLower(n.name) {
+					return fail("constructor name %q does not match class %q", member.name, n.name)
+				}
+				if hasConstructor {
+					return fail("class %q has more than one constructor", n.name)
+				}
+				hasConstructor = true
+				class.constructor = function
+				continue
+			}
+			if _, exists := class.methods[member.name]; exists {
+				return fail("class %q has duplicate method %q", n.name, member.name)
+			}
+			class.methods[member.name] = function
+		}
+		e.set(n.name, class)
+		return nil
+	case "constructor":
+		return fail("a constructor can only be declared inside a class")
 	case "try":
 		err := r.execute(n.body, e)
 		if err == nil {
@@ -803,45 +1244,450 @@ func (r *runtime) execNode(n node, e *env) error {
 }
 
 var (
-	reLet     = regexp.MustCompile(`(?i)^let\s+([A-Za-z_]\w*)\s+be\s+(.+)$`)
-	reSet     = regexp.MustCompile(`(?i)^set\s+([A-Za-z_]\w*)\s+to\s+(.+)$`)
-	reSay     = regexp.MustCompile(`(?i)^(?:say|show|print)\s+(.+)$`)
-	reAsk     = regexp.MustCompile(`(?i)^ask\s+(.+?)\s+and\s+(?:save the answer as|put the answer in)\s+([A-Za-z_]\w*)$`)
-	reRead    = regexp.MustCompile(`(?i)^read the file\s+(.+?)\s+into\s+([A-Za-z_]\w*)$`)
-	reWrite   = regexp.MustCompile(`(?i)^write\s+(.+?)\s+to the file\s+(.+)$`)
-	reAppend  = regexp.MustCompile(`(?i)^append\s+(.+?)\s+to the file\s+(.+)$`)
-	reUse     = regexp.MustCompile(`(?i)^use the\s+([A-Za-z_]+)\s+library(?:\s+as\s+([A-Za-z_]\w*))?$`)
-	reCall    = regexp.MustCompile(`(?i)^(?:call|run)\s+([A-Za-z_]\w*)\s+with\s+(.+)$`)
-	reReturn  = regexp.MustCompile(`(?i)^(?:give back|return)(?:\s+(.+))?$`)
-	reSetItem = regexp.MustCompile(`(?i)^set (?:the )?item at position (.+?) in ([A-Za-z_]\w*) to (.+)$`)
-	reSetKey  = regexp.MustCompile(`(?i)^set (?:the )?key (.+?) in ([A-Za-z_]\w*) to (.+)$`)
-	reAdd     = regexp.MustCompile(`(?i)^add\s+(.+?)\s+to\s+([A-Za-z_]\w*)$`)
-	reRemove  = regexp.MustCompile(`(?i)^remove\s+(.+?)\s+from\s+([A-Za-z_]\w*)$`)
-	reRaise   = regexp.MustCompile(`(?i)^raise an error saying\s+(.+)$`)
+	reRemember   = regexp.MustCompile(`(?i)^remember\s+(.+?)\s+as\s+this\.([\p{L}_][\p{L}\p{N}_]*)$`)
+	reTell       = regexp.MustCompile(`(?i)^tell\s+([\p{L}_][\p{L}\p{N}_]*)\s+to\s+([\p{L}_][\p{L}\p{N}_]*)(?:\s+with\s+(.+))?$`)
+	reSetMember  = regexp.MustCompile(`(?i)^set\s+([\p{L}_][\p{L}\p{N}_]*)\.([\p{L}_][\p{L}\p{N}_]*)\s+to\s+(.+)$`)
+	reImportTell = regexp.MustCompile(`(?i)^use the module\s+(.+?)\s+as\s+([\p{L}_][\p{L}\p{N}_]*)$`)
+	reAsk        = regexp.MustCompile(`(?i)^ask\s+(.+?)\s+and\s+(?:save the answer as|put the answer in)\s+([\p{L}_][\p{L}\p{N}_]*)$`)
+	reRead       = regexp.MustCompile(`(?i)^read the file\s+(.+?)\s+into\s+([\p{L}_][\p{L}\p{N}_]*)$`)
+	reWrite      = regexp.MustCompile(`(?i)^write\s+(.+?)\s+to the file\s+(.+)$`)
+	reAppend     = regexp.MustCompile(`(?i)^append\s+(.+?)\s+to the file\s+(.+)$`)
+	reUse        = regexp.MustCompile(`(?i)^use the\s+([A-Za-z_]+)\s+library(?:\s+as\s+([\p{L}_][\p{L}\p{N}_]*))?$`)
+	reSetItem    = regexp.MustCompile(`(?i)^set (?:the )?item at position (.+?) in ([\p{L}_][\p{L}\p{N}_]*) to (.+)$`)
+	reSetKey     = regexp.MustCompile(`(?i)^set (?:the )?key (.+?) in ([\p{L}_][\p{L}\p{N}_]*) to (.+)$`)
+	reAdd        = regexp.MustCompile(`(?i)^add\s+(.+?)\s+to\s+([\p{L}_][\p{L}\p{N}_]*)$`)
+	reRemove     = regexp.MustCompile(`(?i)^remove\s+(.+?)\s+from\s+([\p{L}_][\p{L}\p{N}_]*)$`)
+	reRaise      = regexp.MustCompile(`(?i)^raise an error saying\s+(.+)$`)
 )
 
 func (r *runtime) statement(s string, e *env) error {
-	if m := reLet.FindStringSubmatch(s); m != nil {
-		v, err := r.eval(m[2], e)
-		if err == nil {
-			e.set(m[1], v)
+	if expression, ok := prefixFold(s, "check that "); ok {
+		if expression == "" {
+			return fail("Check that needs a condition")
 		}
-		return err
-	}
-	if m := reSet.FindStringSubmatch(s); m != nil {
-		v, err := r.eval(m[2], e)
-		if err == nil {
-			e.set(m[1], v)
+		value, err := r.eval(expression, e)
+		if err != nil {
+			return err
 		}
-		return err
+		if !truthy(value) {
+			return fail("check failed: %s", expression)
+		}
+		return nil
 	}
-	if m := reSay.FindStringSubmatch(s); m != nil {
+	if rest, ok := prefixFold(s, "let "); ok {
+		constant := false
+		if constantRest, isConstant := prefixFold(rest, "constant "); isConstant {
+			rest = constantRest
+			constant = true
+		}
+		binding, expression, separated := splitFoldOnce(rest, " be ")
+		name, annotation, annotated := splitFoldOnce(binding, " as ")
+		if !annotated {
+			name = binding
+		}
+		if separated && identifier(name) && expression != "" {
+			value, err := r.eval(expression, e)
+			if err != nil {
+				return err
+			}
+			if constant || annotated {
+				return r.declare(e, name, value, annotation, constant)
+			}
+			return r.assign(e, name, value)
+		}
+	}
+	if rest, ok := prefixFold(s, "set "); ok {
+		name, expression, separated := splitFoldOnce(rest, " to ")
+		if separated && identifier(name) && expression != "" {
+			value, err := r.eval(expression, e)
+			if err != nil {
+				return err
+			}
+			return r.assign(e, name, value)
+		}
+	}
+	for _, prefix := range []string{"say ", "show ", "print "} {
+		if expression, ok := prefixFold(s, prefix); ok && expression != "" {
+			value, err := r.eval(expression, e)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintln(r.output, display(value))
+			return nil
+		}
+	}
+	for _, prefix := range []string{"give back ", "return "} {
+		if expression, ok := prefixFold(s, prefix); ok {
+			var value any
+			if expression != "" {
+				var err error
+				value, err = r.eval(expression, e)
+				if err != nil {
+					return err
+				}
+			}
+			return signal{kind: "return", value: value}
+		}
+	}
+	if strings.EqualFold(s, "give back") || strings.EqualFold(s, "return") {
+		return signal{kind: "return", value: nil}
+	}
+	if strings.EqualFold(s, "stop this loop") || strings.EqualFold(s, "break out of this loop") {
+		return signal{kind: "break"}
+	}
+	if strings.EqualFold(s, "skip to the next repetition") || strings.EqualFold(s, "continue to the next repetition") {
+		return signal{kind: "continue"}
+	}
+	for _, prefix := range []string{"call ", "run "} {
+		if rest, ok := prefixFold(s, prefix); ok {
+			name, tail := firstWord(rest)
+			if args, valid := prefixFold(tail, "with "); valid && identifier(name) && args != "" {
+				target, err := e.get(name)
+				if err != nil {
+					return err
+				}
+				values := make([]any, 0)
+				for _, argument := range splitAnd(args) {
+					value, err := r.eval(argument, e)
+					if err != nil {
+						return err
+					}
+					values = append(values, value)
+				}
+				_, err = invoke(target, values)
+				return err
+			}
+		}
+	}
+	if rest, ok := prefixFold(s, "use the module "); ok {
+		pathExpr, alias, separated := splitFoldOnce(rest, " as ")
+		if separated && identifier(alias) {
+			pathValue, err := r.eval(pathExpr, e)
+			if err != nil {
+				return err
+			}
+			module, err := r.loadTellModule(fmt.Sprint(pathValue))
+			if err != nil {
+				return err
+			}
+			e.set(alias, module)
+			return nil
+		}
+	}
+	if rest, ok := prefixFold(s, "set "); ok {
+		left, expression, separated := splitFoldOnce(rest, " to ")
+		if separated {
+			objectName, field, member := splitFoldOnce(left, ".")
+			if member && identifier(objectName) && identifier(field) {
+				value, err := r.eval(expression, e)
+				if err != nil {
+					return err
+				}
+				target, err := e.get(objectName)
+				if err != nil {
+					return err
+				}
+				instance, ok := target.(*userInstance)
+				if !ok {
+					return fail("%q is not a Tell instance", objectName)
+				}
+				instance.fields[field] = value
+				return nil
+			}
+		}
+	}
+	if rest, ok := prefixFold(s, "remember "); ok {
+		expression, field, separated := splitFoldOnce(rest, " as this.")
+		if separated && identifier(field) {
+			value, err := r.eval(expression, e)
+			if err != nil {
+				return err
+			}
+			instance, err := e.get("this")
+			if err != nil {
+				return fail("Remember ... as this.field can only be used in a method or constructor")
+			}
+			object, ok := instance.(*userInstance)
+			if !ok {
+				return fail("this is not an instance")
+			}
+			object.fields[field] = value
+			return nil
+		}
+	}
+	if rest, ok := prefixFold(s, "tell "); ok {
+		objectName, action, separated := splitFoldOnce(rest, " to ")
+		if separated && identifier(objectName) {
+			method, argsText := firstWord(action)
+			if identifier(method) {
+				args := []string{}
+				if argsText != "" {
+					argsText, separated = prefixFold(argsText, "with ")
+					if !separated || argsText == "" {
+						method = ""
+					} else {
+						args = splitAnd(argsText)
+					}
+				}
+				if method != "" {
+					_, err := r.eval(objectName+"."+method+"("+strings.Join(args, ",")+")", e)
+					return err
+				}
+			}
+		}
+	}
+	if rest, ok := prefixFold(s, "ask "); ok {
+		for _, delimiter := range []string{" and save the answer as ", " and put the answer in "} {
+			prompt, name, separated := splitFoldOnce(rest, delimiter)
+			if separated && identifier(name) {
+				value, err := r.eval(prompt, e)
+				if err != nil {
+					return err
+				}
+				fmt.Fprint(r.output, display(value))
+				line, err := r.reader.ReadString('\n')
+				if err != nil && len(line) == 0 {
+					return err
+				}
+				line = strings.TrimRight(line, "\r\n")
+				e.set(name, line)
+				e.set("_last_answer", line)
+				return nil
+			}
+		}
+	}
+	if rest, ok := prefixFold(s, "read the file "); ok {
+		pathExpr, name, separated := splitFoldOnce(rest, " into ")
+		if separated && identifier(name) {
+			path, err := r.eval(pathExpr, e)
+			if err != nil {
+				return err
+			}
+			data, err := os.ReadFile(fmt.Sprint(path))
+			if err != nil {
+				return err
+			}
+			e.set(name, string(data))
+			return nil
+		}
+	}
+	for _, operation := range []struct{ prefix, delimiter string }{{"write ", " to the file "}, {"append ", " to the file "}} {
+		if rest, ok := prefixFold(s, operation.prefix); ok {
+			valueExpr, pathExpr, separated := splitFoldOnce(rest, operation.delimiter)
+			if separated {
+				value, err := r.eval(valueExpr, e)
+				if err != nil {
+					return err
+				}
+				path, err := r.eval(pathExpr, e)
+				if err != nil {
+					return err
+				}
+				if operation.prefix == "write " {
+					return os.WriteFile(fmt.Sprint(path), []byte(display(value)), 0644)
+				}
+				file, err := os.OpenFile(fmt.Sprint(path), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+				if err != nil {
+					return err
+				}
+				defer file.Close()
+				_, err = file.WriteString(display(value))
+				return err
+			}
+		}
+	}
+	if rest, ok := prefixFold(s, "add "); ok {
+		valueExpr, name, separated := splitFoldOnce(rest, " to ")
+		if separated && identifier(name) {
+			value, err := r.eval(valueExpr, e)
+			if err != nil {
+				return err
+			}
+			collection, err := e.get(name)
+			if err != nil {
+				return err
+			}
+			items, ok := collection.([]any)
+			if !ok {
+				return fail("%q does not support adding items", name)
+			}
+			e.values[name] = append(items, value)
+			return nil
+		}
+	}
+	if rest, ok := prefixFold(s, "remove "); ok {
+		valueExpr, name, separated := splitFoldOnce(rest, " from ")
+		if separated && identifier(name) {
+			value, err := r.eval(valueExpr, e)
+			if err != nil {
+				return err
+			}
+			collection, err := e.get(name)
+			if err != nil {
+				return err
+			}
+			items, ok := collection.([]any)
+			if !ok {
+				return fail("%q does not support removing items", name)
+			}
+			for i, item := range items {
+				if reflect.DeepEqual(item, value) {
+					e.values[name] = append(items[:i], items[i+1:]...)
+					return nil
+				}
+			}
+			return fail("item %q was not found", display(value))
+		}
+	}
+	if rest, ok := prefixFold(s, "raise an error saying "); ok && rest != "" {
+		value, err := r.eval(rest, e)
+		if err != nil {
+			return err
+		}
+		return fail("%s", display(value))
+	}
+	if rest, ok := prefixFold(s, "use the "); ok {
+		if index := strings.Index(strings.ToLower(rest), " library"); index >= 0 {
+			requested := strings.TrimSpace(rest[:index])
+			tail := strings.TrimSpace(rest[index+len(" library"):])
+			alias := strings.ToLower(strings.ReplaceAll(requested, " ", ""))
+			aliasOK := true
+			if tail != "" {
+				alias, aliasOK = prefixFold(tail, "as ")
+				aliasOK = aliasOK && identifier(alias)
+			}
+			if requested != "" && aliasOK && identifier(strings.ReplaceAll(requested, " ", "")) {
+				library := strings.ToLower(strings.ReplaceAll(requested, " ", ""))
+				switch library {
+				case "dateandtime", "dates":
+					library = "datetime"
+				}
+				module, err := moduleValue(library)
+				if err != nil {
+					return err
+				}
+				e.set(alias, module)
+				return nil
+			}
+		}
+	}
+	if rest, ok := prefixFold(s, "set "); ok {
+		location, valueExpr, separated := splitFoldOnce(rest, " to ")
+		if separated {
+			itemText, isItem := prefixFold(location, "the item at position ")
+			if !isItem {
+				itemText, isItem = prefixFold(location, "item at position ")
+			}
+			if isItem {
+				indexExpr, name, hasIn := splitFoldOnce(itemText, " in ")
+				if hasIn && identifier(name) {
+					collection, err := e.get(name)
+					if err != nil {
+						return err
+					}
+					items, ok := collection.([]any)
+					if !ok {
+						return fail("%q is not a list", name)
+					}
+					indexValue, err := r.eval(indexExpr, e)
+					if err != nil {
+						return err
+					}
+					number, err := numberValue(indexValue)
+					if err != nil {
+						return err
+					}
+					index := int(number)
+					if index < 0 {
+						index += len(items)
+					}
+					if index < 0 || index >= len(items) {
+						return fail("list index out of range")
+					}
+					items[index], err = r.eval(valueExpr, e)
+					return err
+				}
+			}
+			keyText, isKey := prefixFold(location, "the key ")
+			if !isKey {
+				keyText, isKey = prefixFold(location, "key ")
+			}
+			if isKey {
+				keyExpr, name, hasIn := splitFoldOnce(keyText, " in ")
+				if hasIn && identifier(name) {
+					collection, err := e.get(name)
+					if err != nil {
+						return err
+					}
+					dictionary, ok := collection.(map[string]any)
+					if !ok {
+						return fail("%q is not a dictionary", name)
+					}
+					key, err := r.eval(keyExpr, e)
+					if err != nil {
+						return err
+					}
+					value, err := r.eval(valueExpr, e)
+					if err != nil {
+						return err
+					}
+					dictionary[fmt.Sprint(key)] = value
+					return nil
+				}
+			}
+		}
+	}
+	if m := reImportTell.FindStringSubmatch(s); m != nil {
+		pathValue, err := r.eval(m[1], e)
+		if err != nil {
+			return err
+		}
+		module, err := r.loadTellModule(fmt.Sprint(pathValue))
+		if err != nil {
+			return err
+		}
+		e.set(m[2], module)
+		return nil
+	}
+	if m := reSetMember.FindStringSubmatch(s); m != nil {
+		value, err := r.eval(m[3], e)
+		if err != nil {
+			return err
+		}
+		target, err := e.get(m[1])
+		if err != nil {
+			return err
+		}
+		instance, ok := target.(*userInstance)
+		if !ok {
+			return fail("%q is not a Tell instance", m[1])
+		}
+		instance.fields[m[2]] = value
+		return nil
+	}
+	if m := reRemember.FindStringSubmatch(s); m != nil {
 		v, err := r.eval(m[1], e)
 		if err != nil {
 			return err
 		}
-		fmt.Fprintln(r.output, display(v))
+		instance, err := e.get("this")
+		if err != nil {
+			return fail("Remember ... as this.field can only be used in a method or constructor")
+		}
+		object, ok := instance.(*userInstance)
+		if !ok {
+			return fail("this is not an instance")
+		}
+		object.fields[m[2]] = v
 		return nil
+	}
+	if m := reTell.FindStringSubmatch(s); m != nil {
+		args := []string{}
+		if strings.TrimSpace(m[3]) != "" {
+			args = splitAnd(m[3])
+		}
+		_, err := r.eval(m[1]+"."+m[2]+"("+strings.Join(args, ",")+")", e)
+		return err
 	}
 	if m := reAsk.FindStringSubmatch(s); m != nil {
 		p, err := r.eval(m[1], e)
@@ -910,39 +1756,6 @@ func (r *runtime) statement(s string, e *env) error {
 		}
 		e.set(alias, module)
 		return nil
-	}
-	if m := reCall.FindStringSubmatch(s); m != nil {
-		v, err := e.get(m[1])
-		if err != nil {
-			return err
-		}
-		args := []any{}
-		for _, part := range splitAnd(m[2]) {
-			x, er := r.eval(part, e)
-			if er != nil {
-				return er
-			}
-			args = append(args, x)
-		}
-		_, err = invoke(v, args)
-		return err
-	}
-	if m := reReturn.FindStringSubmatch(s); m != nil {
-		var v any
-		if strings.TrimSpace(m[1]) != "" {
-			x, err := r.eval(m[1], e)
-			if err != nil {
-				return err
-			}
-			v = x
-		}
-		return signal{kind: "return", value: v}
-	}
-	if strings.EqualFold(s, "stop this loop") || strings.EqualFold(s, "break out of this loop") {
-		return signal{kind: "break"}
-	}
-	if strings.EqualFold(s, "skip to the next repetition") || strings.EqualFold(s, "continue to the next repetition") {
-		return signal{kind: "continue"}
 	}
 	if m := reSetItem.FindStringSubmatch(s); m != nil {
 		v, err := e.get(m[2])
@@ -1039,36 +1852,155 @@ func (r *runtime) statement(s string, e *env) error {
 		}
 		return fail("%s", display(v))
 	}
-	_, err := r.eval(s, e)
+	value, err := r.eval(s, e)
 	if err != nil {
 		return fail("I don't recognise this sentence: %q (%v)", s, err)
 	}
+	if r.echoResults {
+		e.set("_", value)
+		fmt.Fprintln(r.output, display(value))
+	}
 	return nil
 }
+
+func (r *runtime) loadTellModule(path string) (map[string]any, error) {
+	if !strings.EqualFold(filepath.Ext(path), ".tell") {
+		return nil, fail("Tell modules must use the .tell extension")
+	}
+	absolute, err := filepath.Abs(filepath.Join(filepath.Dir(r.filename), path))
+	if err != nil {
+		return nil, err
+	}
+	absolute = filepath.Clean(absolute)
+	if cached, ok := r.modules[absolute]; ok {
+		return cached, nil
+	}
+	if r.loading[absolute] {
+		return nil, fail("circular module import detected for %q", absolute)
+	}
+	source, err := os.ReadFile(absolute)
+	if err != nil {
+		return nil, fail("cannot load Tell module %q: %v", path, err)
+	}
+	nodes, err := parse(string(source), absolute)
+	if err != nil {
+		return nil, err
+	}
+	r.loading[absolute] = true
+	defer delete(r.loading, absolute)
+	moduleEnv := newEnv(r.global)
+	previousFilename := r.filename
+	r.filename = absolute
+	err = r.execute(nodes, moduleEnv)
+	r.filename = previousFilename
+	if err != nil {
+		return nil, err
+	}
+	exports := make(map[string]any)
+	for name, value := range moduleEnv.values {
+		if !strings.HasPrefix(name, "_") {
+			exports[name] = value
+		}
+	}
+	r.modules[absolute] = exports
+	return exports, nil
+}
+
+func (f *userFunction) call(args []any, receiver *userInstance) (any, error) {
+	return f.callNamed(args, nil, receiver)
+}
+
+func (f *userFunction) callNamed(args []any, named map[string]any, receiver *userInstance) (any, error) {
+	if len(args) > len(f.params) {
+		return nil, fail("%q accepts %d argument(s), but got %d positional arguments", f.name, len(f.params), len(args))
+	}
+	parameterIndex := make(map[string]int, len(f.params))
+	bindings := make(map[string]any, len(f.params))
+	for index, parameter := range f.params {
+		parameterIndex[parameter] = index
+		if index < len(args) {
+			bindings[parameter] = args[index]
+		}
+	}
+	for name, value := range named {
+		index, exists := parameterIndex[name]
+		if !exists {
+			return nil, fail("%q has no parameter named %q", f.name, name)
+		}
+		if index < len(args) {
+			return nil, fail("%q got multiple values for %q", f.name, name)
+		}
+		bindings[name] = value
+	}
+	for _, parameter := range f.params {
+		if _, exists := bindings[parameter]; !exists {
+			return nil, fail("%q is missing argument %q", f.name, parameter)
+		}
+	}
+	if f.runtime.callDepth >= f.runtime.limits.MaxFunctionCallDepth {
+		return nil, fail("maximum function call depth (%d) exceeded", f.runtime.limits.MaxFunctionCallDepth)
+	}
+	f.runtime.callDepth++
+	defer func() { f.runtime.callDepth-- }()
+	local := newEnv(f.closure)
+	for name, value := range bindings {
+		local.set(name, value)
+	}
+	if receiver != nil {
+		local.set("this", receiver)
+	}
+	err := f.runtime.execute(f.body, local)
+	if err != nil {
+		var s signal
+		if errors.As(err, &s) && s.kind == "return" {
+			return s.value, nil
+		}
+		return nil, err
+	}
+	return nil, nil
+}
+
 func invoke(v any, args []any) (any, error) {
+	return invokeNamed(v, args, nil)
+}
+
+func invokeNamed(v any, args []any, named map[string]any) (any, error) {
 	switch f := v.(type) {
+	case namedCallable:
+		return f(args, named)
 	case callable:
+		if len(named) != 0 {
+			return nil, fail("named arguments are not supported by this function")
+		}
 		return f(args)
 	case *userFunction:
-		if len(args) != len(f.params) {
-			return nil, fail("%q needs %d argument(s), but got %d", f.name, len(f.params), len(args))
-		}
-		local := newEnv(f.closure)
-		for i, p := range f.params {
-			local.set(p, args[i])
-		}
-		err := f.runtime.execute(f.body, local)
-		if err != nil {
-			var s signal
-			if errors.As(err, &s) && s.kind == "return" {
-				return s.value, nil
+		return f.callNamed(args, named, nil)
+	case *userClass:
+		instance := &userInstance{class: f, fields: make(map[string]any)}
+		if f.constructor == nil {
+			if len(args) > 0 || len(named) > 0 {
+				return nil, fail("class %q has no constructor and accepts no arguments", f.name)
 			}
+			return instance, nil
+		}
+		if _, err := f.constructor.callNamed(args, named, instance); err != nil {
 			return nil, err
 		}
-		return nil, nil
+		return instance, nil
 	}
 	return nil, fail("this value cannot be called")
 }
+
+func (c *userClass) method(name string) (*userFunction, bool) {
+	if method, ok := c.methods[name]; ok {
+		return method, true
+	}
+	if c.base != nil {
+		return c.base.method(name)
+	}
+	return nil, false
+}
+
 func moduleValue(name string) (any, error) {
 	mathModule := map[string]any{"pi": math.Pi, "e": math.E, "sqrt": callable(unaryMath(math.Sqrt)), "floor": callable(unaryMath(math.Floor)), "ceil": callable(unaryMath(math.Ceil)), "sin": callable(unaryMath(math.Sin)), "cos": callable(unaryMath(math.Cos)), "tan": callable(unaryMath(math.Tan)), "abs": callable(unaryMath(math.Abs)), "log": callable(unaryMath(math.Log)), "pow": callable(func(a []any) (any, error) {
 		if len(a) != 2 {
@@ -1095,7 +2027,7 @@ func moduleValue(name string) (any, error) {
 			}
 			return lo + rand.Float64()*(hi-lo), nil
 		}), "integer": callable(func(a []any) (any, error) {
-			return newRuntime("", nil, nil).global.values["random_number"].(callable)(a)
+			return newRuntime("", nil, nil, DefaultExecutionLimits()).global.values["random_number"].(callable)(a)
 		})}, nil
 	case "json":
 		return map[string]any{"loads": callable(func(a []any) (any, error) {
@@ -1113,7 +2045,9 @@ func moduleValue(name string) (any, error) {
 			return string(b), e
 		})}, nil
 	case "statistics":
-		return map[string]any{"mean": callable(func(a []any) (any, error) { return newRuntime("", nil, nil).global.values["average"].(callable)(a) })}, nil
+		return map[string]any{"mean": callable(func(a []any) (any, error) {
+			return newRuntime("", nil, nil, DefaultExecutionLimits()).global.values["average"].(callable)(a)
+		})}, nil
 	case "datetime", "dates":
 		return map[string]any{"now": callable(func(a []any) (any, error) { return time.Now().Format(time.RFC3339), nil }), "today": callable(func(a []any) (any, error) { return time.Now().Format("2006-01-02"), nil })}, nil
 	default:
@@ -1134,97 +2068,127 @@ func normalizeJSON(v any) any {
 	return v
 }
 
-// Expression parser: a compact Pratt parser for Tell's expression language.
-type token struct{ kind, text string }
-type exprParser struct {
-	tokens  []token
-	pos     int
-	runtime *runtime
-	env     *env
+// token carries source offsets and one-based diagnostic coordinates.
+type token struct {
+	kind, text   string
+	start, end   int
+	line, column int
 }
 
 func translateExpr(s string) string {
-	for _, pair := range [][2]string{
-		{"the current repetition number", "_repeat_index"},
-		{"the current item", "_current_item"},
-		{"the answer", "_last_answer"},
+	newObject := regexp.MustCompile(`(?i)^(?:a\s+)?new\s+([\p{L}_][\p{L}\p{N}_]*)(?:\s+with\s+(.+))?$`)
+	if match := newObject.FindStringSubmatch(strings.TrimSpace(s)); match != nil {
+		if strings.TrimSpace(match[2]) == "" {
+			return match[1] + "()"
+		}
+		return match[1] + "(" + strings.Join(splitAnd(match[2]), ",") + ")"
+	}
+	result := regexp.MustCompile(`(?i)^the result of\s+([\p{L}_][\p{L}\p{N}_]*)\s+with\s+(.+)$`)
+	if match := result.FindStringSubmatch(strings.TrimSpace(s)); match != nil {
+		return match[1] + "(" + strings.Join(splitAnd(match[2]), ",") + ")"
+	}
+	for _, phrase := range []struct{ pattern, replacement string }{
+		{`(?i)^the length of\s+(.+)$`, `len($1)`},
+		{`(?i)^the square root of\s+(.+)$`, `sqrt($1)`},
+		{`(?i)^the absolute value of\s+(.+)$`, `abs($1)`},
+		{`(?i)^the type of\s+(.+)$`, `type_of($1)`},
 	} {
-		s = regexp.MustCompile(`(?i)`+regexp.QuoteMeta(pair[0])).ReplaceAllString(s, pair[1])
-	}
-	// Natural function-result and prefix phrases are rewritten before tokenizing.
-	result := regexp.MustCompile(`(?i)^the result of\s+([A-Za-z_]\w*)\s+with\s+(.+)$`)
-	if m := result.FindStringSubmatch(strings.TrimSpace(s)); m != nil {
-		parts := splitAnd(m[2])
-		return m[1] + "(" + strings.Join(parts, ",") + ")"
-	}
-	for _, p := range []struct{ re, replace string }{{`(?i)^the length of\s+(.+)$`, `len($1)`}, {`(?i)^the square root of\s+(.+)$`, `sqrt($1)`}, {`(?i)^the absolute value of\s+(.+)$`, `abs($1)`}, {`(?i)^the type of\s+(.+)$`, `type_of($1)`}} {
-		if re := regexp.MustCompile(p.re); re.MatchString(strings.TrimSpace(s)) {
-			s = re.ReplaceAllString(strings.TrimSpace(s), p.replace)
-			break
+		if pattern := regexp.MustCompile(phrase.pattern); pattern.MatchString(strings.TrimSpace(s)) {
+			return pattern.ReplaceAllString(strings.TrimSpace(s), phrase.replacement)
 		}
 	}
-	// Apply word operators only outside quoted strings.
-	var out strings.Builder
-	var segment strings.Builder
-	quote := byte(0)
-	escaped := false
-	flush := func() {
-		x := segment.String()
-		segment.Reset()
-		patterns := []struct{ from, to string }{{"is greater than or equal to", ">="}, {"is less than or equal to", "<="}, {"is not equal to", "!="}, {"isn't equal to", "!="}, {"is equal to", "=="}, {"is greater than", ">"}, {"is more than", ">"}, {"is less than", "<"}, {"is below", "<"}, {"is at least", ">="}, {"is at most", "<="}, {"is not in", "notin"}, {"is in", "in"}, {"to the power of", "**"}, {"divided by", "/"}, {"multiplied by", "*"}, {"plus", "+"}, {"minus", "-"}, {"times", "*"}, {"modulo", "%"}, {"isn't", "!="}, {"is not", "!="}, {" and ", " and "}, {" or ", " or "}}
-		for _, p := range patterns {
-			re := regexp.MustCompile(`(?i)(^|[^A-Za-z0-9_])` + regexp.QuoteMeta(p.from) + `([^A-Za-z0-9_]|$)`)
-			x = re.ReplaceAllString(x, "${1}"+p.to+"${2}")
-		}
-		reIs := regexp.MustCompile(`(?i)(^|[^A-Za-z0-9_])is([^A-Za-z0-9_]|$)`)
-		x = reIs.ReplaceAllString(x, "${1}==${2}")
-		repl := strings.NewReplacer("true", "true", "false", "false", "nothing", "nothing")
-		_ = repl
-		out.WriteString(x)
-	}
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if quote != 0 {
-			out.WriteByte(c)
-			if escaped {
-				escaped = false
-			} else if c == '\\' {
-				escaped = true
-			} else if c == quote {
-				quote = 0
-			}
+	return s
+}
+
+type languagePhrase struct{ phrase, kind, text string }
+
+var languagePhrases = []languagePhrase{
+	{"the current repetition number", "ident", "_repeat_index"},
+	{"the current item", "ident", "_current_item"},
+	{"the answer", "ident", "_last_answer"},
+	{"is greater than or equal to", ">=", ">="},
+	{"is less than or equal to", "<=", "<="},
+	{"is not equal to", "!=", "!="},
+	{"isn't equal to", "!=", "!="},
+	{"is greater than", ">", ">"},
+	{"is more than", ">", ">"},
+	{"is less than", "<", "<"},
+	{"is at least", ">=", ">="},
+	{"is at most", "<=", "<="},
+	{"is not in", "notin", "notin"},
+	{"is equal to", "==", "=="},
+	{"isn't", "!=", "!="},
+	{"is not", "!=", "!="},
+	{"is below", "<", "<"},
+	{"to the power of", "**", "**"},
+	{"multiplied by", "*", "*"},
+	{"divided by", "/", "/"},
+	{"modulo", "%", "%"},
+	{"plus", "+", "+"},
+	{"minus", "-", "-"},
+	{"times", "*", "*"},
+	{"is in", "in", "in"},
+	{"is", "==", "=="},
+}
+
+func identifierRune(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' }
+
+func matchLanguagePhrase(source string, offset int) (kind, text string, end int, ok bool) {
+	for _, phrase := range languagePhrases {
+		end = offset + len(phrase.phrase)
+		if end > len(source) || !strings.EqualFold(source[offset:end], phrase.phrase) {
 			continue
 		}
-		if c == '\'' || c == '"' {
-			flush()
-			quote = c
-			out.WriteByte(c)
-		} else {
-			segment.WriteByte(c)
+		if offset > 0 {
+			before, _ := utf8.DecodeLastRuneInString(source[:offset])
+			if identifierRune(before) {
+				continue
+			}
 		}
+		if end < len(source) {
+			after, _ := utf8.DecodeRuneInString(source[end:])
+			if identifierRune(after) {
+				continue
+			}
+		}
+		return phrase.kind, phrase.text, end, true
 	}
-	flush()
-	// Replace boolean/null words outside strings with canonical tokens.
-	return out.String()
+	return "", "", offset, false
 }
 func lex(s string) ([]token, error) {
 	s = translateExpr(s)
 	var out []token
+	position := func(offset int) (int, int) {
+		prefix := s[:offset]
+		line := strings.Count(prefix, "\n") + 1
+		lastNewline := strings.LastIndex(prefix, "\n")
+		return line, utf8.RuneCountInString(prefix[lastNewline+1:]) + 1
+	}
+	appendToken := func(kind, text string, start, end int) {
+		line, column := position(start)
+		out = append(out, token{kind: kind, text: text, start: start, end: end, line: line, column: column})
+	}
 	for i := 0; i < len(s); {
-		c := s[i]
-		if c == ' ' || c == '\t' || c == '\r' || c == '\n' {
-			i++
+		c, size := utf8.DecodeRuneInString(s[i:])
+		if unicode.IsSpace(c) {
+			i += size
+			continue
+		}
+		start := i
+		if kind, text, end, ok := matchLanguagePhrase(s, i); ok {
+			appendToken(kind, text, start, end)
+			i = end
 			continue
 		}
 		if c == '"' || c == '\'' {
-			q := c
-			i++
+			q := byte(c)
+			i += size
 			var b strings.Builder
 			esc := false
 			closed := false
 			for i < len(s) {
-				x := s[i]
-				i++
+				x, width := utf8.DecodeRuneInString(s[i:])
+				i += width
 				if esc {
 					switch x {
 					case 'n':
@@ -1234,7 +2198,7 @@ func lex(s string) ([]token, error) {
 					case 'r':
 						b.WriteByte('\r')
 					default:
-						b.WriteByte(x)
+						b.WriteRune(x)
 					}
 					esc = false
 					continue
@@ -1243,68 +2207,88 @@ func lex(s string) ([]token, error) {
 					esc = true
 					continue
 				}
-				if x == q {
+				if x == rune(q) {
 					closed = true
 					break
 				}
-				b.WriteByte(x)
+				b.WriteRune(x)
 			}
 			if !closed {
-				return nil, fail("unterminated text in expression")
+				line, column := position(start)
+				return nil, fail("unterminated text at line %d, column %d", line, column)
 			}
-			out = append(out, token{"string", b.String()})
+			appendToken("string", b.String(), start, i)
 			continue
 		}
 		if (c >= '0' && c <= '9') || (c == '.' && i+1 < len(s) && s[i+1] >= '0' && s[i+1] <= '9') {
-			start := i
-			i++
+			i += size
 			for i < len(s) && ((s[i] >= '0' && s[i] <= '9') || s[i] == '.') {
 				i++
 			}
-			out = append(out, token{"number", s[start:i]})
+			if i < len(s) && (s[i] == 'e' || s[i] == 'E') {
+				i++
+				if i < len(s) && (s[i] == '+' || s[i] == '-') {
+					i++
+				}
+				exponentStart := i
+				for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+					i++
+				}
+				if exponentStart == i {
+					line, column := position(start)
+					return nil, fail("invalid numeric exponent at line %d, column %d", line, column)
+				}
+			}
+			if _, err := strconv.ParseFloat(s[start:i], 64); err != nil {
+				line, column := position(start)
+				return nil, fail("invalid number %q at line %d, column %d", s[start:i], line, column)
+			}
+			appendToken("number", s[start:i], start, i)
 			continue
 		}
-		if (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_' {
-			start := i
-			i++
-			for i < len(s) && ((s[i] >= 'A' && s[i] <= 'Z') || (s[i] >= 'a' && s[i] <= 'z') || (s[i] >= '0' && s[i] <= '9') || s[i] == '_') {
-				i++
+		if unicode.IsLetter(c) || c == '_' {
+			i += size
+			for i < len(s) {
+				next, width := utf8.DecodeRuneInString(s[i:])
+				if !unicode.IsLetter(next) && !unicode.IsDigit(next) && next != '_' {
+					break
+				}
+				i += width
 			}
 			word := s[start:i]
 			low := strings.ToLower(word)
 			switch low {
 			case "true", "false", "nothing", "and", "or", "not", "in", "notin":
-				out = append(out, token{low, low})
+				appendToken(low, low, start, i)
 			default:
-				out = append(out, token{"ident", word})
+				appendToken("ident", word, start, i)
 			}
 			continue
 		}
 		if i+1 < len(s) {
 			two := s[i : i+2]
 			if two == ">=" || two == "<=" || two == "==" || two == "!=" || two == "**" || two == "//" {
-				out = append(out, token{two, two})
+				appendToken(two, two, start, i+2)
 				i += 2
 				continue
 			}
 		}
-		if strings.ContainsRune("+-*/%<>()[]{}.,", rune(c)) {
-			out = append(out, token{string(c), string(c)})
-			i++
+		if strings.ContainsRune("+-*/%<>()[]{}.,:", c) {
+			appendToken(string(c), string(c), start, start+size)
+			i += size
 			continue
 		}
-		return nil, fail("unexpected character %q in expression", c)
+		if c == '=' {
+			appendToken("=", "=", start, start+size)
+			i += size
+			continue
+		}
+		line, column := position(start)
+		return nil, fail("unexpected character %q at line %d, column %d", c, line, column)
 	}
-	out = append(out, token{"eof", ""})
+	line, column := position(len(s))
+	out = append(out, token{kind: "eof", line: line, column: column, start: len(s), end: len(s)})
 	return out, nil
-}
-func (p *exprParser) peek() string { return p.tokens[p.pos].kind }
-func (p *exprParser) take() token {
-	t := p.tokens[p.pos]
-	if p.pos < len(p.tokens)-1 {
-		p.pos++
-	}
-	return t
 }
 func precedence(op string) int {
 	switch op {
@@ -1323,330 +2307,83 @@ func precedence(op string) int {
 	}
 	return 0
 }
-func (p *exprParser) expression(min int) (any, error) {
-	left, err := p.prefix()
+func sliceIndices(length int, start, end *any, step int) ([]int, error) {
+	bound := func(value *any, fallback int) (int, error) {
+		if value == nil {
+			return fallback, nil
+		}
+		n, err := numberValue(*value)
+		if err != nil {
+			return 0, err
+		}
+		i := int(n)
+		if i < 0 {
+			i += length
+		}
+		return i, nil
+	}
+	startDefault := 0
+	if step < 0 {
+		startDefault = length - 1
+	}
+	first, err := bound(start, startDefault)
 	if err != nil {
 		return nil, err
 	}
-	for {
-		op := p.peek()
-		prec := precedence(op)
-		if prec < min || prec == 0 {
-			break
+	last, err := bound(end, func() int {
+		if step < 0 {
+			return -1
 		}
-		p.take()
-		next := prec + 1
-		if op == "**" {
-			next = prec
-		}
-		right, e := p.expression(next)
-		if e != nil {
-			return nil, e
-		}
-		left, e = p.binary(op, left, right)
-		if e != nil {
-			return nil, e
-		}
-	}
-	return left, nil
-}
-func (p *exprParser) prefix() (any, error) {
-	t := p.take()
-	var v any
-	var err error
-	switch t.kind {
-	case "number":
-		v, err = strconv.ParseFloat(t.text, 64)
-	case "string":
-		v = p.runtime.interpolate(t.text, p.env)
-	case "true":
-		v = true
-	case "false":
-		v = false
-	case "nothing":
-		v = nil
-	case "-", "+", "not":
-		x, e := p.expression(7)
-		if e != nil {
-			return nil, e
-		}
-		if t.kind == "not" {
-			v = !truthy(x)
-		} else {
-			n, e := numberValue(x)
-			if e != nil {
-				return nil, e
-			}
-			if t.kind == "-" {
-				v = -n
-			} else {
-				v = n
-			}
-		}
-	case "(":
-		v, err = p.expression(1)
-		if err == nil && p.peek() == ")" {
-			p.take()
-		} else if err == nil {
-			err = fail("expected )")
-		}
-	case "[":
-		xs := []any{}
-		if p.peek() != "]" {
-			for {
-				item, e := p.expression(1)
-				if e != nil {
-					return nil, e
-				}
-				xs = append(xs, item)
-				if p.peek() != "," {
-					break
-				}
-				p.take()
-			}
-		}
-		if p.peek() == "]" {
-			p.take()
-		} else {
-			return nil, fail("expected ]")
-		}
-		v = xs
-	case "{":
-		obj := map[string]any{}
-		if p.peek() != "}" {
-			for {
-				key, e := p.expression(1)
-				if e != nil {
-					return nil, e
-				}
-				if p.peek() != ":" {
-					return nil, fail("expected : in dictionary")
-				}
-				p.take()
-				val, e := p.expression(1)
-				if e != nil {
-					return nil, e
-				}
-				obj[fmt.Sprint(key)] = val
-				if p.peek() != "," {
-					break
-				}
-				p.take()
-			}
-		}
-		if p.peek() == "}" {
-			p.take()
-		} else {
-			return nil, fail("expected }")
-		}
-		v = obj
-	case "ident":
-		v, err = p.env.get(t.text)
-	default:
-		return nil, fail("expected a value, found %q", t.text)
-	}
+		return length
+	}())
 	if err != nil {
 		return nil, err
 	}
-	return p.postfix(v)
-}
-func (p *exprParser) postfix(v any) (any, error) {
-	for {
-		switch p.peek() {
-		case "(":
-			p.take()
-			args := []any{}
-			if p.peek() != ")" {
-				for {
-					x, e := p.expression(1)
-					if e != nil {
-						return nil, e
-					}
-					args = append(args, x)
-					if p.peek() != "," {
-						break
-					}
-					p.take()
-				}
-			}
-			if p.peek() != ")" {
-				return nil, fail("expected ) after arguments")
-			}
-			p.take()
-			var e error
-			v, e = invoke(v, args)
-			if e != nil {
-				return nil, e
-			}
-		case ".":
-			p.take()
-			if p.peek() != "ident" {
-				return nil, fail("expected a member name after .")
-			}
-			name := p.take().text
-			obj, ok := v.(map[string]any)
-			if !ok {
-				return nil, fail("this value has no member %q", name)
-			}
-			member, ok := obj[name]
-			if !ok {
-				return nil, fail("unknown member %q", name)
-			}
-			v = member
-		case "[":
-			p.take()
-			ix, e := p.expression(1)
-			if e != nil {
-				return nil, e
-			}
-			if p.peek() != "]" {
-				return nil, fail("expected ] after index")
-			}
-			p.take()
-			switch x := v.(type) {
-			case []any:
-				n, e := numberValue(ix)
-				if e != nil {
-					return nil, e
-				}
-				i := int(n)
-				if i < 0 {
-					i += len(x)
-				}
-				if i < 0 || i >= len(x) {
-					return nil, fail("list index out of range")
-				}
-				v = x[i]
-			case string:
-				n, e := numberValue(ix)
-				if e != nil {
-					return nil, e
-				}
-				r := []rune(x)
-				i := int(n)
-				if i < 0 {
-					i += len(r)
-				}
-				if i < 0 || i >= len(r) {
-					return nil, fail("text index out of range")
-				}
-				v = string(r[i])
-			case map[string]any:
-				val, ok := x[fmt.Sprint(ix)]
-				if !ok {
-					return nil, fail("dictionary key %q was not found", display(ix))
-				}
-				v = val
-			default:
-				return nil, fail("this value cannot be indexed")
-			}
-		default:
-			return v, nil
+	if step > 0 {
+		if first < 0 {
+			first = 0
+		} else if first > length {
+			first = length
+		}
+		if last < 0 {
+			last = 0
+		} else if last > length {
+			last = length
+		}
+	} else {
+		if first < -1 {
+			first = -1
+		} else if first >= length {
+			first = length - 1
+		}
+		if last < -1 {
+			last = -1
+		} else if last >= length {
+			last = length - 1
 		}
 	}
-}
-func (p *exprParser) binary(op string, a, b any) (any, error) {
-	switch op {
-	case "and":
-		return truthy(a) && truthy(b), nil
-	case "or":
-		return truthy(a) || truthy(b), nil
-	case "==":
-		return reflect.DeepEqual(a, b), nil
-	case "!=":
-		return !reflect.DeepEqual(a, b), nil
-	case "<":
-		return compare(a, b) < 0, nil
-	case ">":
-		return compare(a, b) > 0, nil
-	case "<=":
-		return compare(a, b) <= 0, nil
-	case ">=":
-		return compare(a, b) >= 0, nil
-	case "in", "notin":
-		found := false
-		switch x := b.(type) {
-		case []any:
-			for _, v := range x {
-				if reflect.DeepEqual(a, v) {
-					found = true
-				}
-			}
-		case string:
-			found = strings.Contains(x, fmt.Sprint(a))
-		case map[string]any:
-			_, found = x[fmt.Sprint(a)]
-		}
-		if op == "notin" {
-			found = !found
-		}
-		return found, nil
-	case "+":
-		if x, ok := a.(string); ok {
-			return x + display(b), nil
-		}
-		if xs, ok := a.([]any); ok {
-			ys, ok := b.([]any)
-			if !ok {
-				return nil, fail("cannot add a list to this value")
-			}
-			return append(xs, ys...), nil
-		}
-		x, e := numberValue(a)
-		if e != nil {
-			return nil, e
-		}
-		y, e := numberValue(b)
-		return x + y, e
-	case "-", "*", "/", "//", "%", "**":
-		x, e := numberValue(a)
-		if e != nil {
-			return nil, e
-		}
-		y, e := numberValue(b)
-		if e != nil {
-			return nil, e
-		}
-		switch op {
-		case "-":
-			return x - y, nil
-		case "*":
-			return x * y, nil
-		case "/":
-			if y == 0 {
-				return nil, fail("division by zero")
-			}
-			return x / y, nil
-		case "//":
-			if y == 0 {
-				return nil, fail("division by zero")
-			}
-			return math.Floor(x / y), nil
-		case "%":
-			if y == 0 {
-				return nil, fail("division by zero")
-			}
-			return math.Mod(x, y), nil
-		case "**":
-			return math.Pow(x, y), nil
-		}
+	indices := make([]int, 0)
+	for i := first; (step > 0 && i < last) || (step < 0 && i > last); i += step {
+		indices = append(indices, i)
 	}
-	return nil, fail("unsupported operator %q", op)
+	return indices, nil
 }
+
 func (r *runtime) eval(s string, e *env) (any, error) {
 	tokens, err := lex(s)
 	if err != nil {
 		return nil, err
 	}
-	p := &exprParser{tokens: tokens, runtime: r, env: e}
-	v, err := p.expression(1)
+	p := &expressionParser{tokens: tokens}
+	expr, err := p.parse()
 	if err != nil {
 		return nil, err
 	}
 	if p.peek() != "eof" {
-		return nil, fail("unexpected %q in expression", p.tokens[p.pos].text)
+		unexpected := p.tokens[p.pos]
+		return nil, fail("unexpected %q at line %d, column %d in expression", unexpected.text, unexpected.line, unexpected.column)
 	}
-	return v, nil
+	return r.evalExpression(expr, e)
 }
 
 var interpolation = regexp.MustCompile(`\{([^{}]+)\}`)

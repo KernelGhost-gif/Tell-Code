@@ -1,26 +1,27 @@
-Tell 0.2.0 native binaries
+Tell 0.3.0 native binaries
 
-These executables run Tell programs without Python or a separate Go installation.
+These executables run Tell programs without Python or a separately installed Go toolchain.
 
-Choose the binary matching your operating system and CPU:
-  tell-linux-amd64       Linux x86-64
-  tell-linux-arm64       Linux ARM64
-  tell-darwin-amd64      macOS Intel
-  tell-darwin-arm64      macOS Apple Silicon
-  tell-windows-amd64.exe Windows x86-64
-  tell-windows-arm64.exe Windows ARM64
+Targets: Linux x64/ARM64, macOS Intel/Apple Silicon, and Windows x64/ARM64.
 
-Usage:
+Run a program:
   Linux/macOS: ./tell-linux-amd64 program.tell
   Windows:     tell-windows-amd64.exe program.tell
 
-Check a source file without running it:
+Check syntax:
   Linux/macOS: ./tell-linux-amd64 --check program.tell
   Windows:     tell-windows-amd64.exe --check program.tell
 
-Print the runtime version:
-  Linux/macOS: ./tell-linux-amd64 --version
-  Windows:     tell-windows-amd64.exe --version
+Run source tests:
+  Linux/macOS: ./tell-linux-amd64 test
+  Windows:     tell-windows-amd64.exe test
 
-The macOS and Windows binaries are cross-compiled from the source. Their actual
-execution should be smoke-tested on the corresponding operating systems.
+Compile the supported native bytecode subset and execute it:
+  Linux/macOS: ./tell-linux-amd64 build program.tell
+               ./tell-linux-amd64 run program.tbc
+  Windows:     tell-windows-amd64.exe build program.tell
+               tell-windows-amd64.exe run program.tbc
+
+The bytecode compiler supports only a subset of Tell; consult docs/CLI_REFERENCE.md.
+
+Cross-compilation proves that a target binary was produced. Run target-specific smoke tests before claiming it was executed on that operating system.

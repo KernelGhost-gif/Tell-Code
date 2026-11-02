@@ -7,7 +7,7 @@ Tell has two runtimes:
 - **Native runtime:** a standalone executable written in Go. It runs `.tell` programs directly and does not need Python or Go installed on the user's machine.
 - **Python runtime:** the original interpreter, kept for compatibility, experimentation, and people who want to embed or extend Tell from Python.
 
-Current version: **0.2.0**.
+Current version: **0.3.0**.
 
 ## A first program
 
@@ -32,6 +32,8 @@ You are an adult.
 
 ## Run Tell without Python
 
+See [examples/language-core.tell](examples/language-core.tell) for Unicode identifiers, named arguments, short-circuit logic, and an otherwise-if chain.
+
 Download the executable for your operating system from the `releases/` folder or the GitHub Actions build artifact.
 
 | File | Platform |
@@ -48,6 +50,7 @@ On Linux or macOS, make the file executable once, then run it:
 ```bash
 chmod +x ./tell-linux-amd64
 ./tell-linux-amd64 examples/hello.tell
+./tell-linux-amd64 repl
 ./tell-linux-amd64 --check examples/features.tell
 ./tell-linux-amd64 --version
 ```
@@ -56,11 +59,21 @@ On Windows, run from PowerShell:
 
 ```powershell
 .\tell-windows-amd64.exe examples\hello.tell
+.\tell-windows-amd64.exe repl
 .\tell-windows-amd64.exe --check examples\features.tell
 .\tell-windows-amd64.exe --version
 ```
 
 The executable is self-contained. It does not invoke Python, a shell, or a separately installed Go runtime. Use the matching OS/CPU build; macOS and Windows builds are cross-compiled in CI and should also be smoke-tested on those operating systems before a production release.
+
+The native runtime can compile the documented core subset to stack bytecode and run it:
+
+```text
+tell build examples/hello.tell
+tell run examples/hello.tbc
+```
+
+Use `tell build source.tell --output output.tbc` to choose the artifact path. The compiler supports functions, recursion, closures, core control flow, local modules embedded in the artifact, `Try`/`Raise`, and the initial class model with constructors, fields, methods, single inheritance, and overrides. `Finally` and other language features remain unsupported in bytecode; see the [CLI reference](docs/CLI_REFERENCE.md) for its exact subset and limits. [examples/compiled-objects.tell](examples/compiled-objects.tell) demonstrates an object program that can be run by either interpreter or compiled to bytecode by the native runtime.
 
 ## Run the Python version
 
@@ -68,6 +81,10 @@ Python 3.10 or newer is required for this runtime only.
 
 ```bash
 python tell.py examples/hello.tell
+python -m tell run examples/hello.tell
+python -m tell check examples/hello.tell
+python -m tell run --max-call-depth 128 --max-loop-iterations 50000 examples/hello.tell
+cat examples/hello.tell | python -m tell run -
 python tell.py --check examples/features.tell
 python tell.py --version
 ```
@@ -86,16 +103,22 @@ tell examples/hello.tell
 | Variables and assignment | Yes | Yes |
 | Arithmetic and word operators | Yes | Yes |
 | Text interpolation | Yes | Yes |
-| If / otherwise | Yes | Yes |
+| If / otherwise-if / otherwise | Yes | Yes |
 | While, repeat, for-each loops | Yes | Yes |
 | Functions and recursion | Yes | Yes |
+| Named arguments for Tell-defined functions, constructors, methods | Yes | Yes |
+| Unicode identifiers (letters, numbers, underscore) | Yes | Yes |
+| Persistent multiline REPL | Yes | Yes |
 | Lists and dictionaries | Yes | Yes |
 | Input and output | Yes | Yes |
 | Basic file read/write/append | Yes | Yes |
 | Try / error handling | Yes | Yes |
 | Math, random, JSON, statistics, date/time libraries | Core functions | Python-backed allowlist |
 | Full Python module ecosystem | No | No, intentionally allowlisted |
-| Classes, inheritance, async, package manager | Planned | Planned |
+| Constructors, fields, instance methods, single inheritance | Yes | Yes |
+| Local `.tell` modules with public exports and import caching | Yes | Yes |
+| Static methods, access modifiers, multiple inheritance | Planned | Planned |
+| Async, package manager | Planned | Planned |
 
 The native and Python runtimes aim to share the same core syntax. The Python runtime currently has a broader set of built-ins and standard-library behavior. This is an evolving language, not a claim of complete Python compatibility.
 
@@ -201,6 +224,15 @@ Say data["answer"].
 
 Native modules currently include `math`, `random`, `statistics`, `json`, and `datetime`. The Python runtime has a similar allowlist.
 
+Tell files can also import another `.tell` file relative to the importing source file:
+
+```tell
+Use the module "helpers.tell" as helpers.
+Say helpers.triple(7).
+```
+
+Imports execute once per interpreter and export public top-level names. Names beginning with `_` are private. Circular imports are rejected. `tell build` compiles and embeds local module dependencies recursively, so a `.tbc` artifact does not need the source modules at runtime. See the [module guide](docs/MODULES.md) and [CLI reference](docs/CLI_REFERENCE.md). There is no package registry or dependency installer.
+
 ### Files
 
 ```tell
@@ -252,6 +284,8 @@ The script uses `CGO_ENABLED=0`, so the outputs do not depend on a C runtime or 
 python -m unittest discover -s tests -v
 ```
 
+Tell source tests use `Check that expression.` assertions and filenames ending in `_test.tell`. Run `python -m tell test` or `tell test` to discover them below the current directory; pass a directory or a single `.tell` file to narrow the run.
+
 The Python command above tests the preserved Python implementation; it is not required to run native Tell programs.
 
 ## Project layout
@@ -271,11 +305,15 @@ Tell-Code/
 └── pyproject.toml           # Python package metadata
 ```
 
+The supported core is described in [`docs/LANGUAGE_SPECIFICATION.md`](docs/LANGUAGE_SPECIFICATION.md), with the [CLI reference](docs/CLI_REFERENCE.md), [variable and runtime type behavior](docs/VARIABLES_AND_TYPES.md), and the implemented object subset in [`docs/OBJECTS_AND_CLASSES.md`](docs/OBJECTS_AND_CLASSES.md). Architecture, security boundaries, and known gaps are documented in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/SECURITY.md`](docs/SECURITY.md), and [`docs/ENGINEERING_AUDIT.md`](docs/ENGINEERING_AUDIT.md). The shared programs in `conformance/core.json` run in both runtime test suites.
+
+Tagging a version as `v*` runs both test suites, cross-builds the six native targets, generates checksums, and publishes a GitHub Release using the workflow's `GITHUB_TOKEN` with `contents: write` permission.
+
 ## Roadmap
 
 - **0.2:** Native runtime and multi-platform standalone binaries.
 - **0.3:** Stronger grammar, better diagnostics, more consistent standard-library behavior.
-- **0.4:** Classes, objects, and modules.
+- **0.4:** Extend the initial class model with access controls, static members, and richer object behavior.
 - **0.5:** Package manager and debugger.
 - **1.0:** Stable language specification and compatibility suite.
 

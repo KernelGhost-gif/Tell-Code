@@ -1,0 +1,15 @@
+To greet with person and greeting:
+    Give back "{greeting}, {person}.".
+End function.
+
+Let constant hello_prefix as text be "Hello".
+Let café as number be 2.
+If false and (1 divided by 0 is equal to 0):
+    Say "This branch should not run.".
+Otherwise if café is equal to 2:
+    Say greet(person="Ada", greeting=hello_prefix).
+Otherwise:
+    Say "The value was unexpected.".
+End if.
+
+Say "Unicode value: {café}.".

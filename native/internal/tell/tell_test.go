@@ -2,11 +2,207 @@ package tell
 
 import (
 	"bytes"
+	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestSharedConformanceCorpus(t *testing.T) {
+	data, err := os.ReadFile("../../../conformance/core.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []struct {
+		Name     string `json:"name"`
+		Filename string `json:"filename"`
+		Source   string `json:"source"`
+		Output   string `json:"output"`
+		Error    string `json:"error"`
+	}
+	if err := json.Unmarshal(data, &cases); err != nil {
+		t.Fatal(err)
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.Name, func(t *testing.T) {
+			var output bytes.Buffer
+			filename := testCase.Name + ".tell"
+			if testCase.Filename != "" {
+				filename = filepath.Join("../../../conformance", filepath.FromSlash(testCase.Filename))
+			}
+			err := RunWithIO(testCase.Source, filename, bytes.NewReader(nil), &output)
+			if testCase.Error != "" {
+				if err == nil || !strings.Contains(strings.ToLower(err.Error()), strings.ToLower(testCase.Error)) {
+					t.Fatalf("expected error containing %q, got %v", testCase.Error, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := io.ReadAll(&output)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != testCase.Output {
+				t.Fatalf("output mismatch: got %q, want %q", got, testCase.Output)
+			}
+		})
+	}
+}
+
+func TestModuleExampleRuns(t *testing.T) {
+	filename := filepath.Join("../../../examples", "modules.tell")
+	source, err := os.ReadFile(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	if err := RunWithIO(string(source), filename, bytes.NewReader(nil), &output); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := output.String(), "42\n"; got != want {
+		t.Fatalf("module example output = %q, want %q", got, want)
+	}
+}
+
+func TestCheckThatAssertionPassesAndFails(t *testing.T) {
+	if _, err := runTest(t, "Check that 2 plus 2 is equal to 4.", ""); err != nil {
+		t.Fatalf("true assertion failed: %v", err)
+	}
+	if _, err := runTest(t, "Check that 2 plus 2 is equal to 5.", ""); err == nil || !strings.Contains(err.Error(), "check failed") {
+		t.Fatalf("expected a failed assertion, got %v", err)
+	}
+}
+
+func FuzzExpressionParserDoesNotPanic(f *testing.F) {
+	for _, seed := range []string{
+		`2 plus 3 times 4`,
+		`[1, {"key": values[1:]}]`,
+		`"is equal to plus"`,
+		`1e+`,
+		`((((`,
+	} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, source string) {
+		tokens, err := lex(source)
+		if err != nil {
+			return
+		}
+		parser := &expressionParser{tokens: tokens}
+		_, _ = parser.parse()
+	})
+}
+
+func TestCircularModuleImportIsRejected(t *testing.T) {
+	err := RunWithIO(`Use the module "cycle_a.tell" as a.`, "../../../conformance/modules/entry.tell", bytes.NewReader(nil), &bytes.Buffer{})
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "circular module import") {
+		t.Fatalf("expected circular module import error, got %v", err)
+	}
+}
+
+func TestSessionKeepsValuesBetweenExecutions(t *testing.T) {
+	var output bytes.Buffer
+	session := NewSession(strings.NewReader(""), &output)
+	if err := session.Exec(`Let greeting be "hello".`, "first.tell"); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.Exec(`Say greeting.`, "second.tell"); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := output.String(), "hello\n"; got != want {
+		t.Fatalf("session output = %q, want %q", got, want)
+	}
+}
+
+func TestSessionEchoesExpressionResultsWhenEnabled(t *testing.T) {
+	var output bytes.Buffer
+	session := NewSession(strings.NewReader(""), &output)
+	session.SetEchoExpressions(true)
+	if err := session.Exec("2 plus 2", "repl.tell"); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.Exec("_ plus 1", "repl.tell"); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := output.String(), "4\n5\n"; got != want {
+		t.Fatalf("REPL expression output = %q, want %q", got, want)
+	}
+}
+
+func TestFormatterNormalizesIndentationAndPreservesProgram(t *testing.T) {
+	source := "# top\nIf true:\nSay \"keep  \".\n# inside\n Otherwise:\n   Say \"skip\". # trailing\nEnd if.\n"
+	want := "# top\nIf true:\n    Say \"keep  \".\n    # inside\nOtherwise:\n    Say \"skip\". # trailing\nEnd if.\n"
+	formatted, err := Format(source, "format.tell")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if formatted != want {
+		t.Fatalf("formatted source = %q, want %q", formatted, want)
+	}
+	formattedAgain, err := Format(formatted, "format.tell")
+	if err != nil || formattedAgain != formatted {
+		t.Fatalf("formatter is not idempotent: output=%q err=%v", formattedAgain, err)
+	}
+	before, _ := runTest(t, source, "")
+	after, _ := runTest(t, formatted, "")
+	if before != after {
+		t.Fatalf("formatter changed program output: before=%q after=%q", before, after)
+	}
+}
+
+func TestRecursionLimitReturnsRuntimeError(t *testing.T) {
+	source := `To recurse with value:
+    Give back recurse(value plus 1).
+End function.
+Say recurse(0).`
+	_, err := runTest(t, source, "")
+	if err == nil || !strings.Contains(err.Error(), "maximum function call depth (64) exceeded") {
+		t.Fatalf("expected recursion limit error, got %v", err)
+	}
+}
+
+func TestExecutionLimitsCanBeConfigured(t *testing.T) {
+	var output bytes.Buffer
+	limits := ExecutionLimits{MaxFunctionCallDepth: 3, MaxLoopIterations: 2}
+	session := NewSessionWithLimits(strings.NewReader(""), &output, limits)
+	err := session.Exec("Repeat 3 times:\n    Say 1.\nEnd repeat.", "limit.tell")
+	if err == nil || !strings.Contains(err.Error(), "repeat count must be between 0 and 2") {
+		t.Fatalf("expected configured repeat limit error, got %v", err)
+	}
+	source := "To recurse with value:\n    Give back recurse(value plus 1).\nEnd function.\nSay recurse(0)."
+	err = session.Exec(source, "limit.tell")
+	if err == nil || !strings.Contains(err.Error(), "maximum function call depth (3) exceeded") {
+		t.Fatalf("expected configured recursion limit error, got %v", err)
+	}
+	var exactOutput bytes.Buffer
+	exactLimit := NewSessionWithLimits(strings.NewReader(""), &exactOutput, ExecutionLimits{MaxFunctionCallDepth: 3, MaxLoopIterations: 2})
+	err = exactLimit.Exec("Let count be 0.\nWhile count is less than 2:\n    Set count to count plus 1.\nEnd while.", "exact-limit.tell")
+	if err != nil {
+		t.Fatalf("loop completing at its limit must succeed, got %v", err)
+	}
+	err = exactLimit.Exec("For each item in [1, 2, 3]:\n    Say item.\nEnd loop.", "for-limit.tell")
+	if err == nil || !strings.Contains(err.Error(), "for-each loop exceeded the configured limit of 2") {
+		t.Fatalf("expected configured for-each limit error, got %v", err)
+	}
+}
+
+func TestClassRuntimeStorageIsNotExposed(t *testing.T) {
+	source := `Create a class called Box:
+    When creating a Box with value:
+        Remember value as this.value.
+    End constructor.
+End class.
+Let box be a new Box with 3.
+Say box.fields.`
+	_, err := runTest(t, source, "")
+	if err == nil || !strings.Contains(err.Error(), `Box has no member "fields"`) {
+		t.Fatalf("expected internal field access to fail, got %v", err)
+	}
+}
 
 func runTest(t *testing.T, source, input string) (string, error) {
 	t.Helper()
@@ -25,6 +221,41 @@ Say "{name} has {score} points.".`, "")
 	}
 	if out != "Ada has 22 points.\n" {
 		t.Fatalf("unexpected output: %q", out)
+	}
+}
+
+func TestNamedArgumentValidation(t *testing.T) {
+	source := "To add with left and right:\n    Give back left plus right.\nEnd function.\nSay add(1, left=2)."
+	_, err := runTest(t, source, "")
+	if err == nil || !strings.Contains(err.Error(), "multiple values") {
+		t.Fatalf("expected duplicate argument error, got %v", err)
+	}
+	source = "To add with left and right:\n    Give back left plus right.\nEnd function.\nSay add(other=2)."
+	_, err = runTest(t, source, "")
+	if err == nil || !strings.Contains(err.Error(), "no parameter named") {
+		t.Fatalf("expected unknown parameter error, got %v", err)
+	}
+}
+
+func TestRuntimeErrorsIncludeSourceColumns(t *testing.T) {
+	source := "If true:\n    Say 1 divided by 0.\nEnd if."
+	_, err := runTest(t, source, "")
+	if err == nil || !strings.Contains(err.Error(), "test.tell:2:5:") {
+		t.Fatalf("expected source file, line, and column in error, got %v", err)
+	}
+}
+
+func TestExpressionLexerTracksUnicodeColumns(t *testing.T) {
+	tokens, err := lex("café + 2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tokens[0].kind != "ident" || tokens[0].text != "café" || tokens[0].column != 1 {
+		t.Fatalf("unexpected unicode identifier token: %#v", tokens[0])
+	}
+	_, err = lex("é + @")
+	if err == nil || !strings.Contains(err.Error(), "column 5") {
+		t.Fatalf("expected location at Unicode-aware column 5, got %v", err)
 	}
 }
 

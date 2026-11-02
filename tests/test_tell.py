@@ -1,9 +1,13 @@
 import os
+import json
+import io
 import tempfile
 import unittest
 from pathlib import Path
 
 from tell import Interpreter, Parser, TellError
+from tell.__main__ import repl, run_tests
+from tell.interpreter import format_source
 
 
 class TellLanguageTests(unittest.TestCase):
@@ -67,6 +71,13 @@ Say answer.
         self.assertEqual(output, ["42"])
         self.assertEqual(env.get("answer"), 42)
 
+    def test_legacy_python_expression_forms_remain_available(self):
+        output = []
+        Interpreter(output_fn=output.append).run(
+            'Say (1, 2).\nSay {1, 2}.\nSay "yes" if true else "no".'
+        )
+        self.assertEqual(output, ["(1, 2)", "{1, 2}", "yes"])
+
     def test_input_and_number_conversion(self):
         output, _ = self.run_tell('''
 Ask "Age? " and save the answer as raw_age.
@@ -123,7 +134,7 @@ Use the math library as maths.
 Say the result of factorial with 5.
 Say maths.sqrt(81).
 """)
-        self.assertEqual(output, ["120", "9.0"])
+        self.assertEqual(output, ["120", "9"])
 
     def test_file_read_and_write(self):
         original = Path.cwd()
@@ -152,6 +163,136 @@ Say contents.
         root = Path(__file__).resolve().parents[1]
         for file in (root / "examples").glob("*.tell"):
             Parser(file.read_text(encoding="utf-8"), str(file)).parse()
+
+    def test_module_example_executes(self):
+        root = Path(__file__).resolve().parents[1]
+        filename = root / "examples" / "modules.tell"
+        output = io.StringIO()
+        interpreter = Interpreter(output_fn=lambda text: output.write(text + "\n"))
+        interpreter.run(filename.read_text(encoding="utf-8"), str(filename))
+        self.assertEqual(output.getvalue(), "42\n")
+
+    def test_check_that_assertion_passes_and_fails(self):
+        Interpreter().run("Check that 2 plus 2 is equal to 4.")
+        with self.assertRaisesRegex(TellError, "Check failed"):
+            Interpreter().run("Check that 2 plus 2 is equal to 5.", "assertion.tell")
+
+    def test_tell_test_discovers_and_runs_test_files(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "one_test.tell").write_text("Check that true.\n", encoding="utf-8")
+            (root / "ignored.tell").write_text("Check that false.\n", encoding="utf-8")
+            output, errors = io.StringIO(), io.StringIO()
+            status = run_tests(str(root), output_stream=output, error_stream=errors)
+            self.assertEqual(status, 0)
+            self.assertIn("1 passed, 0 failed", output.getvalue())
+            self.assertEqual(errors.getvalue(), "")
+
+            (root / "failure_test.tell").write_text("Check that false.\n", encoding="utf-8")
+            output, errors = io.StringIO(), io.StringIO()
+            status = run_tests(str(root), output_stream=output, error_stream=errors)
+            self.assertEqual(status, 1)
+            self.assertIn("1 failed", output.getvalue())
+            self.assertIn("Check failed", errors.getvalue())
+
+    def test_shared_conformance_corpus(self):
+        root = Path(__file__).resolve().parents[1]
+        cases = json.loads((root / "conformance" / "core.json").read_text(encoding="utf-8"))
+        for case in cases:
+            with self.subTest(case=case["name"]):
+                output = io.StringIO()
+                interpreter = Interpreter(output_fn=lambda text: output.write(text + "\n"))
+                filename = str(root / "conformance" / case.get("filename", f"{case['name']}.tell"))
+                if case.get("error"):
+                    with self.assertRaises(TellError) as caught:
+                        interpreter.run(case["source"], filename)
+                    self.assertIn(case["error"].casefold(), str(caught.exception).casefold())
+                    continue
+                interpreter.run(case["source"], filename)
+                self.assertEqual(output.getvalue(), case["output"])
+
+    def test_named_arguments_reject_duplicates_and_unknown_names(self):
+        source = '''To add with left and right:
+    Give back left plus right.
+End function.
+Say add(1, left=2).'''
+        with self.assertRaisesRegex(TellError, "multiple values"):
+            Interpreter().run(source)
+
+        source = '''To add with left and right:
+    Give back left plus right.
+End function.
+Say add(other=2).'''
+        with self.assertRaisesRegex(TellError, "no parameter named"):
+            Interpreter().run(source)
+
+    def test_runtime_errors_include_source_columns(self):
+        source = "If true:\n    Say 1 divided by 0.\nEnd if."
+        with self.assertRaisesRegex(TellError, r"sample\.tell:2:5:"):
+            Interpreter().run(source, "sample.tell")
+
+    def test_circular_module_import_is_rejected(self):
+        root = Path(__file__).resolve().parents[1]
+        source_path = root / "conformance" / "modules" / "entry.tell"
+        with self.assertRaisesRegex(TellError, "Circular module import"):
+            Interpreter().run('Use the module "cycle_a.tell" as a.', str(source_path))
+
+    def test_repl_persists_values_and_accepts_multiline_functions(self):
+        source = '''Let name be "Ada".
+To greet with person:
+    Give back "Hello, {person}!".
+End function.
+Say greet(name).
+:exit
+'''
+        output = io.StringIO()
+        self.assertEqual(repl(io.StringIO(source), output), 0)
+        self.assertIn("Hello, Ada!", output.getvalue())
+
+    def test_repl_echoes_bare_expression_results_like_idle(self):
+        output = io.StringIO()
+        repl(io.StringIO("2 plus 2\n_\n:exit\n"), output)
+        self.assertIn("4\n4\n", output.getvalue())
+
+    def test_formatter_normalizes_indentation_and_preserves_program(self):
+        source = '# top\nIf true:\nSay "keep  ".\n# inside\n Otherwise:\n   Say "skip". # trailing\nEnd if.\n'
+        expected = '# top\nIf true:\n    Say "keep  ".\n    # inside\nOtherwise:\n    Say "skip". # trailing\nEnd if.\n'
+        formatted = format_source(source, "format.tell")
+        self.assertEqual(formatted, expected)
+        self.assertEqual(format_source(formatted, "format.tell"), formatted)
+        before, _ = self.run_tell(source)
+        after, _ = self.run_tell(formatted)
+        self.assertEqual(before, after)
+
+    def test_recursion_limit_is_a_tell_error(self):
+        source = '''To recurse with value:
+    Give back recurse(value plus 1).
+End function.
+Say recurse(0).
+'''
+        with self.assertRaisesRegex(TellError, r"maximum function call depth \(64\) exceeded"):
+            Interpreter().run(source, "recursion.tell")
+
+    def test_execution_limits_can_be_configured(self):
+        with self.assertRaisesRegex(TellError, "repeat count is too large"):
+            Interpreter(max_loop_iterations=2).run("Repeat 3 times:\n    Say 1.\nEnd repeat.")
+        source = "To repeat_call with number:\n    Give back repeat_call(number plus 1).\nEnd function.\nSay repeat_call(0)."
+        with self.assertRaisesRegex(TellError, r"maximum function call depth \(3\) exceeded"):
+            Interpreter(max_call_depth=3).run(source)
+        with self.assertRaisesRegex(TellError, "For-each loop exceeded"):
+            Interpreter(max_loop_iterations=2).run("For each item in [1, 2, 3]:\n    Say item.\nEnd loop.")
+
+    def test_class_runtime_storage_is_not_exposed_as_language_members(self):
+        source = '''Create a class called Box:
+    When creating a Box with value:
+        Remember value as this.value.
+    End constructor.
+End class.
+Let box be a new Box with 3.
+Say box.fields.
+'''
+        with self.assertRaisesRegex(TellError, "has no member 'fields'"):
+            Interpreter().run(source, "private-fields.tell")
 
 
 if __name__ == "__main__":

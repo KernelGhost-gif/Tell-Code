@@ -1,0 +1,4 @@
+Use the module "math_helpers.tell" as helpers.
+Use the module "math_helpers.tell" as helper_copy.
+Say helpers.triple(7).
+Say helper_copy.triple(3).

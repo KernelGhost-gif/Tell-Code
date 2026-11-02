@@ -1,0 +1,20 @@
+Create a class called Animal:
+    When creating an Animal with name:
+        Remember name as this.name.
+    End constructor.
+
+    To speak:
+        Say "{this.name} makes a sound.".
+    End function.
+End class.
+
+Create a class called Dog based on Animal:
+    To speak:
+        Say "Woof, {this.name}!".
+    End function.
+End class.
+
+Let pet as Animal be a new Dog with "Rex".
+Tell pet to speak.
+Set pet.name to "Milo".
+Tell pet to speak.

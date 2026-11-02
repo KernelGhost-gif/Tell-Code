@@ -1,0 +1,3 @@
+To double(value):
+    Give back value times 2.
+End function.

@@ -1,0 +1,133 @@
+[
+  {
+    "name": "arithmetic and interpolation",
+    "source": "Let count be 2.\nSay \"count={count}; total={count plus 3}.\".",
+    "output": "count=2; total=5.\n"
+  },
+  {
+    "name": "branch and loop",
+    "source": "Let total be 0.\nRepeat 3 times:\n    Set total to total plus the current repetition number.\nEnd repeat.\nIf total is equal to 6:\n    Say \"ok\".\nOtherwise:\n    Say \"bad\".\nEnd if.",
+    "output": "ok\n"
+  },
+  {
+    "name": "function and collection",
+    "source": "To double with value:\n    Give back value times 2.\nEnd function.\nLet values be [2, 4].\nSay double(values[1]).",
+    "output": "8\n"
+  },
+  {
+    "name": "dictionary literal and slice",
+    "source": "Let profile be {\"answer\": 42}.\nLet values be [0, 1, 2, 3, 4].\nSay profile[\"answer\"].\nSay values[1:4:2].\nSay values[::-1].",
+    "output": "42\n[1, 3]\n[4, 3, 2, 1, 0]\n"
+  },
+  {
+    "name": "unicode text slicing",
+    "source": "Say \"héllo\"[1:3].",
+    "output": "él\n"
+  },
+  {
+    "name": "class constructor fields and methods",
+    "source": "Create a class called Animal:\n    When creating an Animal with name:\n        Remember name as this.name.\n    End constructor.\n    To speak:\n        Say \"{this.name} makes a sound.\".\n    End function.\n    To greet with greeting:\n        Say \"{greeting}, {this.name}.\".\n    End function.\nEnd class.\nLet dog be a new Animal with \"Max\".\nTell dog to speak.\nTell dog to greet with \"Hello\".",
+    "output": "Max makes a sound.\nHello, Max.\n"
+  },
+  {
+    "name": "class inheritance and overriding",
+    "source": "Create a class called Animal:\n    When creating an Animal with name:\n        Remember name as this.name.\n    End constructor.\n    To speak:\n        Say \"{this.name} makes a sound.\".\n    End function.\nEnd class.\nCreate a class called Dog based on Animal:\n    To speak:\n        Say \"Woof, {this.name}!\".\n    End function.\n    To greet with prefix:\n        Say \"{prefix} {this.name}.\".\n    End function.\nEnd class.\nLet pet be a new Dog with \"Rex\".\nSet pet.name to \"Rexy\".\nTell pet to speak.\nTell pet to greet with \"Pet:\".",
+    "output": "Woof, Rexy!\nPet: Rexy.\n"
+  },
+  {
+    "name": "class type inspection",
+    "source": "Create a class called Box:\nEnd class.\nLet box be a new Box.\nSay type_of(Box).\nSay type_of(box).",
+    "output": "class\nBox\n"
+  },
+  {
+    "name": "local module import and cache",
+    "filename": "modules/main.tell",
+    "source": "Use the module \"math_helpers.tell\" as helpers.\nUse the module \"math_helpers.tell\" as helper_copy.\nSay helpers.triple(7).\nSay helper_copy.triple(3).",
+    "output": "helper loaded\n21\n9\n"
+  },
+  {
+    "name": "expression precedence and short circuit",
+    "source": "If 2 plus 3 times 4 is equal to 14:\n    Say \"precedence ok\".\nEnd if.\nIf false and (1 divided by 0 is equal to 0):\n    Say \"bad and\".\nOtherwise:\n    Say \"and short-circuited\".\nEnd if.\nIf true or (1 divided by 0 is equal to 0):\n    Say \"or short-circuited\".\nEnd if.\nIf 2 to the power of 3 to the power of 2 is equal to 512:\n    Say \"right associative\".\nEnd if.\nIf 1.5e2 plus 1e1 is equal to 160:\n    Say \"scientific notation\".\nEnd if.",
+    "output": "precedence ok\nand short-circuited\nor short-circuited\nright associative\nscientific notation\n"
+  },
+  {
+    "name": "operator phrases preserve quoted text",
+    "source": "Say \"plus and is equal to remain text\".\nIf 4 IS AT LEAST 4:\n    Say \"case-insensitive phrase\".\nEnd if.\nIf 2 is not in [1, 3]:\n    Say \"not a member\".\nEnd if.\nIf 2 is in [1, 2, 3]:\n    Say \"member\".\nEnd if.",
+    "output": "plus and is equal to remain text\ncase-insensitive phrase\nnot a member\nmember\n"
+  },
+  {
+    "name": "unicode identifiers and parameters",
+    "source": "Let café be 7.\nTo double with valeur:\n    Give back valeur times 2.\nEnd function.\nLet résumé be double(café).\nSay résumé.",
+    "output": "14\n"
+  },
+  {
+    "name": "named function arguments",
+    "source": "To greet with person and greeting:\n    Give back \"{greeting}, {person}!\".\nEnd function.\nSay greet(person=\"Ada\", greeting=\"Hello\").\nSay greet(\"Grace\", greeting=\"Welcome\").",
+    "output": "Hello, Ada!\nWelcome, Grace!\n"
+  },
+  {
+    "name": "named constructor and method arguments",
+    "source": "Create a class called Speaker:\n    When creating a Speaker with name:\n        Remember name as this.name.\n    End constructor.\n    To greet with greeting:\n        Say \"{greeting}, {this.name}!\".\n    End function.\nEnd class.\nLet speaker be Speaker(name=\"Ada\").\nTell speaker to greet with \"Hello\".\nSay speaker.greet(greeting=\"Welcome\").",
+    "output": "Hello, Ada!\nWelcome, Ada!\nnothing\n"
+  },
+  {
+    "name": "portable scalar rendering",
+    "source": "Say nothing.\nSay true.\nSay false.",
+    "output": "nothing\ntrue\nfalse\n"
+  },
+  {
+    "name": "portable division error",
+    "source": "Say 10 divided by 0.",
+    "error": "division by zero"
+  },
+  {
+    "name": "constants and runtime type annotations",
+    "source": "Let constant greeting as text be \"Hello\".\nLet visits as number be 2.\nSet visits to visits plus 1.\nSay greeting.\nSay visits.",
+    "output": "Hello\n3\n"
+  },
+  {
+    "name": "class annotations accept derived instances",
+    "source": "Create a class called Parent:\nEnd class.\nCreate a class called Child based on Parent:\nEnd class.\nLet value as Parent be new Child.\nSay type_of(value).",
+    "output": "Child\n"
+  },
+  {
+    "name": "typed assignment rejects incompatible value",
+    "source": "Let age as number be 21.\nSet age to \"old\".",
+    "error": "type mismatch"
+  },
+  {
+    "name": "constant assignment is rejected",
+    "source": "Let constant answer be 42.\nSet answer to 43.",
+    "error": "cannot be reassigned"
+  },
+  {
+    "name": "unknown type annotation is rejected",
+    "source": "Let score as imaginary_type be 10.",
+    "error": "unknown type annotation"
+  },
+  {
+    "name": "portable numeric types and nested collection rendering",
+    "source": "Say type_of(4).\nSay [true, nothing, 3.0].\nSay {\"flag\": true, \"count\": 3.0}.",
+    "output": "number\n[true, nothing, 3]\n{\"count\":3,\"flag\":true}\n"
+  },
+  {
+    "name": "statement delimiters inside strings and nested expressions",
+    "source": "Let phrase be \"be and to remain text\".\nSet phrase to \"to and be remain text\".\nSay phrase.\nTo echo with first and second:\n    Give back first.\nEnd function.\nSay echo(\"left and middle\", \"right\").",
+    "output": "to and be remain text\nleft and middle\n"
+  },
+  {
+    "name": "otherwise-if chain",
+    "source": "Let choice be 2.\nIf choice is equal to 1:\n    Say \"one\".\nOtherwise if choice is equal to 2:\n    Say \"two\".\nOtherwise if choice is equal to 3:\n    Say \"three\".\nOtherwise:\n    Say \"other\".\nEnd if.",
+    "output": "two\n"
+  },
+  {
+    "name": "Check that assertion passes",
+    "source": "Check that 2 plus 2 is equal to 4.\nSay \"assertion passed\".",
+    "output": "assertion passed\n"
+  },
+  {
+    "name": "Check that assertion fails",
+    "source": "Check that false.",
+    "error": "check failed"
+  }
+]

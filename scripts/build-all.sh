@@ -9,7 +9,8 @@ if [[ -z "$VERSION" ]]; then
 fi
 
 mkdir -p "$ROOT/releases"
-rm -f "$ROOT"/releases/tell-* "$ROOT"/releases/SHA256SUMS
+STAGE="$(mktemp -d "$ROOT/releases/.tell-build.XXXXXX")"
+trap 'rm -rf "$STAGE"' EXIT
 cd "$ROOT/native"
 
 targets=(
@@ -25,15 +26,15 @@ for target in "${targets[@]}"; do
   read -r goos goarch <<< "$target"
   suffix=""
   [[ "$goos" == "windows" ]] && suffix=".exe"
-  output="$ROOT/releases/tell-${goos}-${goarch}${suffix}"
+  output="$STAGE/tell-${goos}-${goarch}${suffix}"
   echo "Building Tell ${VERSION} for ${goos}/${goarch}..."
   CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go build \
     -trimpath \
     -ldflags="-s -w -X main.version=${VERSION}" \
     -o "$output" ./cmd/tell
- done
+done
 
-cat > "$ROOT/releases/README.txt" <<README
+cat > "$STAGE/README.txt" <<README
 Tell ${VERSION} native binaries
 
 These executables run Tell programs without Python or a separate Go installation.
@@ -58,14 +59,22 @@ Print the runtime version:
   Linux/macOS: ./tell-linux-amd64 --version
   Windows:     tell-windows-amd64.exe --version
 
+Run Tell source tests:
+  Linux/macOS: ./tell-linux-amd64 test
+  Windows:     tell-windows-amd64.exe test
+
 The macOS and Windows binaries are cross-compiled from the source. Their actual
 execution should be smoke-tested on the corresponding operating systems.
 README
 
 if command -v sha256sum >/dev/null 2>&1; then
-  (cd "$ROOT/releases" && sha256sum tell-* > SHA256SUMS)
+  (cd "$STAGE" && sha256sum tell-* > SHA256SUMS)
 elif command -v shasum >/dev/null 2>&1; then
-  (cd "$ROOT/releases" && shasum -a 256 tell-* > SHA256SUMS)
+  (cd "$STAGE" && shasum -a 256 tell-* > SHA256SUMS)
 fi
+
+for artifact in "$STAGE"/*; do
+  mv -f "$artifact" "$ROOT/releases/"
+done
 
 echo "Native binaries created in $ROOT/releases"

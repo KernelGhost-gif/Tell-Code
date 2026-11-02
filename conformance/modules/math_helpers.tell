@@ -1,0 +1,5 @@
+Say "helper loaded".
+Let multiplier be 3.
+To triple with value:
+    Give back value times multiplier.
+End function.
