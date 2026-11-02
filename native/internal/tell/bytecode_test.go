@@ -462,7 +462,7 @@ func TestBytecodeRemoveMissingCollectionValueReturnsRuntimeError(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = RunBytecode(artifact, "remove-missing.tbc", bytes.NewReader(nil), &bytes.Buffer{})
-	if err == nil || !strings.Contains(err.Error(), "item 2 was not found") {
+	if err == nil || !strings.Contains(err.Error(), `item "2" was not found`) {
 		t.Fatalf("expected a missing-item error, got %v", err)
 	}
 }
