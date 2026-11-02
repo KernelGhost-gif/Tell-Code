@@ -209,8 +209,23 @@ class Parser:
         elif token.kind == "ident":
             node = Expr("name", token.text, start=token.offset)
         elif token.kind == "(":
-            node = self.parse_precedence(1)
-            self.require(")", "expected )")
+            if self.peek().kind == ")":
+                self.take()
+                node = Expr("tuple", children=(), start=token.offset)
+            else:
+                first = self.parse_precedence(1)
+                if self.peek().kind == ",":
+                    items = [first]
+                    while self.peek().kind == ",":
+                        self.take()
+                        if self.peek().kind == ")":
+                            break
+                        items.append(self.parse_precedence(1))
+                    self.require(")", "expected ) after tuple")
+                    node = Expr("tuple", children=tuple(items), start=token.offset)
+                else:
+                    self.require(")", "expected )")
+                    node = first
         elif token.kind == "[":
             items: list[Expr] = []
             if self.peek().kind != "]":

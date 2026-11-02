@@ -23,6 +23,7 @@ type binaryExpression struct {
 	left, right expression
 }
 type listExpression struct{ items []expression }
+type tupleExpression struct{ items []expression }
 type dictionaryExpression struct{ keys, values []expression }
 type callArgument struct {
 	name  string
@@ -49,6 +50,7 @@ func (nameExpression) isExpression()       {}
 func (unaryExpression) isExpression()      {}
 func (binaryExpression) isExpression()     {}
 func (listExpression) isExpression()       {}
+func (tupleExpression) isExpression()      {}
 func (dictionaryExpression) isExpression() {}
 func (callExpression) isExpression()       {}
 func (memberExpression) isExpression()     {}
@@ -144,15 +146,40 @@ func (p *expressionParser) parsePrefix() (expression, error) {
 		}
 		value = unaryExpression{operator: t.kind, operand: operand}
 	case "(":
-		var err error
-		value, err = p.parsePrecedence(1)
+		if p.peek() == ")" {
+			p.take()
+			value = tupleExpression{items: []expression{}}
+			break
+		}
+		first, err := p.parsePrecedence(1)
 		if err != nil {
 			return nil, err
 		}
-		if p.peek() != ")" {
-			return nil, p.syntaxError("expected )")
+		if p.peek() == "," {
+			items := []expression{first}
+			for p.peek() == "," {
+				p.take()
+				if p.peek() == ")" {
+					break
+				}
+				item, itemErr := p.parsePrecedence(1)
+				if itemErr != nil {
+					return nil, itemErr
+				}
+				items = append(items, item)
+			}
+			if p.peek() != ")" {
+				return nil, p.syntaxError("expected ) after tuple")
+			}
+			p.take()
+			value = tupleExpression{items: items}
+		} else {
+			if p.peek() != ")" {
+				return nil, p.syntaxError("expected )")
+			}
+			p.take()
+			value = first
 		}
-		p.take()
 	case "[":
 		items := []expression{}
 		if p.peek() != "]" {
@@ -369,6 +396,16 @@ func (r *runtime) evalExpression(expr expression, e *env) (any, error) {
 			items = append(items, value)
 		}
 		return items, nil
+	case tupleExpression:
+		items := make(tupleValue, 0, len(x.items))
+		for _, item := range x.items {
+			value, err := r.evalExpression(item, e)
+			if err != nil {
+				return nil, err
+			}
+			items = append(items, value)
+		}
+		return items, nil
 	case dictionaryExpression:
 		items := make(map[string]any, len(x.keys))
 		for i, keyExpr := range x.keys {
@@ -485,6 +522,16 @@ func (r *runtime) evalExpression(expr expression, e *env) (any, error) {
 				result = append(result, value[index])
 			}
 			return result, nil
+		case tupleValue:
+			indices, err := sliceIndices(len(value), start, end, stride)
+			if err != nil {
+				return nil, err
+			}
+			result := make(tupleValue, 0, len(indices))
+			for _, index := range indices {
+				result = append(result, value[index])
+			}
+			return result, nil
 		case string:
 			runes := []rune(value)
 			indices, err := sliceIndices(len(runes), start, end, stride)
@@ -516,6 +563,19 @@ func indexValue(value, index any) (any, error) {
 		}
 		if i < 0 || i >= len(x) {
 			return nil, fail("list index out of range")
+		}
+		return x[i], nil
+	case tupleValue:
+		n, err := numberValue(index)
+		if err != nil {
+			return nil, err
+		}
+		i := int(n)
+		if i < 0 {
+			i += len(x)
+		}
+		if i < 0 || i >= len(x) {
+			return nil, fail("tuple index out of range")
 		}
 		return x[i], nil
 	case string:
@@ -575,6 +635,13 @@ func applyBinary(op string, a, b any) (any, error) {
 					break
 				}
 			}
+		case tupleValue:
+			for _, item := range container {
+				if reflect.DeepEqual(a, item) {
+					found = true
+					break
+				}
+			}
 		case string:
 			found = strings.Contains(container, fmt.Sprint(a))
 		case map[string]any:
@@ -595,6 +662,14 @@ func applyBinary(op string, a, b any) (any, error) {
 				return nil, fail("cannot add a list to this value")
 			}
 			result := append([]any(nil), left...)
+			return append(result, right...), nil
+		}
+		if left, ok := a.(tupleValue); ok {
+			right, ok := b.(tupleValue)
+			if !ok {
+				return nil, fail("cannot add a tuple to this value")
+			}
+			result := append(tupleValue(nil), left...)
 			return append(result, right...), nil
 		}
 		left, err := numberValue(a)

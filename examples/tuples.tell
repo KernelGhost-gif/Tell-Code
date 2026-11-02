@@ -1,0 +1,12 @@
+Let first, second be ("Ada", 42).
+Say [first, second].
+
+Let values be (1, 2, 3).
+Say values.
+Say values[::-1].
+For each value in values:
+    Say value.
+End loop.
+
+Let label as tuple be tuple(["readable", "portable"]).
+Say label plus ("language",).

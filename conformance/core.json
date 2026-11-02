@@ -231,6 +231,21 @@
     "output": "after\n"
   },
   {
+    "name": "tuple literals support display index slice and type",
+    "source": "Let pair as tuple be (\"Ada\", 42).\nSay (1).\nSay ().\nSay (\"only\",).\nSay pair.\nSay pair[0].\nSay pair[1:].\nSay type_of(pair).\nSay len(pair).",
+    "output": "1\n()\n(only,)\n(Ada, 42)\nAda\n(42,)\ntuple\n2\n"
+  },
+  {
+    "name": "tuple literals support assignment and loop destructuring",
+    "source": "Let first, second be (1, 2).\nSay [first, second].\nFor each left, right in [(3, 4), (5, 6)]:\n    Say left plus right.\nEnd loop.",
+    "output": "[1, 2]\n7\n11\n"
+  },
+  {
+    "name": "tuple constructors concatenation and membership",
+    "source": "Let values be tuple([1, 2]) plus (3,).\nSay values.\nSay 3 is in values.\nSay tuple().",
+    "output": "(1, 2, 3)\ntrue\n()\n"
+  },
+  {
     "name": "constructor supports default arguments",
     "source": "Create a class called Counter:\n    When creating a Counter with initial defaulting to 5:\n        Remember initial as this.value.\n    End constructor.\nEnd class.\nLet counter be a new Counter.\nSay counter.value.",
     "output": "5\n"

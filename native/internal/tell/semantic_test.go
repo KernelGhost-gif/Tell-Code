@@ -24,6 +24,18 @@ Let active as boolean be amount is greater than 0.`
 	}
 }
 
+func TestAnalyzeRecognizesTupleAnnotationsAndInferredTupleOperations(t *testing.T) {
+	valid := `Let pair as tuple be (1, 2).
+Let extended as tuple be pair plus (3,).
+Let tail as tuple be extended[1:].`
+	if err := Analyze(valid, "tuple-types.tell"); err != nil {
+		t.Fatalf("valid tuple annotations rejected: %v", err)
+	}
+	if err := Analyze(`Let pair as tuple be [1, 2].`, "tuple-mismatch.tell"); err == nil || !strings.Contains(err.Error(), "type mismatch") {
+		t.Fatalf("expected tuple/list annotation mismatch, got %v", err)
+	}
+}
+
 func TestAnalyzeLeavesDynamicExpressionsToRuntime(t *testing.T) {
 	if err := Analyze(`Let result as number be dynamic_value.`, "dynamic.tell"); err != nil {
 		t.Fatalf("an expression with unknown static type should be deferred: %v", err)

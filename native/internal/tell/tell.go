@@ -37,6 +37,9 @@ func DefaultExecutionLimits() ExecutionLimits {
 
 type Error struct{ Message string }
 
+// tupleValue is an immutable, ordered Tell sequence distinct from mutable lists.
+type tupleValue []any
+
 func (e *Error) Error() string              { return e.Message }
 func fail(format string, args ...any) error { return &Error{Message: fmt.Sprintf(format, args...)} }
 
@@ -384,7 +387,7 @@ func bindLoopValues(target *env, names []string, value any) error {
 		target.set(names[0], value)
 		return nil
 	}
-	values, ok := value.([]any)
+	values, ok := sequenceValues(value)
 	if !ok {
 		return fail("for each expects %d values, got a non-list item", len(names))
 	}
@@ -395,6 +398,17 @@ func bindLoopValues(target *env, names []string, value any) error {
 		target.set(name, values[index])
 	}
 	return nil
+}
+
+func sequenceValues(value any) ([]any, bool) {
+	switch values := value.(type) {
+	case []any:
+		return values, true
+	case tupleValue:
+		return []any(values), true
+	default:
+		return nil, false
+	}
 }
 
 func parseConstructorHeader(header string) (name string, params []string, ok bool) {
@@ -796,6 +810,9 @@ func typeMatches(typeName string, value any, e *env) (bool, error) {
 	case "list":
 		_, ok := value.([]any)
 		return ok, nil
+	case "tuple":
+		_, ok := value.(tupleValue)
+		return ok, nil
 	case "dictionary":
 		_, ok := value.(map[string]any)
 		return ok, nil
@@ -1006,6 +1023,8 @@ func (r *runtime) installBuiltins(e *env) {
 			return float64(len([]rune(v))), nil
 		case []any:
 			return float64(len(v)), nil
+		case tupleValue:
+			return float64(len(v)), nil
 		case map[string]any:
 			return float64(len(v)), nil
 		}
@@ -1028,6 +1047,28 @@ func (r *runtime) installBuiltins(e *env) {
 			n += v
 		}
 		return n, nil
+	}))
+	e.set("tuple", wrap(func(a []any) (any, error) {
+		if len(a) == 0 {
+			return tupleValue{}, nil
+		}
+		if len(a) != 1 {
+			return nil, fail("tuple expects zero or one iterable")
+		}
+		switch values := a[0].(type) {
+		case []any:
+			return tupleValue(append([]any(nil), values...)), nil
+		case tupleValue:
+			return tupleValue(append([]any(nil), values...)), nil
+		case string:
+			items := make(tupleValue, 0, utf8.RuneCountInString(values))
+			for _, character := range values {
+				items = append(items, string(character))
+			}
+			return items, nil
+		default:
+			return nil, fail("tuple expects a list, tuple, or text")
+		}
 	}))
 	e.set("min", wrap(func(a []any) (any, error) { return numericExtreme(a, false) }))
 	e.set("max", wrap(func(a []any) (any, error) { return numericExtreme(a, true) }))
@@ -1346,6 +1387,8 @@ func truthy(v any) bool {
 		return x != ""
 	case []any:
 		return len(x) > 0
+	case tupleValue:
+		return len(x) > 0
 	case map[string]any:
 		return len(x) > 0
 	}
@@ -1363,6 +1406,8 @@ func typeName(v any) string {
 		return "text"
 	case []any:
 		return "list"
+	case tupleValue:
+		return "tuple"
 	case map[string]any:
 		return "dictionary"
 	case callable, namedCallable, *userFunction:
@@ -1404,6 +1449,15 @@ func display(v any) string {
 			parts[i] = display(v)
 		}
 		return "[" + strings.Join(parts, ", ") + "]"
+	case tupleValue:
+		parts := make([]string, len(x))
+		for i, item := range x {
+			parts[i] = display(item)
+		}
+		if len(parts) == 1 {
+			return "(" + parts[0] + ",)"
+		}
+		return "(" + strings.Join(parts, ", ") + ")"
 	case map[string]any:
 		b, e := json.Marshal(x)
 		if e == nil {
@@ -1519,6 +1573,9 @@ func (r *runtime) execNode(n node, e *env) error {
 			return err
 		}
 		items, ok := v.([]any)
+		if tuple, isTuple := v.(tupleValue); isTuple {
+			items, ok = []any(tuple), true
+		}
 		if !ok {
 			if s, yes := v.(string); yes {
 				items = make([]any, 0, r.limits.MaxLoopIterations+1)
@@ -1529,7 +1586,7 @@ func (r *runtime) execNode(n node, e *env) error {
 					}
 				}
 			} else {
-				return fail("for each needs a list or text value")
+				return fail("for each needs a list, tuple, or text value")
 			}
 		}
 		loopNames, _ := parseLoopNames(n.name)
@@ -1626,9 +1683,9 @@ func (r *runtime) executeSimpleStatement(statement *simpleStatement, e *env) err
 	switch statement.kind {
 	case "let":
 		if len(statement.names) > 1 {
-			values, ok := value.([]any)
+			values, ok := sequenceValues(value)
 			if !ok {
-				return fail("multiple assignment expects a list")
+				return fail("multiple assignment expects a list or tuple")
 			}
 			return r.assignMany(e, statement.names, values, statement.constant)
 		}
@@ -1638,9 +1695,9 @@ func (r *runtime) executeSimpleStatement(statement *simpleStatement, e *env) err
 		return r.assign(e, statement.names[0], value)
 	case "set":
 		if len(statement.names) > 1 {
-			values, ok := value.([]any)
+			values, ok := sequenceValues(value)
 			if !ok {
-				return fail("multiple assignment expects a list")
+				return fail("multiple assignment expects a list or tuple")
 			}
 			return r.assignMany(e, statement.names, values, false)
 		}
@@ -1742,7 +1799,7 @@ func (r *runtime) statement(s string, e *env) error {
 				if err != nil {
 					return err
 				}
-				values, ok := value.([]any)
+				values, ok := sequenceValues(value)
 				if !ok {
 					return fail("multiple assignment expects a list")
 				}
@@ -1779,9 +1836,9 @@ func (r *runtime) statement(s string, e *env) error {
 				if err != nil {
 					return err
 				}
-				values, ok := value.([]any)
+				values, ok := sequenceValues(value)
 				if !ok {
-					return fail("multiple assignment expects a list")
+					return fail("multiple assignment expects a list or tuple")
 				}
 				return r.assignMany(e, names, values, false)
 			}

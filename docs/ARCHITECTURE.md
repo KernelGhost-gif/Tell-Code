@@ -2,7 +2,7 @@
 
 ## Current implementation
 
-Both runtimes parse block headers with explicit prefix and delimiter routines, including nested otherwise-if chains. The parser now builds expression ASTs for common `Let`, `Set`, instance member assignment, output, assertion, return, raise, loop-control, bare expression, and `Tell object to method` statements. Other statements still use the line-oriented compatibility recognizers.
+Both runtimes parse block headers with explicit prefix and delimiter routines, including nested otherwise-if chains. The parser now builds expression ASTs for common `Let`, `Set`, instance member assignment, output, assertion, return, raise, loop-control, bare expression, and `Tell object to method` statements. The expression AST includes tuple literals with shared runtime semantics. Other statements still use the line-oriented compatibility recognizers.
 
 Tell has two independent runtimes:
 

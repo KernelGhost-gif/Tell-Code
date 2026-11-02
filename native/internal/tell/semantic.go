@@ -158,7 +158,7 @@ func (a *semanticAnalyzer) checkAnnotation(name, annotation, inferred string) er
 	typeName := strings.ToLower(strings.TrimSpace(annotation))
 	known := map[string]bool{
 		"any": true, "nothing": true, "boolean": true, "number": true,
-		"text": true, "list": true, "dictionary": true, "function": true, "class": true,
+		"text": true, "list": true, "tuple": true, "dictionary": true, "function": true, "class": true,
 	}
 	if !known[typeName] && !a.classes[strings.TrimSpace(annotation)] {
 		return fail("unknown type annotation %q", annotation)
@@ -233,6 +233,9 @@ func inferSemanticType(expr expression, bindings map[string]semanticBinding) str
 			if left == "list" && right == "list" {
 				return "list"
 			}
+			if left == "tuple" && right == "tuple" {
+				return "tuple"
+			}
 		case "-", "*", "/", "//", "%", "**":
 			if left == "number" && right == "number" {
 				return "number"
@@ -240,12 +243,14 @@ func inferSemanticType(expr expression, bindings map[string]semanticBinding) str
 		}
 	case listExpression:
 		return "list"
+	case tupleExpression:
+		return "tuple"
 	case dictionaryExpression:
 		return "dictionary"
 	case indexExpression:
 		valueType := inferSemanticType(value.value, bindings)
 		if value.isSlice {
-			if valueType == "text" || valueType == "list" {
+			if valueType == "text" || valueType == "list" || valueType == "tuple" {
 				return valueType
 			}
 		} else if valueType == "text" {

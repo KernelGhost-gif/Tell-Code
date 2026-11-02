@@ -35,6 +35,11 @@ def display(value: Any) -> str:
             return str(int(value))
     if isinstance(value, list):
         return "[" + ", ".join(display(item) for item in value) + "]"
+    if isinstance(value, tuple):
+        parts = ", ".join(display(item) for item in value)
+        if len(value) == 1:
+            parts += ","
+        return "(" + parts + ")"
     if isinstance(value, dict):
         def json_value(item: Any) -> Any:
             if isinstance(item, float) and math.isfinite(item) and item.is_integer():
@@ -59,6 +64,8 @@ def display_type(value: Any) -> str:
         return "text"
     if isinstance(value, list):
         return "list"
+    if isinstance(value, tuple):
+        return "tuple"
     if isinstance(value, dict):
         return "dictionary"
     if isinstance(value, TellInstance):
@@ -857,6 +864,8 @@ class Interpreter:
                 return "text"
             if isinstance(value, list):
                 return "list"
+            if isinstance(value, tuple):
+                return "tuple"
             if isinstance(value, dict):
                 return "dictionary"
             return type(value).__name__
@@ -897,11 +906,16 @@ class Interpreter:
                 raise TellError("enumerate expects one list")
             return [[index, value] for index, value in enumerate(values)]
 
+        def tuple_values(values: Any = ()) -> tuple[Any, ...]:
+            if isinstance(values, (list, tuple, str)):
+                return tuple(values)
+            raise TellError("tuple expects a list, tuple, or text")
+
         builtins = {
             "len": len, "range": range, "sum": sum, "min": min, "max": max,
             "sorted": sorted, "reversed": reversed, "enumerate": enumerate_values,
             "zip": zip, "abs": abs, "round": round, "int": int, "float": float,
-            "str": str, "bool": bool, "list": list, "tuple": tuple, "dict": dict,
+            "str": str, "bool": bool, "list": list, "tuple": tuple_values, "dict": dict,
             "set": set, "any": any, "all": all, "average": average,
             "map": map_values, "filter": filter_values, "reduce": reduce_values,
             "first": first, "last": last, "type_of": type_of,
@@ -1028,6 +1042,8 @@ class Interpreter:
             return env.get(str(node.value))
         if node.kind == "list":
             return [self._eval_expression(item, env) for item in node.children]
+        if node.kind == "tuple":
+            return tuple(self._eval_expression(item, env) for item in node.children)
         if node.kind == "dict":
             return {
                 display(self._eval_expression(node.children[index], env)):
@@ -1066,7 +1082,7 @@ class Interpreter:
             if operator_name in {"in", "notin"}:
                 if isinstance(right, dict):
                     contains = display(left) in right
-                elif isinstance(right, (list, str)):
+                elif isinstance(right, (list, tuple, str)):
                     needle = display(left) if isinstance(right, str) else left
                     contains = needle in right
                 else:
@@ -1076,6 +1092,8 @@ class Interpreter:
                 if isinstance(left, str):
                     return left + display(right)
                 if isinstance(left, list) and isinstance(right, list):
+                    return left + right
+                if isinstance(left, tuple) and isinstance(right, tuple):
                     return left + right
                 return self._as_number(left) + self._as_number(right)
             a, b = self._as_number(left), self._as_number(right)
@@ -1115,7 +1133,7 @@ class Interpreter:
         if node.kind == "index":
             value = self._eval_expression(node.children[0], env)
             index = self._eval_expression(node.children[1], env)
-            if isinstance(value, (list, str)):
+            if isinstance(value, (list, tuple, str)):
                 index = int(self._as_number(index))
             elif isinstance(value, dict):
                 index = display(index)
@@ -1126,7 +1144,7 @@ class Interpreter:
             bounds = [int(self._as_number(item)) if item is not None else None for item in bounds]
             if bounds[2] == 0:
                 raise TellError("slice step cannot be zero")
-            if not isinstance(value, (list, str)):
+            if not isinstance(value, (list, tuple, str)):
                 raise TellError("this value cannot be sliced")
             return value[slice(*bounds)]
         if node.kind == "call":
@@ -1299,7 +1317,7 @@ class Interpreter:
                 if len(names) == 1:
                     env.set(names[0], item)
                 else:
-                    if not isinstance(item, list):
+                    if not isinstance(item, (list, tuple)):
                         raise TellError(f"for each expects {len(names)} values, got a non-list item")
                     if len(item) != len(names):
                         raise TellError(f"for each expects {len(names)} values, got {len(item)}")
@@ -1404,6 +1422,7 @@ class Interpreter:
             "number": lambda item: isinstance(item, (int, float)) and not isinstance(item, bool),
             "text": lambda item: isinstance(item, str),
             "list": lambda item: isinstance(item, list),
+            "tuple": lambda item: isinstance(item, tuple),
             "dictionary": lambda item: isinstance(item, dict),
             "function": lambda item: callable(item) and not isinstance(item, TellClass),
             "class": lambda item: isinstance(item, TellClass),
@@ -1459,8 +1478,8 @@ class Interpreter:
         env.set(name, value)
 
     def assign_many(self, env: Environment, names: list[str], values: Any, constant: bool = False) -> None:
-        if not isinstance(values, list):
-            raise TellError("Multiple assignment expects a list.")
+        if not isinstance(values, (list, tuple)):
+            raise TellError("Multiple assignment expects a list or tuple.")
         if len(values) != len(names):
             raise TellError(f"Multiple assignment expected {len(names)} values, got {len(values)}.")
         for target, value in zip(names, values):

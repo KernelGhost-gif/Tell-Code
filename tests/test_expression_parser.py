@@ -4,6 +4,12 @@ from tell.expression_parser import ExpressionSyntaxError, parse
 
 
 class ExpressionParserTests(unittest.TestCase):
+    def test_tuple_literals_distinguish_grouping_and_empty_tuple(self):
+        self.assertEqual(parse("(1)").kind, "literal")
+        self.assertEqual(parse("()").kind, "tuple")
+        self.assertEqual(parse("(1,)").kind, "tuple")
+        self.assertEqual(parse("(1, 2)").kind, "tuple")
+
     def test_pratt_precedence_and_right_associative_power(self):
         tree = parse("2 plus 3 times 4 to the power of 2")
         self.assertEqual(tree.kind, "binary")

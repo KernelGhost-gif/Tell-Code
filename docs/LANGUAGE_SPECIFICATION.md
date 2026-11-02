@@ -49,16 +49,16 @@ Say greeting.
 Say visits.
 ```
 
-Multiple assignment binds or updates several names from a list in one operation:
+Multiple assignment binds or updates several names from a list or tuple in one operation:
 
 ```tell
-Let width, height be [640, 480].
+Let width, height be (640, 480).
 Set width, height to [800, 600].
 ```
 
-The right side must evaluate to a list with exactly as many values as names. All target names and their existing constant/type constraints are validated before any target is updated. Multiple assignment currently does not accept per-name annotations.
+The right side must evaluate to a list or tuple with exactly as many values as names. All target names and their existing constant/type constraints are validated before any target is updated. Multiple assignment currently does not accept per-name annotations.
 
-`For each` accepts one binding for ordinary items or multiple bindings to destructure each list item. The item must contain exactly one value per binding; otherwise execution reports an arity error. This works with `enumerate(list)`:
+`For each` accepts one binding for ordinary items or multiple bindings to destructure each list or tuple item. The item must contain exactly one value per binding; otherwise execution reports an arity error. This works with `enumerate(list)`:
 
 ```tell
 For each index, value in enumerate(["Ada", "Grace"]):
@@ -66,7 +66,7 @@ For each index, value in enumerate(["Ada", "Grace"]):
 End loop.
 ```
 
-The current runtime annotations are `any`, `nothing`, `boolean`, `number`, `text`, `list`, `dictionary`, `function`, `class`, and a declared Tell class name. A class annotation accepts instances of that class and its subclasses. Runtime checks always apply. The native CLI additionally offers conservative static validation of known initializer and assignment types with `tell check --types`; `tell build` applies it during compilation. Unknown expressions are deferred to runtime. This is not a whole-program static type system. A variable's existing annotation is preserved by `Set` and ordinary `Let` reassignment.
+The current runtime annotations are `any`, `nothing`, `boolean`, `number`, `text`, `list`, `tuple`, `dictionary`, `function`, `class`, and a declared Tell class name. A class annotation accepts instances of that class and its subclasses. Runtime checks always apply. The native CLI additionally offers conservative static validation of known initializer and assignment types with `tell check --types`; `tell build` applies it during compilation. Unknown expressions are deferred to runtime. This is not a whole-program static type system. A variable's existing annotation is preserved by `Set` and ordinary `Let` reassignment.
 
 It also includes list/dictionary mutation (`Add`, `Remove`, set item/key), file read/write/append, class field initialization and updates, module imports, library imports, and `Raise an error saying ...`. Exact accepted phrases are implementation-sensitive until covered by the conformance corpus.
 
@@ -76,7 +76,15 @@ Both interpreters support `Try` with an optional `If something goes wrong` handl
 
 ## Expressions
 
-Expressions include numbers, quoted strings, booleans (`true`, `false`), `nothing`, names, lists, dictionaries, grouping, function calls, indexing, slicing, member access, unary `not`/`+`/`-`, arithmetic, comparisons, membership, and boolean logic. Lists and Unicode text support Python-style slices, including an optional step; a zero step is an error. Dictionary literals use `{key: value}` pairs.
+Expressions include numbers, quoted strings, booleans (`true`, `false`), `nothing`, names, lists, tuples, dictionaries, grouping, function calls, indexing, slicing, member access, unary `not`/`+`/`-`, arithmetic, comparisons, membership, and boolean logic. Parentheses with a comma make a tuple: `()`, `(value,)`, or `(first, second)`; `(value)` is grouping. Lists, tuples, and Unicode text support Python-style slices, including an optional step; a zero step is an error. Tuple slices remain tuples. Dictionary literals use `{key: value}` pairs.
+
+Tuple/grouping syntax is deterministic:
+
+```ebnf
+grouped-expression = "(" expression ")" ;
+tuple-literal      = "(" ")"
+                   | "(" expression "," [ expression { "," expression } [ "," ] ] ")" ;
+```
 
 The portable operators include symbols and these English forms: `plus`, `minus`, `times`, `divided by`, `modulo`, `to the power of`, `is equal to`, `is not equal to`, `is greater than`, `is at least`, `is less than`, `is at most`, `is in`, `is not in`, `and`, `or`, and `not`.
 

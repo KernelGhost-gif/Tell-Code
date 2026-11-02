@@ -783,6 +783,12 @@ func foldBytecodeExpression(expr expression) expression {
 			items[index] = foldBytecodeExpression(item)
 		}
 		return listExpression{items: items}
+	case tupleExpression:
+		items := make([]expression, len(value.items))
+		for index, item := range value.items {
+			items[index] = foldBytecodeExpression(item)
+		}
+		return tupleExpression{items: items}
 	case dictionaryExpression:
 		keys, values := make([]expression, len(value.keys)), make([]expression, len(value.values))
 		for index := range value.keys {
@@ -909,6 +915,14 @@ func (c *bytecodeCompiler) compileExpression(expr expression) error {
 			}
 		}
 		instruction := c.emit("LIST")
+		c.code[instruction].Count = len(value.items)
+	case tupleExpression:
+		for _, item := range value.items {
+			if err := c.compileExpression(item); err != nil {
+				return err
+			}
+		}
+		instruction := c.emit("TUPLE")
 		c.code[instruction].Count = len(value.items)
 	case dictionaryExpression:
 		for i, key := range value.keys {
@@ -1136,7 +1150,7 @@ func validateBytecode(instructions []BytecodeInstruction, terminal string, funct
 		if instruction.Count < 0 {
 			return fail("invalid bytecode count at instruction %d", pc)
 		}
-		if (instruction.Op == "LIST" || instruction.Op == "DICT" || instruction.Op == "CALL") && instruction.Count > len(instructions) {
+		if (instruction.Op == "LIST" || instruction.Op == "TUPLE" || instruction.Op == "DICT" || instruction.Op == "CALL") && instruction.Count > len(instructions) {
 			return fail("invalid bytecode count at instruction %d", pc)
 		}
 		if instruction.Op == "DICT" && instruction.Count > len(instructions)/2 {
@@ -1200,7 +1214,7 @@ func verifyBytecodeStack(instructions []BytecodeInstruction) error {
 			need, delta = 1, 1
 		case "BINARY":
 			need, delta = 2, -1
-		case "LIST":
+		case "LIST", "TUPLE":
 			need, delta = instruction.Count, 1-instruction.Count
 		case "DICT":
 			need, delta = 2*instruction.Count, 1-2*instruction.Count
@@ -1307,9 +1321,9 @@ func executeBytecodeCode(r *runtime, instructions []BytecodeInstruction, functio
 			case "ASSIGN":
 				err = r.assign(r.global, instruction.Name, value)
 			case "MULTI_DECLARE", "MULTI_ASSIGN":
-				values, ok := value.([]any)
+				values, ok := sequenceValues(value)
 				if !ok {
-					err = fail("multiple assignment expects a list")
+					err = fail("multiple assignment expects a list or tuple")
 				} else {
 					err = r.assignMany(r.global, instruction.ArgNames, values, instruction.Op == "MULTI_DECLARE" && instruction.Constant)
 				}
@@ -1359,13 +1373,17 @@ func executeBytecodeCode(r *runtime, instructions []BytecodeInstruction, functio
 					stack = append(stack, value)
 				}
 			}
-		case "LIST":
+		case "LIST", "TUPLE":
 			items := make([]any, instruction.Count)
 			for i := instruction.Count - 1; i >= 0 && err == nil; i-- {
 				items[i], err = pop()
 			}
 			if err == nil {
-				stack = append(stack, items)
+				if instruction.Op == "TUPLE" {
+					stack = append(stack, tupleValue(items))
+				} else {
+					stack = append(stack, items)
+				}
 			}
 		case "DICT":
 			items := make(map[string]any, instruction.Count)
@@ -1641,6 +1659,8 @@ func executeBytecodeCode(r *runtime, instructions []BytecodeInstruction, functio
 			switch iterable := value.(type) {
 			case []any:
 				values = iterable
+			case tupleValue:
+				values = []any(iterable)
 			case string:
 				for _, character := range iterable {
 					values = append(values, string(character))
@@ -1649,7 +1669,7 @@ func executeBytecodeCode(r *runtime, instructions []BytecodeInstruction, functio
 					}
 				}
 			default:
-				err = fail("for each needs a list or text value")
+				err = fail("for each needs a list, tuple, or text value")
 			}
 			if err == nil {
 				if len(values) > r.limits.MaxLoopIterations {
@@ -1839,6 +1859,16 @@ func sliceValue(value any, startValue, endValue *any, stride int) (any, error) {
 			return nil, err
 		}
 		result := make([]any, 0, len(indices))
+		for _, index := range indices {
+			result = append(result, item[index])
+		}
+		return result, nil
+	case tupleValue:
+		indices, err := sliceIndices(len(item), startValue, endValue, stride)
+		if err != nil {
+			return nil, err
+		}
+		result := make(tupleValue, 0, len(indices))
 		for _, index := range indices {
 			result = append(result, item[index])
 		}

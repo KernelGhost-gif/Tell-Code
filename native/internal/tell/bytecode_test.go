@@ -52,6 +52,20 @@ Say person.name.`
 	}
 }
 
+func TestBytecodeSupportsTupleValues(t *testing.T) {
+	source := `Let first, second be (1, 2).
+Let values be (first, second, 3).
+Say values.
+Say values[1:].
+For each left, right in [(4, 5)]:
+    Say left plus right.
+End loop.`
+	want := "(1, 2, 3)\n(2, 3)\n9\n"
+	if got := runCompiled(t, source); got != want {
+		t.Fatalf("compiled tuple output = %q, want %q", got, want)
+	}
+}
+
 func TestBytecodeCompilesCSVStandardLibrary(t *testing.T) {
 	source := `Use the csv library as tables.
 Let rows be tables.parse("name,score\nAda,42\n").
