@@ -1,6 +1,6 @@
 # Tell engineering checkpoint
 
-Updated 2026-11-02 against local `main`. The current checkpoint adds end-to-end set support to both runtimes and native bytecode, in addition to the earlier tuple work. Go is installed under the task workspace tools directory.
+Updated 2026-11-02 against GitHub `main`. The current checkpoint adds end-to-end set support to both runtimes and native bytecode, in addition to the earlier tuple work. Go is installed under the task workspace tools directory.
 
 ## Architecture and verified baseline
 
@@ -18,7 +18,7 @@ Updated 2026-11-02 against local `main`. The current checkpoint adds end-to-end 
 - The native bytecode compiler and VM support these function signatures, including constructor defaults and variadic calls.
 - Recent parser work moves common assignments, instance member assignments, output/assertion, return/raise, loop-control, bare expression statements, and `Tell object to method` calls to pre-parsed AST nodes in both runtimes. The Go bytecode compiler lowers the typed statements directly, including `SET_MEMBER`.
 - Both expression Pratt parsers now distinguish grouping from empty, singleton, and multi-value tuple literals. Both runtimes implement immutable tuple values, canonical display, `tuple` type inspection/annotation, length, indexing, slicing, membership, concatenation, iteration, and destructuring. The Go bytecode compiler emits `TUPLE` and the VM preserves tuple identity through indexing, slicing, loops, and multiple assignment.
-- Both Pratt parsers distinguish set literals from dictionaries (`{}` remains an empty dictionary; brace literals without key/value colons are sets). Both runtimes implement insertion-ordered, duplicate-free sets with constructors, type inspection/annotations, length, membership, iteration, equality, `Add`/`Remove`, and `union`/`intersection`/`difference`. Shared conformance tests cover those semantics. The native bytecode compiler emits a verified `SET` instruction and supports set literals, membership, iteration, and algebra built-ins.
+- Both Pratt parsers distinguish set literals from dictionaries (`{}` remains an empty dictionary; brace literals without key/value colons are sets). Both runtimes implement insertion-ordered, duplicate-free sets with constructors, type inspection/annotations, length, membership, iteration, equality, `Add`/`Remove`, and `union`/`intersection`/`difference`. Shared conformance tests cover those semantics. The native bytecode compiler emits a verified `SET` instruction and supports set literals, membership, iteration, algebra built-ins, and the `Add`/`Remove` mutation statements for lists and sets.
 - The Go CLI's `tell new` and `tell init` scaffold runnable project files, tests, and a minimal `tell.toml`, with path validation and overwrite protection. They do not resolve or install dependencies.
 - `docs/COLLECTIONS.md` and the language specification document the implemented contracts; the README and CLI reference describe available behavior.
 
@@ -43,4 +43,4 @@ Updated 2026-11-02 against local `main`. The current checkpoint adds end-to-end 
 
 ## Source control and publishing
 
-The current work is on local `main`. Binary publication is a separate release step; the current checkpoint has no tagged release.
+The ordered-set checkpoint is published on `main`. This bytecode mutation update extends the compiler/VM path without changing the language release version or regenerating release binaries. Binary publication remains a separate release step; the latest published release is v0.3.1.

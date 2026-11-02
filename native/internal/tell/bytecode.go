@@ -618,6 +618,28 @@ func (c *bytecodeCompiler) statement(source string) error {
 			return nil
 		}
 	}
+	if rest, ok := prefixFold(source, "add "); ok {
+		valueExpression, name, separated := splitFoldOnce(rest, " to ")
+		if separated && valueExpression != "" && identifier(name) {
+			if err := c.expression(valueExpression); err != nil {
+				return err
+			}
+			instruction := c.emit("ADD_ITEM")
+			c.code[instruction].Name = name
+			return nil
+		}
+	}
+	if rest, ok := prefixFold(source, "remove "); ok {
+		valueExpression, name, separated := splitFoldOnce(rest, " from ")
+		if separated && valueExpression != "" && identifier(name) {
+			if err := c.expression(valueExpression); err != nil {
+				return err
+			}
+			instruction := c.emit("REMOVE_ITEM")
+			c.code[instruction].Name = name
+			return nil
+		}
+	}
 	for _, prefix := range []string{"say ", "show ", "print "} {
 		if expression, ok := prefixFold(source, prefix); ok && expression != "" {
 			if err := c.expression(expression); err != nil {
@@ -1199,6 +1221,9 @@ func validateBytecode(instructions []BytecodeInstruction, terminal string, funct
 				seen[name] = true
 			}
 		}
+		if (instruction.Op == "ADD_ITEM" || instruction.Op == "REMOVE_ITEM") && !identifier(instruction.Name) {
+			return fail("invalid collection mutation target at instruction %d", pc)
+		}
 		if !inFunction && instruction.Op == "RETURN" {
 			return fail("invalid bytecode return at instruction %d", pc)
 		}
@@ -1218,7 +1243,7 @@ func verifyBytecodeStack(instructions []BytecodeInstruction) error {
 		switch instruction.Op {
 		case "PUSH", "MISSING", "LOAD":
 			delta = 1
-		case "DECLARE", "ASSIGN", "PRINT", "POP", "ASSERT", "MULTI_DECLARE", "MULTI_ASSIGN":
+		case "DECLARE", "ASSIGN", "PRINT", "POP", "ASSERT", "MULTI_DECLARE", "MULTI_ASSIGN", "ADD_ITEM", "REMOVE_ITEM":
 			need, delta = 1, -1
 		case "SET_FIELD", "SET_MEMBER":
 			need, delta = 2, -2
@@ -1496,6 +1521,57 @@ func executeBytecodeCode(r *runtime, instructions []BytecodeInstruction, functio
 					err = fail("property assignment requires a Tell instance")
 				} else {
 					instance.fields[instruction.Name] = value
+				}
+			}
+		case "ADD_ITEM", "REMOVE_ITEM":
+			var item any
+			item, err = pop()
+			if err == nil {
+				var collection any
+				collection, err = r.global.get(instruction.Name)
+				if err == nil {
+					switch values := collection.(type) {
+					case []any:
+						if instruction.Op == "ADD_ITEM" {
+							r.global.set(instruction.Name, append(values, item))
+						} else {
+							found := false
+							for index, value := range values {
+								if valuesEqual(value, item) {
+									r.global.set(instruction.Name, append(values[:index], values[index+1:]...))
+									found = true
+									break
+								}
+							}
+							if !found {
+								err = fail("item %q was not found", display(item))
+							}
+						}
+					case setValue:
+						if instruction.Op == "ADD_ITEM" {
+							if !setContains(values, item) {
+								r.global.set(instruction.Name, append(values, item))
+							}
+						} else {
+							found := false
+							for index, value := range values {
+								if valuesEqual(value, item) {
+									r.global.set(instruction.Name, append(values[:index], values[index+1:]...))
+									found = true
+									break
+								}
+							}
+							if !found {
+								err = fail("item %q was not found", display(item))
+							}
+						}
+					default:
+						if instruction.Op == "ADD_ITEM" {
+							err = fail("%q does not support adding items", instruction.Name)
+						} else {
+							err = fail("%q does not support removing items", instruction.Name)
+						}
+					}
 				}
 			}
 		case "TRY_PUSH":
