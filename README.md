@@ -7,7 +7,7 @@ Tell has two runtimes:
 - **Native runtime:** a standalone executable written in Go. It runs `.tell` programs directly and does not need Python or Go installed on the user's machine.
 - **Python runtime:** the original interpreter, kept for compatibility, experimentation, and people who want to embed or extend Tell from Python.
 
-Current version: **0.3.1**.
+Current version: **0.3.4**.
 
 ## A first program
 
@@ -107,9 +107,11 @@ tell examples/hello.tell
 | While, repeat, for-each loops | Yes | Yes |
 | Functions and recursion | Yes | Yes |
 | Named arguments for Tell-defined functions, constructors, methods | Yes | Yes |
+| Default and variadic function parameters | Yes | Yes |
 | Unicode identifiers (letters, numbers, underscore) | Yes | Yes |
 | Persistent multiline REPL | Yes | Yes |
 | Lists and dictionaries | Yes | Yes |
+| Multiple assignment and eager functional collections | Yes | Yes |
 | Input and output | Yes | Yes |
 | Basic file read/write/append | Yes | Yes |
 | Try / error handling | Yes | Yes |
@@ -205,9 +207,13 @@ Set the item at position 0 in colours to "purple".
 Let profile be {"name": "Ada", "age": 36}.
 Set the key "age" in profile to 37.
 Say profile["age"].
+
+Let width, height be [640, 480].
+Set width, height to [800, 600].
+Say [width, height].
 ```
 
-Built-ins include `len`, `range`, `sum`, `min`, `max`, `sorted`, `reversed`, `abs`, `round`, `average`, `first`, `last`, `type_of`, `random_number`, `number`, `sqrt`, `floor`, and `ceiling`.
+Built-ins include `len`, `range`, `sum`, `min`, `max`, `sorted`, `reversed`, `map`, `filter`, `reduce`, `abs`, `round`, `average`, `first`, `last`, `any`, `all`, `type_of`, `random_number`, `number`, `sqrt`, `floor`, and `ceiling`. See the [collections guide](docs/COLLECTIONS.md) for the shared functional operations and their semantics.
 
 ### Standard libraries
 
@@ -255,6 +261,8 @@ End try.
 ```
 
 ## Build from source
+
+Create a project with `tell new hello-world`, then run `tell run hello-world/main.tell` and `tell test hello-world`. Use `tell init` to scaffold files in the current directory.
 
 ### Build the native executable for your current OS
 
@@ -305,7 +313,7 @@ Tell-Code/
 └── pyproject.toml           # Python package metadata
 ```
 
-The supported core is described in [`docs/LANGUAGE_SPECIFICATION.md`](docs/LANGUAGE_SPECIFICATION.md), with the [CLI reference](docs/CLI_REFERENCE.md), [variable and runtime type behavior](docs/VARIABLES_AND_TYPES.md), and the implemented object subset in [`docs/OBJECTS_AND_CLASSES.md`](docs/OBJECTS_AND_CLASSES.md). Architecture, security boundaries, and known gaps are documented in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/SECURITY.md`](docs/SECURITY.md), and [`docs/ENGINEERING_AUDIT.md`](docs/ENGINEERING_AUDIT.md). The shared programs in `conformance/core.json` run in both runtime test suites.
+The supported core is described in [`docs/LANGUAGE_SPECIFICATION.md`](docs/LANGUAGE_SPECIFICATION.md), with the [CLI reference](docs/CLI_REFERENCE.md), [collections guide](docs/COLLECTIONS.md), [standard library reference](docs/STANDARD_LIBRARY.md), [variable and runtime type behavior](docs/VARIABLES_AND_TYPES.md), and the implemented object subset in [`docs/OBJECTS_AND_CLASSES.md`](docs/OBJECTS_AND_CLASSES.md). Architecture, security boundaries, and known gaps are documented in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/SECURITY.md`](docs/SECURITY.md), and [`docs/ENGINEERING_AUDIT.md`](docs/ENGINEERING_AUDIT.md). The shared programs in `conformance/core.json` run in both runtime test suites.
 
 Tagging a version as `v*` runs both test suites, cross-builds the six native targets, generates checksums, and publishes a GitHub Release using the workflow's `GITHUB_TOKEN` with `contents: write` permission.
 

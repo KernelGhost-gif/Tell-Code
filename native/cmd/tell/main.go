@@ -14,7 +14,7 @@ import (
 	"github.com/KernelGhost-gif/Tell-Code/native/internal/tell"
 )
 
-var version = "0.3.1"
+var version = "0.3.4"
 
 func main() {
 	check := flag.Bool("check", false, "parse the program without running it")
@@ -26,7 +26,7 @@ func main() {
 	maxLoopIterations := flag.Int("max-loop-iterations", defaults.MaxLoopIterations, "maximum iterations in one loop or range")
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "Tell %s - a sentence-first programming language\n\n", version)
-		fmt.Fprintf(flag.CommandLine.Output(), "Usage: tell [run|check|test|build|format] [options] <program.tell|program.tbc|->\n       tell --version\n\nOptions:\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "Usage: tell [run|check|test|build|format|repl|new|init] [options] <program.tell|program.tbc|->\n       tell --version\n\nOptions:\n")
 		flag.PrintDefaults()
 	}
 	args := os.Args[1:]
@@ -34,6 +34,11 @@ func main() {
 	formatMode := len(args) > 0 && args[0] == "format"
 	buildMode := len(args) > 0 && args[0] == "build"
 	testMode := len(args) > 0 && args[0] == "test"
+	projectMode := ""
+	if len(args) > 0 && (args[0] == "new" || args[0] == "init") {
+		projectMode = args[0]
+		args = args[1:]
+	}
 	if len(args) > 0 && args[0] == "repl" {
 		args = args[1:]
 	}
@@ -82,6 +87,43 @@ func main() {
 		os.Exit(2)
 	}
 	limits := tell.ExecutionLimits{MaxFunctionCallDepth: *maxCallDepth, MaxLoopIterations: *maxLoopIterations}
+	if projectMode != "" {
+		if projectMode == "new" && flag.NArg() != 1 {
+			fmt.Fprintln(os.Stderr, "tell new expects one project name")
+			os.Exit(2)
+		}
+		if projectMode == "init" && flag.NArg() > 1 {
+			fmt.Fprintln(os.Stderr, "tell init accepts at most one project name")
+			os.Exit(2)
+		}
+		name := ""
+		if flag.NArg() == 1 {
+			name = flag.Arg(0)
+		}
+		if projectMode == "new" {
+			directory, err := createProject(".", name)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "tell new: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Printf("Created Tell project %q in %s\n", name, directory)
+		} else {
+			if name == "" {
+				cwd, err := os.Getwd()
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "tell init: %v\n", err)
+					os.Exit(1)
+				}
+				name = projectNameFromDirectory(cwd)
+			}
+			if err := initializeProject(".", name); err != nil {
+				fmt.Fprintf(os.Stderr, "tell init: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Printf("Initialized Tell project %q in the current directory\n", name)
+		}
+		return
+	}
 	if replMode {
 		runREPL(limits)
 		return

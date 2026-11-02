@@ -162,6 +162,93 @@ func parseClassHeader(header string) (name, base string, ok bool) {
 	return name, base, true
 }
 
+func parseParameterText(source string) (string, bool) {
+	if remaining, ok := prefixFold(source, "all remaining values as "); ok {
+		if !identifier(remaining) {
+			return "", false
+		}
+		return "*" + remaining, true
+	}
+	name, value, hasDefault := splitFoldOnce(source, " defaulting to ")
+	if !hasDefault {
+		name = strings.TrimSpace(source)
+		return name, identifier(name)
+	}
+	name = strings.TrimSpace(name)
+	value = strings.TrimSpace(value)
+	if !identifier(name) || value == "" {
+		return "", false
+	}
+	return name + "=" + value, true
+}
+
+func parameterParts(parameter string) (name, defaultValue string, hasDefault, variadic, ok bool) {
+	if strings.HasPrefix(parameter, "*") {
+		name = strings.TrimPrefix(parameter, "*")
+		return name, "", false, true, identifier(name)
+	}
+	name, defaultValue, hasDefault = splitFoldOnce(parameter, "=")
+	name = strings.TrimSpace(name)
+	defaultValue = strings.TrimSpace(defaultValue)
+	if hasDefault {
+		ok = identifier(name) && defaultValue != ""
+	} else {
+		name = strings.TrimSpace(parameter)
+		ok = identifier(name)
+	}
+	return name, defaultValue, hasDefault, false, ok
+}
+
+func validParameters(parameters []string) bool {
+	seen := make(map[string]bool, len(parameters))
+	hasDefault := false
+	variadicSeen := false
+	for index, parameter := range parameters {
+		name, _, optional, variadic, ok := parameterParts(parameter)
+		if !ok || seen[name] || variadicSeen || (hasDefault && !optional && !variadic) || (variadic && index != len(parameters)-1) {
+			return false
+		}
+		seen[name] = true
+		hasDefault = hasDefault || optional
+		variadicSeen = variadic
+	}
+	return true
+}
+
+func parseLoopNames(source string) ([]string, bool) {
+	names := splitTop(source, ",")
+	if len(names) == 0 {
+		return nil, false
+	}
+	seen := make(map[string]bool, len(names))
+	for index, name := range names {
+		names[index] = strings.TrimSpace(name)
+		if !identifier(names[index]) || seen[names[index]] {
+			return nil, false
+		}
+		seen[names[index]] = true
+	}
+	return names, true
+}
+
+func bindLoopValues(target *env, names []string, value any) error {
+	if len(names) == 1 {
+		target.set(names[0], value)
+		return nil
+	}
+	values, ok := value.([]any)
+	if !ok {
+		return fail("for each expects %d values, got a non-list item", len(names))
+	}
+	if len(values) != len(names) {
+		return fail("for each expects %d values, got %d", len(names), len(values))
+	}
+	for index, name := range names {
+		target.set(name, values[index])
+	}
+	return nil
+}
+
 func parseConstructorHeader(header string) (name string, params []string, ok bool) {
 	rest, ok := prefixFold(header, "when creating ")
 	if !ok {
@@ -185,10 +272,15 @@ func parseConstructorHeader(header string) (name string, params []string, ok boo
 			return "", nil, false
 		}
 		params = splitAnd(tail)
-		for _, param := range params {
-			if !identifier(param) {
+		for index, param := range params {
+			parsed, valid := parseParameterText(param)
+			if !valid {
 				return "", nil, false
 			}
+			params[index] = parsed
+		}
+		if !validParameters(params) {
+			return "", nil, false
 		}
 	}
 	return name, params, true
@@ -218,10 +310,15 @@ func parseFunctionHeader(header string) (name string, params []string, ok bool) 
 		}
 		params = splitAnd(tail)
 	}
-	for _, param := range params {
-		if !identifier(param) {
+	for index, param := range params {
+		parsed, valid := parseParameterText(param)
+		if !valid {
 			return "", nil, false
 		}
+		params[index] = parsed
+	}
+	if !validParameters(params) {
+		return "", nil, false
 	}
 	return name, params, true
 }
@@ -368,7 +465,8 @@ func (p *parser) block(stops map[string]bool) ([]node, string, error) {
 		}
 		forHeader, forOK := prefixFold(header, "for each ")
 		loopName, items, hasIn := splitFoldOnce(forHeader, " in ")
-		if hasHeader && forOK && hasIn && identifier(loopName) && items != "" {
+		loopNames, validNames := parseLoopNames(loopName)
+		if hasHeader && forOK && hasIn && validNames && items != "" {
 			body, stop, err := p.block(map[string]bool{"end loop.": true})
 			if err != nil {
 				return nil, "", err
@@ -376,7 +474,7 @@ func (p *parser) block(stops map[string]bool) ([]node, string, error) {
 			if stop != "end loop." {
 				return nil, "", fail("for-each block on line %d needs 'End loop.'", lineNo)
 			}
-			out = append(out, node{kind: "for", name: loopName, condition: items, body: body, line: lineNo, column: p.columnAt(lineNo)})
+			out = append(out, node{kind: "for", name: strings.Join(loopNames, ","), condition: items, body: body, line: lineNo, column: p.columnAt(lineNo)})
 			continue
 		}
 		if name, params, ok := parseFunctionHeader(header); hasHeader && ok {
@@ -642,6 +740,43 @@ func (r *runtime) assign(e *env, name string, value any) error {
 	return nil
 }
 
+func (r *runtime) assignMany(e *env, names []string, values []any, constant bool) error {
+	if len(names) != len(values) {
+		return fail("multiple assignment expected %d values, got %d", len(names), len(values))
+	}
+	for index, name := range names {
+		if constant {
+			if e.constants[name] {
+				return fail("constant %q cannot be redeclared", name)
+			}
+			if annotation, ok := e.types[name]; ok {
+				if err := r.checkType(annotation, values[index], e, name); err != nil {
+					return err
+				}
+			}
+			continue
+		}
+		if e.constants[name] {
+			return fail("constant %q cannot be reassigned", name)
+		}
+		if annotation, ok := e.types[name]; ok {
+			if err := r.checkType(annotation, values[index], e, name); err != nil {
+				return err
+			}
+		}
+	}
+	for index, name := range names {
+		if constant {
+			if err := r.declare(e, name, values[index], "", true); err != nil {
+				return err
+			}
+		} else {
+			e.set(name, values[index])
+		}
+	}
+	return nil
+}
+
 func newRuntime(filename string, input io.Reader, output io.Writer, limits ExecutionLimits) *runtime {
 	if input == nil {
 		input = os.Stdin
@@ -842,6 +977,82 @@ func (r *runtime) installBuiltins(e *env) {
 			out[i], out[j] = out[j], out[i]
 		}
 		return out, nil
+	}))
+	e.set("enumerate", wrap(func(a []any) (any, error) {
+		xs, err := oneList(a, "enumerate")
+		if err != nil {
+			return nil, err
+		}
+		out := make([]any, len(xs))
+		for index, value := range xs {
+			out[index] = []any{float64(index), value}
+		}
+		return out, nil
+	}))
+	e.set("map", wrap(func(a []any) (any, error) {
+		if len(a) != 2 {
+			return nil, fail("map expects a function and a list")
+		}
+		if !isCallableValue(a[0]) {
+			return nil, fail("map expects a function as its first argument")
+		}
+		values, ok := a[1].([]any)
+		if !ok {
+			return nil, fail("map expects a list as its second argument")
+		}
+		out := make([]any, len(values))
+		for index, value := range values {
+			mapped, err := invokeNamed(a[0], []any{value}, nil)
+			if err != nil {
+				return nil, err
+			}
+			out[index] = mapped
+		}
+		return out, nil
+	}))
+	e.set("filter", wrap(func(a []any) (any, error) {
+		if len(a) != 2 {
+			return nil, fail("filter expects a function and a list")
+		}
+		if !isCallableValue(a[0]) {
+			return nil, fail("filter expects a function as its first argument")
+		}
+		values, ok := a[1].([]any)
+		if !ok {
+			return nil, fail("filter expects a list as its second argument")
+		}
+		out := make([]any, 0, len(values))
+		for _, value := range values {
+			keep, err := invokeNamed(a[0], []any{value}, nil)
+			if err != nil {
+				return nil, err
+			}
+			if truthy(keep) {
+				out = append(out, value)
+			}
+		}
+		return out, nil
+	}))
+	e.set("reduce", wrap(func(a []any) (any, error) {
+		if len(a) != 3 {
+			return nil, fail("reduce expects a function, a list, and an initial value")
+		}
+		if !isCallableValue(a[0]) {
+			return nil, fail("reduce expects a function as its first argument")
+		}
+		values, ok := a[1].([]any)
+		if !ok {
+			return nil, fail("reduce expects a list as its second argument")
+		}
+		result := a[2]
+		for _, value := range values {
+			next, err := invokeNamed(a[0], []any{result, value}, nil)
+			if err != nil {
+				return nil, err
+			}
+			result = next
+		}
+		return result, nil
 	}))
 	e.set("range", wrap(func(a []any) (any, error) {
 		if len(a) < 1 || len(a) > 3 {
@@ -1171,11 +1382,14 @@ func (r *runtime) execNode(n node, e *env) error {
 				return fail("for each needs a list or text value")
 			}
 		}
+		loopNames, _ := parseLoopNames(n.name)
 		for index, item := range items {
 			if index >= r.limits.MaxLoopIterations {
 				return fail("for-each loop exceeded the configured limit of %d iterations", r.limits.MaxLoopIterations)
 			}
-			e.set(n.name, item)
+			if err := bindLoopValues(e, loopNames, item); err != nil {
+				return err
+			}
 			e.set("_current_item", item)
 			err := r.execute(n.body, e)
 			if err != nil {
@@ -1287,6 +1501,30 @@ func (r *runtime) statement(s string, e *env) error {
 		if !annotated {
 			name = binding
 		}
+		if separated && strings.Contains(binding, ",") {
+			targets := strings.Split(binding, ",")
+			names := make([]string, len(targets))
+			valid := len(targets) > 1 && !annotated
+			seen := make(map[string]bool, len(targets))
+			for index, target := range targets {
+				names[index] = strings.TrimSpace(target)
+				if !identifier(names[index]) || seen[names[index]] {
+					valid = false
+				}
+				seen[names[index]] = true
+			}
+			if valid && expression != "" {
+				value, err := r.eval(expression, e)
+				if err != nil {
+					return err
+				}
+				values, ok := value.([]any)
+				if !ok {
+					return fail("multiple assignment expects a list")
+				}
+				return r.assignMany(e, names, values, constant)
+			}
+		}
 		if separated && identifier(name) && expression != "" {
 			value, err := r.eval(expression, e)
 			if err != nil {
@@ -1300,6 +1538,30 @@ func (r *runtime) statement(s string, e *env) error {
 	}
 	if rest, ok := prefixFold(s, "set "); ok {
 		name, expression, separated := splitFoldOnce(rest, " to ")
+		if separated && strings.Contains(name, ",") {
+			targets := strings.Split(name, ",")
+			names := make([]string, len(targets))
+			valid := len(targets) > 1
+			seen := make(map[string]bool, len(targets))
+			for index, target := range targets {
+				names[index] = strings.TrimSpace(target)
+				if !identifier(names[index]) || seen[names[index]] {
+					valid = false
+				}
+				seen[names[index]] = true
+			}
+			if valid && expression != "" {
+				value, err := r.eval(expression, e)
+				if err != nil {
+					return err
+				}
+				values, ok := value.([]any)
+				if !ok {
+					return fail("multiple assignment expects a list")
+				}
+				return r.assignMany(e, names, values, false)
+			}
+		}
 		if separated && identifier(name) && expression != "" {
 			value, err := r.eval(expression, e)
 			if err != nil {
@@ -1913,15 +2175,41 @@ func (f *userFunction) call(args []any, receiver *userInstance) (any, error) {
 }
 
 func (f *userFunction) callNamed(args []any, named map[string]any, receiver *userInstance) (any, error) {
-	if len(args) > len(f.params) {
+	variadicIndex := -1
+	for index, parameter := range f.params {
+		_, _, _, variadic, ok := parameterParts(parameter)
+		if !ok {
+			return nil, fail("invalid parameter definition %q in %s", parameter, f.name)
+		}
+		if variadic {
+			variadicIndex = index
+		}
+	}
+	if len(args) > len(f.params) && variadicIndex < 0 {
 		return nil, fail("%q accepts %d argument(s), but got %d positional arguments", f.name, len(f.params), len(args))
 	}
 	parameterIndex := make(map[string]int, len(f.params))
 	bindings := make(map[string]any, len(f.params))
+	parameterNames := make([]string, len(f.params))
+	defaults := make([]string, len(f.params))
 	for index, parameter := range f.params {
-		parameterIndex[parameter] = index
-		if index < len(args) {
-			bindings[parameter] = args[index]
+		name, defaultValue, hasDefault, variadic, ok := parameterParts(parameter)
+		if !ok {
+			return nil, fail("invalid parameter definition %q in %s", parameter, f.name)
+		}
+		parameterNames[index] = name
+		parameterIndex[name] = index
+		if hasDefault {
+			defaults[index] = defaultValue
+		}
+		if variadic {
+			if index < len(args) {
+				bindings[name] = append([]any(nil), args[index:]...)
+			} else {
+				bindings[name] = []any{}
+			}
+		} else if index < len(args) {
+			bindings[name] = args[index]
 		}
 	}
 	for name, value := range named {
@@ -1929,13 +2217,17 @@ func (f *userFunction) callNamed(args []any, named map[string]any, receiver *use
 		if !exists {
 			return nil, fail("%q has no parameter named %q", f.name, name)
 		}
+		_, _, _, variadic, _ := parameterParts(f.params[index])
+		if variadic {
+			return nil, fail("%q variadic parameter %q cannot be supplied by name", f.name, name)
+		}
 		if index < len(args) {
 			return nil, fail("%q got multiple values for %q", f.name, name)
 		}
 		bindings[name] = value
 	}
-	for _, parameter := range f.params {
-		if _, exists := bindings[parameter]; !exists {
+	for index, parameter := range parameterNames {
+		if _, exists := bindings[parameter]; !exists && defaults[index] == "" {
 			return nil, fail("%q is missing argument %q", f.name, parameter)
 		}
 	}
@@ -1951,6 +2243,16 @@ func (f *userFunction) callNamed(args []any, named map[string]any, receiver *use
 	if receiver != nil {
 		local.set("this", receiver)
 	}
+	for index, parameter := range parameterNames {
+		if _, exists := bindings[parameter]; exists {
+			continue
+		}
+		value, err := f.runtime.eval(defaults[index], local)
+		if err != nil {
+			return nil, err
+		}
+		local.set(parameter, value)
+	}
 	err := f.runtime.execute(f.body, local)
 	if err != nil {
 		var s signal
@@ -1964,6 +2266,15 @@ func (f *userFunction) callNamed(args []any, named map[string]any, receiver *use
 
 func invoke(v any, args []any) (any, error) {
 	return invokeNamed(v, args, nil)
+}
+
+func isCallableValue(value any) bool {
+	switch value.(type) {
+	case callable, namedCallable, *userFunction, *userClass, *bytecodeClassValue:
+		return true
+	default:
+		return false
+	}
 }
 
 func invokeNamed(v any, args []any, named map[string]any) (any, error) {

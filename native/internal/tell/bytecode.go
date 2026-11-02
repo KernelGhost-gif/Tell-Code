@@ -46,6 +46,9 @@ type BytecodeModule struct {
 type BytecodeFunction struct {
 	Name         string                `json:"name"`
 	Parameters   []string              `json:"parameters"`
+	Defaults     []int                 `json:"default_functions,omitempty"`
+	Variadic     int                   `json:"variadic_index,omitempty"`
+	HasVariadic  bool                  `json:"has_variadic,omitempty"`
 	Receiver     bool                  `json:"receiver,omitempty"`
 	Instructions []BytecodeInstruction `json:"instructions"`
 }
@@ -292,13 +295,43 @@ func (c *bytecodeCompiler) statements(nodes []node) error {
 }
 
 func (c *bytecodeCompiler) compileFunction(name string, params []string, body []node, receiver bool) (int, error) {
+	parameterNames := make([]string, len(params))
+	defaultFunctions := make([]int, len(params))
+	hasDefaults := false
+	variadicIndex := -1
+	for index, parameter := range params {
+		parameterName, defaultExpression, hasDefault, variadic, ok := parameterParts(parameter)
+		if !ok {
+			return 0, fmt.Errorf("invalid parameter definition %q in %s", parameter, name)
+		}
+		parameterNames[index] = parameterName
+		defaultFunctions[index] = -1
+		if variadic {
+			variadicIndex = index
+		}
+		if !hasDefault {
+			continue
+		}
+		defaultCompiler := &bytecodeCompiler{inFunction: true, filename: c.filename, rootDirectory: c.rootDirectory, moduleCache: c.moduleCache, moduleLoading: c.moduleLoading, functions: c.functions, classes: c.classes}
+		if err := defaultCompiler.expression(defaultExpression); err != nil {
+			return 0, fail("invalid default for parameter %q in %s: %v", parameterName, name, err)
+		}
+		defaultCompiler.emit("RETURN")
+		defaultFunction := BytecodeFunction{Name: name + " default " + parameterName, Instructions: defaultCompiler.code}
+		defaultFunctions[index] = len(*c.functions)
+		*c.functions = append(*c.functions, defaultFunction)
+		hasDefaults = true
+	}
 	functionCompiler := &bytecodeCompiler{functions: c.functions, classes: c.classes, inFunction: true, receiver: receiver, allowRemember: receiver || c.allowRemember, filename: c.filename, rootDirectory: c.rootDirectory, moduleCache: c.moduleCache, moduleLoading: c.moduleLoading}
 	if err := functionCompiler.statements(body); err != nil {
 		return 0, err
 	}
 	functionCompiler.emit("PUSH")
 	functionCompiler.emit("RETURN")
-	function := BytecodeFunction{Name: name, Parameters: append([]string(nil), params...), Receiver: receiver, Instructions: functionCompiler.code}
+	function := BytecodeFunction{Name: name, Parameters: parameterNames, Variadic: max(variadicIndex, 0), HasVariadic: variadicIndex >= 0, Receiver: receiver, Instructions: functionCompiler.code}
+	if hasDefaults {
+		function.Defaults = defaultFunctions
+	}
 	index := len(*c.functions)
 	*c.functions = append(*c.functions, function)
 	return index, nil
@@ -444,6 +477,17 @@ func (c *bytecodeCompiler) statement(source string) error {
 		if !annotated {
 			name = binding
 		}
+		if separated && strings.Contains(binding, ",") && !annotated && expression != "" {
+			if names, valid := parseMultipleTargets(binding); valid {
+				if err := c.expression(expression); err != nil {
+					return err
+				}
+				instruction := c.emit("MULTI_DECLARE")
+				c.code[instruction].ArgNames = names
+				c.code[instruction].Constant = constant
+				return nil
+			}
+		}
 		if separated && identifier(name) && expression != "" {
 			if err := c.expression(expression); err != nil {
 				return err
@@ -457,6 +501,16 @@ func (c *bytecodeCompiler) statement(source string) error {
 	}
 	if rest, ok := prefixFold(source, "set "); ok {
 		name, expression, separated := splitFoldOnce(rest, " to ")
+		if separated && strings.Contains(name, ",") && expression != "" {
+			if names, valid := parseMultipleTargets(name); valid {
+				if err := c.expression(expression); err != nil {
+					return err
+				}
+				instruction := c.emit("MULTI_ASSIGN")
+				c.code[instruction].ArgNames = names
+				return nil
+			}
+		}
 		if separated && identifier(name) && expression != "" {
 			if err := c.expression(expression); err != nil {
 				return err
@@ -521,6 +575,23 @@ func (c *bytecodeCompiler) statement(source string) error {
 		return nil
 	}
 	return fmt.Errorf("unsupported statement %q", source)
+}
+
+func parseMultipleTargets(source string) ([]string, bool) {
+	parts := strings.Split(source, ",")
+	if len(parts) < 2 {
+		return nil, false
+	}
+	seen := make(map[string]bool, len(parts))
+	for index, part := range parts {
+		name := strings.TrimSpace(part)
+		if !identifier(name) || seen[name] {
+			return nil, false
+		}
+		seen[name] = true
+		parts[index] = name
+	}
+	return parts, true
 }
 
 func (c *bytecodeCompiler) compileModule(importPath string) (string, error) {
@@ -912,6 +983,23 @@ func validateExecutableBytecode(program BytecodeProgram) error {
 		if function.Name == "" || len(function.Instructions) == 0 {
 			return fail("invalid bytecode function at index %d", index)
 		}
+		if len(function.Defaults) != 0 && len(function.Defaults) != len(function.Parameters) {
+			return fail("invalid default-argument table for bytecode function %q", function.Name)
+		}
+		if function.HasVariadic && (function.Variadic < 0 || function.Variadic != len(function.Parameters)-1) {
+			return fail("invalid variadic parameter for bytecode function %q", function.Name)
+		}
+		for _, defaultIndex := range function.Defaults {
+			if defaultIndex < -1 || defaultIndex >= len(program.Functions) {
+				return fail("invalid default-function reference for bytecode function %q", function.Name)
+			}
+			if defaultIndex >= 0 {
+				defaultFunction := program.Functions[defaultIndex]
+				if len(defaultFunction.Parameters) != 0 || defaultFunction.Receiver || len(defaultFunction.Defaults) != 0 {
+					return fail("invalid default-function target for bytecode function %q", function.Name)
+				}
+			}
+		}
 		if err := validateBytecode(function.Instructions, "RETURN", len(program.Functions), len(program.Classes), true); err != nil {
 			return fail("invalid bytecode function %q: %v", function.Name, err)
 		}
@@ -993,11 +1081,28 @@ func validateBytecode(instructions []BytecodeInstruction, terminal string, funct
 		if (instruction.Op == "REPEAT_NEXT" || instruction.Op == "ITER_NEXT") && instruction.Count >= len(instructions) {
 			return fail("invalid bytecode loop reference at instruction %d", pc)
 		}
+		if instruction.Op == "ITER_INIT" {
+			if _, ok := parseLoopNames(instruction.Name); !ok {
+				return fail("invalid bytecode loop binding at instruction %d", pc)
+			}
+		}
 		if instruction.Op == "DEFINE_FUNC" && instruction.Count >= functionCount {
 			return fail("invalid bytecode function reference at instruction %d", pc)
 		}
 		if instruction.Op == "DEFINE_CLASS" && instruction.Count >= classCount {
 			return fail("invalid bytecode class reference at instruction %d", pc)
+		}
+		if instruction.Op == "MULTI_DECLARE" || instruction.Op == "MULTI_ASSIGN" {
+			if len(instruction.ArgNames) < 2 {
+				return fail("invalid multiple assignment at instruction %d", pc)
+			}
+			seen := make(map[string]bool, len(instruction.ArgNames))
+			for _, name := range instruction.ArgNames {
+				if !identifier(name) || seen[name] {
+					return fail("invalid multiple assignment target at instruction %d", pc)
+				}
+				seen[name] = true
+			}
 		}
 		if !inFunction && instruction.Op == "RETURN" {
 			return fail("invalid bytecode return at instruction %d", pc)
@@ -1018,7 +1123,7 @@ func verifyBytecodeStack(instructions []BytecodeInstruction) error {
 		switch instruction.Op {
 		case "PUSH", "MISSING", "LOAD":
 			delta = 1
-		case "DECLARE", "ASSIGN", "PRINT", "POP", "ASSERT":
+		case "DECLARE", "ASSIGN", "PRINT", "POP", "ASSERT", "MULTI_DECLARE", "MULTI_ASSIGN":
 			need, delta = 1, -1
 		case "SET_FIELD", "SET_MEMBER":
 			need, delta = 2, -2
@@ -1123,7 +1228,7 @@ func executeBytecodeCode(r *runtime, instructions []BytecodeInstruction, functio
 			if err == nil {
 				stack = append(stack, value)
 			}
-		case "DECLARE", "ASSIGN", "PRINT", "POP", "ASSERT", "BOOL", "UNARY":
+		case "DECLARE", "ASSIGN", "PRINT", "POP", "ASSERT", "BOOL", "UNARY", "MULTI_DECLARE", "MULTI_ASSIGN":
 			var value any
 			value, err = pop()
 			if err != nil {
@@ -1134,6 +1239,13 @@ func executeBytecodeCode(r *runtime, instructions []BytecodeInstruction, functio
 				err = r.declare(r.global, instruction.Name, value, instruction.Type, instruction.Constant)
 			case "ASSIGN":
 				err = r.assign(r.global, instruction.Name, value)
+			case "MULTI_DECLARE", "MULTI_ASSIGN":
+				values, ok := value.([]any)
+				if !ok {
+					err = fail("multiple assignment expects a list")
+				} else {
+					err = r.assignMany(r.global, instruction.ArgNames, values, instruction.Op == "MULTI_DECLARE" && instruction.Constant)
+				}
 			case "PRINT":
 				_, err = fmt.Fprintln(r.output, display(value))
 			case "ASSERT":
@@ -1479,7 +1591,9 @@ func executeBytecodeCode(r *runtime, instructions []BytecodeInstruction, functio
 					next = instruction.Jump
 				} else {
 					loopStates[pc] = &bytecodeLoopState{values: values, index: 0, name: instruction.Name}
-					r.global.set(instruction.Name, values[0])
+					if bindErr := bindLoopValues(r.global, strings.Split(instruction.Name, ","), values[0]); bindErr != nil {
+						err = bindErr
+					}
 					r.global.set("_current_item", values[0])
 				}
 			}
@@ -1492,7 +1606,10 @@ func executeBytecodeCode(r *runtime, instructions []BytecodeInstruction, functio
 			state.index++
 			if state.index < len(state.values) {
 				value := state.values[state.index]
-				r.global.set(state.name, value)
+				if bindErr := bindLoopValues(r.global, strings.Split(state.name, ","), value); bindErr != nil {
+					err = bindErr
+					break
+				}
 				r.global.set("_current_item", value)
 				next = instruction.Jump
 			} else {
@@ -1529,14 +1646,20 @@ func executeBytecodeCode(r *runtime, instructions []BytecodeInstruction, functio
 }
 
 func bindBytecodeArguments(function BytecodeFunction, positional []any, named map[string]any) (map[string]any, error) {
-	if len(positional) > len(function.Parameters) {
+	if len(positional) > len(function.Parameters) && !function.HasVariadic {
 		return nil, fail("%q accepts %d argument(s), but got %d positional arguments", function.Name, len(function.Parameters), len(positional))
 	}
 	indices := make(map[string]int, len(function.Parameters))
 	bindings := make(map[string]any, len(function.Parameters))
 	for index, parameter := range function.Parameters {
 		indices[parameter] = index
-		if index < len(positional) {
+		if function.HasVariadic && index == function.Variadic {
+			if index < len(positional) {
+				bindings[parameter] = append([]any(nil), positional[index:]...)
+			} else {
+				bindings[parameter] = []any{}
+			}
+		} else if index < len(positional) {
 			bindings[parameter] = positional[index]
 		}
 	}
@@ -1545,6 +1668,9 @@ func bindBytecodeArguments(function BytecodeFunction, positional []any, named ma
 		if !exists {
 			return nil, fail("%q has no parameter named %q", function.Name, name)
 		}
+		if function.HasVariadic && index == function.Variadic {
+			return nil, fail("%q variadic parameter %q cannot be supplied by name", function.Name, name)
+		}
 		if index < len(positional) {
 			return nil, fail("%q got multiple values for %q", function.Name, name)
 		}
@@ -1552,7 +1678,15 @@ func bindBytecodeArguments(function BytecodeFunction, positional []any, named ma
 	}
 	for _, parameter := range function.Parameters {
 		if _, exists := bindings[parameter]; !exists {
-			return nil, fail("%q is missing argument %q", function.Name, parameter)
+			index := indices[parameter]
+			if function.HasVariadic && index == function.Variadic {
+				bindings[parameter] = []any{}
+				continue
+			}
+			if index >= len(function.Defaults) || function.Defaults[index] < 0 {
+				return nil, fail("%q is missing argument %q", function.Name, parameter)
+			}
+			bindings[parameter] = bytecodeMissing{}
 		}
 	}
 	return bindings, nil
@@ -1573,10 +1707,26 @@ func callBytecodeFunction(r *runtime, function BytecodeFunction, closure *env, f
 	defer func() { r.callDepth-- }()
 	local := newEnv(closure)
 	for name, value := range bindings {
-		local.set(name, value)
+		if _, missing := value.(bytecodeMissing); !missing {
+			local.set(name, value)
+		}
 	}
 	if receiver != nil {
 		local.set("this", receiver)
+	}
+	for index, parameter := range function.Parameters {
+		if _, exists := local.values[parameter]; exists {
+			continue
+		}
+		if index >= len(function.Defaults) || function.Defaults[index] < 0 {
+			return nil, fail("%q is missing argument %q", function.Name, parameter)
+		}
+		defaultFunction := functions[function.Defaults[index]]
+		value, err := callBytecodeFunction(r, defaultFunction, local, functions, classes, nil, nil, nil)
+		if err != nil {
+			return nil, err
+		}
+		local.set(parameter, value)
 	}
 	previous := r.global
 	r.global = local

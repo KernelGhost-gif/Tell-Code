@@ -15,7 +15,7 @@ if-block     = "If" expression ":" program
                [ "Otherwise:" program ] "End if." ;
 while-block  = "While" expression ":" program "End while." ;
 repeat-block = "Repeat" expression "times:" program "End repeat." ;
-for-block    = "For each" identifier "in" expression ":" program "End loop." ;
+for-block    = "For each" identifier { "," identifier } "in" expression ":" program "End loop." ;
 function     = "To" identifier [ "(" [ names ] ")" | "with" names ] ":"
                program "End function." ;
 try-block    = "Try:" program [ "If something goes wrong:" program ] "End try." ;
@@ -49,6 +49,23 @@ Say greeting.
 Say visits.
 ```
 
+Multiple assignment binds or updates several names from a list in one operation:
+
+```tell
+Let width, height be [640, 480].
+Set width, height to [800, 600].
+```
+
+The right side must evaluate to a list with exactly as many values as names. All target names and their existing constant/type constraints are validated before any target is updated. Multiple assignment currently does not accept per-name annotations.
+
+`For each` accepts one binding for ordinary items or multiple bindings to destructure each list item. The item must contain exactly one value per binding; otherwise execution reports an arity error. This works with `enumerate(list)`:
+
+```tell
+For each index, value in enumerate(["Ada", "Grace"]):
+    Say "{index}: {value}".
+End loop.
+```
+
 The current runtime annotations are `any`, `nothing`, `boolean`, `number`, `text`, `list`, `dictionary`, `function`, `class`, and a declared Tell class name. A class annotation accepts instances of that class and its subclasses. Runtime checks always apply. The native CLI additionally offers conservative static validation of known initializer and assignment types with `tell check --types`; `tell build` applies it during compilation. Unknown expressions are deferred to runtime. This is not a whole-program static type system. A variable's existing annotation is preserved by `Set` and ordinary `Let` reassignment.
 
 It also includes list/dictionary mutation (`Add`, `Remove`, set item/key), file read/write/append, class field initialization and updates, module imports, library imports, and `Raise an error saying ...`. Exact accepted phrases are implementation-sensitive until covered by the conformance corpus.
@@ -63,6 +80,8 @@ Expressions include numbers, quoted strings, booleans (`true`, `false`), `nothin
 
 The portable operators include symbols and these English forms: `plus`, `minus`, `times`, `divided by`, `modulo`, `to the power of`, `is equal to`, `is not equal to`, `is greater than`, `is at least`, `is less than`, `is at most`, `is in`, `is not in`, `and`, `or`, and `not`.
 
+Lists also support eager `map(function, list)`, `filter(function, list)`, `reduce(function, list, initial_value)`, and `enumerate(list)`. The first three take Tell functions as appropriate; `enumerate` returns index/value pairs as a list of two-element lists. `map` and `filter` return lists, and `reduce` returns its initial value for an empty list. These calls respect the configured function-call limit.
+
 Precedence, from low to high, is `or`, `and`, comparisons/membership, addition/subtraction, multiplication/division/modulo, exponentiation, then unary operators and postfix calls/index/member access. Exponentiation is right-associative. `and` and `or` short-circuit and return booleans. Parentheses should be used where precedence could be unclear. Runtime-specific discrepancies are tracked as conformance failures, not intended semantics.
 
 Strings support `{expression}` interpolation. If an interpolation cannot be evaluated, current runtimes may preserve the braces; this behavior is legacy and should not be used for error signaling.
@@ -73,7 +92,21 @@ Scalar output is portable: booleans render as lowercase true or false, and the n
 
 User-defined function, constructor, and method calls support named arguments in any order, including a mix of positional arguments followed by named arguments. Positional arguments cannot follow named arguments. Standard-library and built-in calls currently accept positional arguments only in the native runtime.
 
-Values are dynamically typed, with optional runtime annotations and immutable constants as described in [Variables and Types](VARIABLES_AND_TYPES.md). The common values are numbers, strings, booleans, nothing/null, lists, dictionaries, functions, classes, and instances. Functions have positional parameters, capture their defining environment, and return with `Give back`; absent a return they yield nothing.
+Function signatures support call-time default expressions and one final variadic parameter:
+
+```tell
+To greet with person and greeting defaulting to "Hello":
+    Give back "{greeting}, {person}!".
+End function.
+
+To collect with first and all remaining values as rest:
+    Give back [first, rest].
+End function.
+```
+
+Defaults are evaluated for each call, in parameter order, in the new function scope; they can refer to earlier parameters and captured variables. Required parameters must precede defaulted parameters. `all remaining values as name` must be the final parameter and receives a list, including an empty list when no extra values are passed. The variadic parameter cannot be supplied by name.
+
+Values are dynamically typed, with optional runtime annotations and immutable constants as described in [Variables and Types](VARIABLES_AND_TYPES.md). The common values are numbers, strings, booleans, nothing/null, lists, dictionaries, functions, classes, and instances. Functions capture their defining environment and return with `Give back`; absent a return they yield nothing. Positional, named, defaulted, and final variadic parameters are supported by both runtimes and the native bytecode VM.
 
 ## Classes (implemented subset)
 
@@ -107,7 +140,7 @@ To limit runaway work, both runtimes default to a 64-level active function-call 
 
 ## Standard library and effects
 
-The runtimes provide overlapping built-ins for common collection, numeric, random, and type operations, plus allowlisted `math`, `random`, `statistics`, `json`, `datetime`, and `csv` libraries to varying degrees. Both runtimes implement `csv.parse(text)` and `csv.stringify(rows)` with text-only cells and LF output; see the [standard library reference](STANDARD_LIBRARY.md) for details. Exact names/signatures of other exports must be checked against runtime documentation and parity tests. File operations use paths relative to the process working directory.
+The runtimes provide overlapping built-ins for common collection, numeric, random, and type operations, including the shared `map`, `filter`, and `reduce` functions. Allowlisted libraries include `math`, `random`, `statistics`, `json`, `datetime`, and `csv` to varying degrees. Both runtimes implement `csv.parse(text)` and `csv.stringify(rows)` with text-only cells and LF output; see the [standard library reference](STANDARD_LIBRARY.md) for details. Exact names/signatures of other exports must be checked against runtime documentation and parity tests. File operations use paths relative to the process working directory.
 
 Local modules use `Use the module "relative/path.tell" as alias.`. The path is resolved relative to the importing source file; an in-memory program resolves from the process working directory. A module executes once per interpreter, receives built-ins through its parent scope, and exports its public top-level bindings. Names beginning with `_` are not exported. Circular imports and non-`.tell` paths are rejected. This is a local source-file mechanism, not a package manager.
 
@@ -121,4 +154,4 @@ Package management, async/concurrency, a static type system, AOT/JIT compilation
 
 ## Native bytecode subset
 
-The Go CLI can compile a deliberately smaller subset with `tell build`. Supported statements are `Let`, `Set`, `Remember ... as this.field`, output statements, bare expressions, `If`/`Otherwise`, `While`, `Repeat`, `For each`, loop break/continue, `Try`/`If something goes wrong`, `Raise an error saying ...`, local module imports, function declarations, `Give back`, and the class subset described above. Local `.tell` module dependencies are compiled and embedded recursively; repeated imports share one module instance, and public top-level bindings are exported. Compiled functions support recursion, named arguments, and lexical closures; compiled classes support constructors, fields, instance methods, single inheritance, and overriding. A raised runtime error transfers to the nearest `If something goes wrong` handler; error types and `Finally` are not implemented in bytecode. Expressions use the native expression grammar described above. Unsupported syntax is a compile-time error; it is not copied into the artifact. The emitted `tell-bytecode-v1` artifact is JSON-encoded stack instructions and executes only in the native Go VM. This compiler subset is a tooling extension, not a claim that every construct in this specification compiles.
+The Go CLI can compile a deliberately smaller subset with `tell build`. Supported statements are `Let`, `Set`, `Remember ... as this.field`, output statements, bare expressions, `If`/`Otherwise`, `While`, `Repeat`, `For each`, loop break/continue, `Try`/`If something goes wrong`, `Raise an error saying ...`, local module imports, function declarations, `Give back`, and the class subset described above. Local `.tell` module dependencies are compiled and embedded recursively; repeated imports share one module instance, and public top-level bindings are exported. Compiled functions support recursion, named and default arguments, a final variadic parameter, and lexical closures; compiled classes support constructors, fields, instance methods, single inheritance, and overriding. A raised runtime error transfers to the nearest `If something goes wrong` handler; error types and `Finally` are not implemented in bytecode. Expressions use the native expression grammar described above. Unsupported syntax is a compile-time error; it is not copied into the artifact. The emitted `tell-bytecode-v1` artifact is JSON-encoded stack instructions and executes only in the native Go VM. This compiler subset is a tooling extension, not a claim that every construct in this specification compiles.

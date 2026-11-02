@@ -139,5 +139,90 @@
     "name": "CSV stringify rejects non-text cells",
     "source": "Use the csv library.\nSay csv.stringify([[\"answer\", 42]]).",
     "error": "must contain only text"
+  },
+  {
+    "name": "functional map filter and reduce with Tell functions",
+    "source": "To double with value:\n    Give back value times 2.\nEnd function.\nTo is_even with value:\n    Give back value modulo 2 is equal to 0.\nEnd function.\nTo add with total and value:\n    Give back total plus value.\nEnd function.\nSay map(double, [1, 2, 3]).\nSay filter(is_even, [1, 2, 3, 4]).\nSay reduce(add, [1, 2, 3, 4], 0).",
+    "output": "[2, 4, 6]\n[2, 4]\n10\n"
+  },
+  {
+    "name": "functional map preserves closures",
+    "source": "To make_adder with offset:\n    To add with value:\n        Give back value plus offset.\n    End function.\n    Give back add.\nEnd function.\nLet add_three be make_adder(3).\nSay map(add_three, [1, 2]).",
+    "output": "[4, 5]\n"
+  },
+  {
+    "name": "functional collection operation validates callback",
+    "source": "Say map(42, [1, 2]).",
+    "error": "expects a function"
+  },
+  {
+    "name": "multiple assignment declares and updates names",
+    "source": "Let first, second be [10, 20].\nSet first, second to [30, 40].\nSay [first, second].",
+    "output": "[30, 40]\n"
+  },
+  {
+    "name": "multiple assignment enforces exact arity",
+    "source": "Let first, second be [10, 20].\nSet first, second to [30].",
+    "error": "expected 2 values, got 1"
+  },
+  {
+    "name": "multiple assignment requires a list",
+    "source": "Let first, second be 10.",
+    "error": "expects a list"
+  },
+  {
+    "name": "function default arguments and named overrides",
+    "source": "To greet with person and greeting defaulting to \"Hello\":\n    Give back \"{greeting}, {person}!\".\nEnd function.\nSay greet(\"Ada\").\nSay greet(\"Grace\", \"Welcome\").\nSay greet(person=\"Lin\").",
+    "output": "Hello, Ada!\nWelcome, Grace!\nHello, Lin!\n"
+  },
+  {
+    "name": "function default can use an earlier parameter",
+    "source": "To area with width and height defaulting to width times 2:\n    Give back width times height.\nEnd function.\nSay area(3).",
+    "output": "18\n"
+  },
+  {
+    "name": "function still requires parameters without defaults",
+    "source": "To combine with required and optional defaulting to 1:\n    Give back required plus optional.\nEnd function.\nSay combine().",
+    "error": "missing argument"
+  },
+  {
+    "name": "function defaults are evaluated at each call",
+    "source": "Let greeting be \"Hello\".\nTo greet with person and prefix defaulting to greeting:\n    Give back \"{prefix}, {person}!\".\nEnd function.\nSay greet(\"Ada\").\nSet greeting to \"Welcome\".\nSay greet(\"Grace\").",
+    "output": "Hello, Ada!\nWelcome, Grace!\n"
+  },
+  {
+    "name": "variadic function parameter collects remaining arguments",
+    "source": "To collect with first and all remaining values as rest:\n    Give back [first, rest].\nEnd function.\nSay collect(1, 2, 3).\nSay collect(4).",
+    "output": "[1, [2, 3]]\n[4, []]\n"
+  },
+  {
+    "name": "default parameter can precede variadic parameter",
+    "source": "To collect with first defaulting to 1 and all remaining values as rest:\n    Give back [first, rest].\nEnd function.\nSay collect().\nSay collect(2, 3, 4).",
+    "output": "[1, []]\n[2, [3, 4]]\n"
+  },
+  {
+    "name": "variadic parameter cannot be supplied by name",
+    "source": "To collect with all remaining values as rest:\n    Give back rest.\nEnd function.\nSay collect(rest=[1, 2]).",
+    "error": "cannot be supplied by name"
+  },
+  {
+    "name": "enumerate returns index value pairs",
+    "source": "Say enumerate([\"a\", \"b\"]).\nSay enumerate([]).",
+    "output": "[[0, a], [1, b]]\n[]\n"
+  },
+  {
+    "name": "for each destructures enumerated index and value",
+    "source": "For each index, value in enumerate([\"a\", \"b\"]):\n    Say \"{index}:{value}\".\nEnd loop.",
+    "output": "0:a\n1:b\n"
+  },
+  {
+    "name": "for each destructuring requires matching list arity",
+    "source": "For each first, second in [[1]]:\n    Say first.\nEnd loop.",
+    "error": "for each expects 2 values, got 1"
+  },
+  {
+    "name": "constructor supports default arguments",
+    "source": "Create a class called Counter:\n    When creating a Counter with initial defaulting to 5:\n        Remember initial as this.value.\n    End constructor.\nEnd class.\nLet counter be a new Counter.\nSay counter.value.",
+    "output": "5\n"
   }
 ]

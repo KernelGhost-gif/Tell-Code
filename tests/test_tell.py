@@ -100,6 +100,16 @@ Say profile["age"].
         self.assertEqual(output, ["9", "36"])
         self.assertEqual(env.get("numbers"), [9, 2, 3])
 
+    def test_multiple_assignment_validates_before_mutating(self):
+        interpreter = Interpreter()
+        interpreter.global_env.set("first", 1)
+        interpreter.global_env.set("second", "before")
+        interpreter.global_env.types["second"] = "text"
+        with self.assertRaisesRegex(TellError, "type mismatch"):
+            interpreter.run("Set first, second to [2, 3].")
+        self.assertEqual(interpreter.global_env.get("first"), 1)
+        self.assertEqual(interpreter.global_env.get("second"), "before")
+
     def test_while_loop(self):
         source = """
 Let count be 0.

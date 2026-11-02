@@ -49,6 +49,79 @@ Say tables.stringify(rows).`
 	}
 }
 
+func TestBytecodeSupportsHigherOrderCollectionFunctions(t *testing.T) {
+	source := `To double with value:
+    Give back value times 2.
+End function.
+To add with total and value:
+    Give back total plus value.
+End function.
+Say map(double, [1, 2, 3]).
+Say reduce(add, [1, 2, 3], 0).`
+	want := "[2, 4, 6]\n6\n"
+	if got := runCompiled(t, source); got != want {
+		t.Fatalf("compiled functional output = %q, want %q", got, want)
+	}
+}
+
+func TestBytecodeSupportsMultipleAssignment(t *testing.T) {
+	source := `Let first, second be [1, 2].
+Set first, second to [3, 4].
+Say [first, second].`
+	if got, want := runCompiled(t, source), "[3, 4]\n"; got != want {
+		t.Fatalf("compiled multiple assignment output = %q, want %q", got, want)
+	}
+}
+
+func TestBytecodeSupportsDefaultFunctionArguments(t *testing.T) {
+	source := `To greet with person and greeting defaulting to "Hello":
+    Give back "{greeting}, {person}!".
+End function.
+To area with width and height defaulting to width times 2:
+    Give back width times height.
+End function.
+Say greet("Ada").
+Say greet("Grace", "Welcome").
+Say area(3).`
+	want := "Hello, Ada!\nWelcome, Grace!\n18\n"
+	if got := runCompiled(t, source); got != want {
+		t.Fatalf("compiled default-argument output = %q, want %q", got, want)
+	}
+}
+
+func TestBytecodeSupportsDefaultConstructorArguments(t *testing.T) {
+	source := `Create a class called Counter:
+    When creating a Counter with initial defaulting to 5:
+        Remember initial as this.value.
+    End constructor.
+End class.
+Let counter be a new Counter.
+Say counter.value.`
+	if got, want := runCompiled(t, source), "5\n"; got != want {
+		t.Fatalf("compiled constructor default output = %q, want %q", got, want)
+	}
+}
+
+func TestBytecodeSupportsVariadicFunctionArguments(t *testing.T) {
+	source := `To collect with first and all remaining values as rest:
+    Give back [first, rest].
+End function.
+Say collect(1, 2, 3).
+Say collect(4).`
+	if got, want := runCompiled(t, source), "[1, [2, 3]]\n[4, []]\n"; got != want {
+		t.Fatalf("compiled variadic output = %q, want %q", got, want)
+	}
+}
+
+func TestBytecodeSupportsDestructuredEnumeratedLoops(t *testing.T) {
+	source := `For each index, value in enumerate(["a", "b"]):
+    Say "{index}:{value}".
+End loop.`
+	if got, want := runCompiled(t, source), "0:a\n1:b\n"; got != want {
+		t.Fatalf("compiled destructured-loop output = %q, want %q", got, want)
+	}
+}
+
 func TestBytecodeCheckThatAssertion(t *testing.T) {
 	if got, want := runCompiled(t, "Check that 2 plus 2 is equal to 4.\nSay \"passed\"."), "passed\n"; got != want {
 		t.Fatalf("asserting program output = %q, want %q", got, want)

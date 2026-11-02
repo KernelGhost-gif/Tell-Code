@@ -127,18 +127,31 @@ class UserFunction:
         kwargs: dict[str, Any] | None = None,
     ) -> Any:
         named = kwargs or {}
-        if len(args) > len(self.parameters):
+        definitions = [_parameter_parts(parameter) for parameter in self.parameters]
+        if any(definition is None for definition in definitions):
+            raise TellError(f"'{self.name}' has an invalid parameter definition.")
+        parsed = [definition for definition in definitions if definition is not None]
+        parameter_names = [name for name, _, _ in parsed]
+        variadic_index = next((i for i, definition in enumerate(parsed) if definition[2]), None)
+        if len(args) > len(self.parameters) and variadic_index is None:
             raise TellError(
                 f"'{self.name}' accepts {len(self.parameters)} argument(s), but got {len(args)} positional arguments."
             )
-        values = dict(zip(self.parameters, args))
+        values: dict[str, Any] = {}
+        for index, (name, _, variadic) in enumerate(parsed):
+            if variadic:
+                values[name] = list(args[index:])
+            elif index < len(args):
+                values[name] = args[index]
         for name, value in named.items():
-            if name not in self.parameters:
+            if name not in parameter_names:
                 raise TellError(f"'{self.name}' has no parameter named '{name}'.")
+            if parsed[parameter_names.index(name)][2]:
+                raise TellError(f"'{self.name}' variadic parameter '{name}' cannot be supplied by name.")
             if name in values:
                 raise TellError(f"'{self.name}' got multiple values for '{name}'.")
             values[name] = value
-        missing = [name for name in self.parameters if name not in values]
+        missing = [name for name, default, variadic in parsed if name not in values and default is None and not variadic]
         if missing:
             raise TellError(f"'{self.name}' is missing argument(s): {', '.join(missing)}.")
         if receiver is not None:
@@ -150,6 +163,9 @@ class UserFunction:
             )
         self.interpreter.call_depth += 1
         try:
+            for name, default, variadic in parsed:
+                if name not in local.values and default is not None:
+                    local.set(name, self.interpreter.evaluate(default, local))
             self.interpreter.execute(self.body, local)
         except ReturnSignal as signal:
             return signal.value
@@ -294,6 +310,56 @@ def _first_identifier(text: str) -> tuple[str, str]:
     return text[:end], text[end:].strip()
 
 
+def _parse_parameter_text(text: str) -> str | None:
+    remaining = _take_prefix(text, "all remaining values as ")
+    if remaining is not None:
+        return f"*{remaining}" if re.fullmatch(r"(?:[^\W\d]|_)\w*", remaining) else None
+    parts = _split_once_casefold(text, " defaulting to ")
+    if parts is None:
+        name = text.strip()
+        return name if re.fullmatch(r"(?:[^\W\d]|_)\w*", name) else None
+    name, default_value = (part.strip() for part in parts)
+    if not re.fullmatch(r"(?:[^\W\d]|_)\w*", name) or not default_value:
+        return None
+    return f"{name}={default_value}"
+
+
+def _parameter_parts(parameter: str) -> tuple[str, str | None, bool] | None:
+    if parameter.startswith("*"):
+        name = parameter[1:].strip()
+        if re.fullmatch(r"(?:[^\W\d]|_)\w*", name):
+            return name, None, True
+        return None
+    name, separator, default_value = parameter.partition("=")
+    name = name.strip()
+    if not re.fullmatch(r"(?:[^\W\d]|_)\w*", name):
+        return None
+    if separator:
+        default_value = default_value.strip()
+        if not default_value:
+            return None
+        return name, default_value, False
+    return name, None, False
+
+
+def _valid_parameters(parameters: list[str]) -> bool:
+    names: set[str] = set()
+    has_default = False
+    has_variadic = False
+    for index, parameter in enumerate(parameters):
+        parts = _parameter_parts(parameter)
+        if parts is None:
+            return False
+        name, default_value, variadic = parts
+        optional = default_value is not None
+        if name in names or has_variadic or (has_default and not optional and not variadic) or (variadic and index != len(parameters) - 1):
+            return False
+        names.add(name)
+        has_default = has_default or optional
+        has_variadic = variadic
+    return True
+
+
 def _parse_function_header(header: str) -> tuple[str, list[str]] | None:
     rest = _take_prefix(header, "to ")
     if rest is None:
@@ -313,7 +379,11 @@ def _parse_function_header(header: str) -> tuple[str, list[str]] | None:
         params = [part.strip() for part in re.split(r"\s+and\s+", tail, flags=re.I)]
     else:
         params = []
-    if any(not re.fullmatch(r"(?:[^\W\d]|_)\w*", param) for param in params):
+    parsed_params = [_parse_parameter_text(param) for param in params]
+    if any(param is None for param in parsed_params):
+        return None
+    params = [param for param in parsed_params if param is not None]
+    if not _valid_parameters(params):
         return None
     return name, params
 
@@ -435,9 +505,12 @@ class Parser:
             if constructor_name and not re.fullmatch(r"(?:[^\W\d]|_)\w*", constructor_name):
                 constructor_name = ""
             if constructor_name:
-                params = constructor_params
-                if any(not re.fullmatch(r"(?:[^\W\d]|_)\w*", p) for p in params):
-                    raise TellError(f"Constructor parameters on line {line_no} must be simple names.")
+                parsed_params = [_parse_parameter_text(parameter) for parameter in constructor_params]
+                if any(parameter is None for parameter in parsed_params):
+                    raise TellError(f"Constructor parameters on line {line_no} are invalid.")
+                params = [parameter for parameter in parsed_params if parameter is not None]
+                if not _valid_parameters(params):
+                    raise TellError(f"Constructor parameters on line {line_no} are invalid.")
                 body, stop = self.parse_block({"end constructor."})
                 if stop != "end constructor.":
                     raise TellError(f"Constructor on line {line_no} needs 'End constructor.'.")
@@ -469,11 +542,15 @@ class Parser:
 
             for_rest = _take_prefix(header, "for each ") if header is not None else None
             for_parts = _split_once_casefold(for_rest, " in ") if for_rest is not None else None
-            if for_parts and re.fullmatch(r"(?:[^\W\d]|_)\w*", for_parts[0]) and for_parts[1]:
+            loop_names = [name.strip() for name in for_parts[0].split(",")] if for_parts else []
+            valid_loop_names = bool(loop_names) and all(
+                re.fullmatch(r"(?:[^\W\d]|_)\w*", name) for name in loop_names
+            ) and len(set(loop_names)) == len(loop_names)
+            if for_parts and valid_loop_names and for_parts[1]:
                 body, stop = self.parse_block({"end loop."})
                 if stop != "end loop.":
                     raise TellError(f"For-each block on line {line_no} needs 'End loop.'.")
-                nodes.append(Node("for", {"name": for_parts[0], "items": for_parts[1], "body": body}, line_no, self._source_column(line_no)))
+                nodes.append(Node("for", {"names": loop_names, "items": for_parts[1], "body": body}, line_no, self._source_column(line_no)))
                 continue
 
             function_header = _parse_function_header(header or "")
@@ -632,12 +709,42 @@ class Interpreter:
             converted = float(value)
             return int(converted) if converted.is_integer() else converted
 
+        def map_values(function: Any, values: Any) -> list[Any]:
+            if not callable(function):
+                raise TellError("map expects a function as its first argument")
+            if not isinstance(values, list):
+                raise TellError("map expects a list as its second argument")
+            return [function(value) for value in values]
+
+        def filter_values(function: Any, values: Any) -> list[Any]:
+            if not callable(function):
+                raise TellError("filter expects a function as its first argument")
+            if not isinstance(values, list):
+                raise TellError("filter expects a list as its second argument")
+            return [value for value in values if function(value)]
+
+        def reduce_values(function: Any, values: Any, initial: Any) -> Any:
+            if not callable(function):
+                raise TellError("reduce expects a function as its first argument")
+            if not isinstance(values, list):
+                raise TellError("reduce expects a list as its second argument")
+            result = initial
+            for value in values:
+                result = function(result, value)
+            return result
+
+        def enumerate_values(values: Any) -> list[list[Any]]:
+            if not isinstance(values, list):
+                raise TellError("enumerate expects one list")
+            return [[index, value] for index, value in enumerate(values)]
+
         builtins = {
             "len": len, "range": range, "sum": sum, "min": min, "max": max,
-            "sorted": sorted, "reversed": reversed, "enumerate": enumerate,
+            "sorted": sorted, "reversed": reversed, "enumerate": enumerate_values,
             "zip": zip, "abs": abs, "round": round, "int": int, "float": float,
             "str": str, "bool": bool, "list": list, "tuple": tuple, "dict": dict,
             "set": set, "any": any, "all": all, "average": average,
+            "map": map_values, "filter": filter_values, "reduce": reduce_values,
             "first": first, "last": last, "type_of": type_of,
             "random_number": random_number, "number": number, "sqrt": math.sqrt,
             "floor": math.floor, "ceiling": math.ceil,
@@ -1078,7 +1185,16 @@ class Interpreter:
             for index, item in enumerate(items, start=1):
                 if index > self.max_loop_iterations:
                     raise TellError(f"For-each loop exceeded the configured limit of {self.max_loop_iterations} iterations.")
-                env.set(data["name"], item)
+                names = data["names"]
+                if len(names) == 1:
+                    env.set(names[0], item)
+                else:
+                    if not isinstance(item, list):
+                        raise TellError(f"for each expects {len(names)} values, got a non-list item")
+                    if len(item) != len(names):
+                        raise TellError(f"for each expects {len(names)} values, got {len(item)}")
+                    for name, value in zip(names, item):
+                        env.set(name, value)
                 env.set("_current_item", item)
                 try:
                     self.execute(data["body"], env)
@@ -1212,6 +1328,39 @@ class Interpreter:
                 name, type_name = binding if binding else (parts[0], None)
             else:
                 name, type_name = "", None
+            if parts and "," in parts[0]:
+                targets = [target.strip() for target in parts[0].split(",")]
+                valid_names = (
+                    len(targets) > 1
+                    and binding is None
+                    and all(re.fullmatch(r"(?:[^\W\d]|_)\w*", target) for target in targets)
+                    and len(set(targets)) == len(targets)
+                )
+                if valid_names and parts[1]:
+                    values = self.evaluate(parts[1], env)
+                    if not isinstance(values, list):
+                        raise TellError("Multiple assignment expects a list.")
+                    if len(values) != len(targets):
+                        raise TellError(f"Multiple assignment expected {len(targets)} values, got {len(values)}.")
+                    for target in targets:
+                        if constant and target in env.constants:
+                            raise TellError(f"Constant {target!r} cannot be redeclared.")
+                        annotation = env.types.get(target)
+                        if constant:
+                            if annotation is not None:
+                                self._check_type(annotation, values[targets.index(target)], env, target)
+                        else:
+                            if target in env.constants:
+                                raise TellError(f"Constant {target!r} cannot be reassigned.")
+                            if annotation is not None:
+                                self._check_type(annotation, values[targets.index(target)], env, target)
+                    if constant:
+                        for target, value in zip(targets, values):
+                            self.declare(env, target, value, None, True)
+                    else:
+                        for target, value in zip(targets, values):
+                            env.set(target, value)
+                    return
             if parts and re.fullmatch(r"(?:[^\W\d]|_)\w*", name) and parts[1]:
                 value = self.evaluate(parts[1], env)
                 if constant or type_name is not None:
@@ -1222,6 +1371,28 @@ class Interpreter:
         rest = _take_prefix(statement, "set ")
         if rest is not None:
             parts = _split_once_casefold(rest, " to ")
+            if parts and "," in parts[0]:
+                targets = [target.strip() for target in parts[0].split(",")]
+                if (
+                    len(targets) > 1
+                    and all(re.fullmatch(r"(?:[^\W\d]|_)\w*", target) for target in targets)
+                    and len(set(targets)) == len(targets)
+                    and parts[1]
+                ):
+                    values = self.evaluate(parts[1], env)
+                    if not isinstance(values, list):
+                        raise TellError("Multiple assignment expects a list.")
+                    if len(values) != len(targets):
+                        raise TellError(f"Multiple assignment expected {len(targets)} values, got {len(values)}.")
+                    for index, target in enumerate(targets):
+                        if target in env.constants:
+                            raise TellError(f"Constant {target!r} cannot be reassigned.")
+                        annotation = env.types.get(target)
+                        if annotation is not None:
+                            self._check_type(annotation, values[index], env, target)
+                    for target, value in zip(targets, values):
+                        env.set(target, value)
+                    return
             if parts and re.fullmatch(r"(?:[^\W\d]|_)\w*", parts[0]) and parts[1]:
                 self.assign(env, parts[0], self.evaluate(parts[1], env))
                 return

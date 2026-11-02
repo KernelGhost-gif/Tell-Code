@@ -43,7 +43,7 @@ tell run program.tbc
 tell program.tbc
 ```
 
-`build` emits a versioned, JSON-encoded stack bytecode artifact (`.tbc`) with local `.tell` dependencies embedded, so the compiled program does not need the original module files at runtime. The current compiler subset supports `Let`, `Set`, `Remember ... as this.field`, output statements, bare expressions, `If`/`Otherwise`, `While`, `Repeat`, `For each`, loop break/continue, `Try`/`If something goes wrong`, `Raise an error saying ...`, local module imports, Tell function declarations, `Give back`, recursion, named arguments, lexical closures, classes, constructors, instance fields and methods, single inheritance, method overrides, and compiled class annotations. Expressions use the native Pratt parser, and safe scalar literal expressions are folded at compile time. `Finally`, typed/custom exception classes, class static members, access controls, multiple inheritance, and other unsupported statements fail compilation with a line diagnostic. The VM verifies opcode references and stack heights before execution. Bytecode runs on the native Go runtime only. Execution limits apply to compiled functions and loops. This is an initial compiler/VM milestone; it is not AOT native code, a full optimization pipeline, or cross-runtime bytecode.
+`build` emits a versioned, JSON-encoded stack bytecode artifact (`.tbc`) with local `.tell` dependencies embedded, so the compiled program does not need the original module files at runtime. The current compiler subset supports `Let`, `Set`, `Remember ... as this.field`, output statements, bare expressions, `If`/`Otherwise`, `While`, `Repeat`, `For each`, loop break/continue, `Try`/`If something goes wrong`, `Raise an error saying ...`, local module imports, Tell function declarations, `Give back`, recursion, named and default arguments, final variadic parameters, lexical closures, classes, constructors, instance fields and methods, single inheritance, method overrides, and compiled class annotations. Expressions use the native Pratt parser, and safe scalar literal expressions are folded at compile time. `Finally`, typed/custom exception classes, class static members, access controls, multiple inheritance, and other unsupported statements fail compilation with a line diagnostic. The VM verifies opcode references and stack heights before execution. Bytecode runs on the native Go runtime only. Execution limits apply to compiled functions and loops. This is an initial compiler/VM milestone; it is not AOT native code, a full optimization pipeline, or cross-runtime bytecode.
 
 ## Interactive shell
 
@@ -63,6 +63,16 @@ The REPL keeps variables and functions between entries, accepts multiline blocks
 
 `_` contains the most recent bare expression result. Commands are `:help`, `:clear`, `:exit`, `exit`, and `quit`. The native REPL runs independently of Python.
 
+## Create a project
+
+```text
+tell new hello-world
+tell init
+tell init my-project
+```
+
+`new` creates a project subdirectory containing `tell.toml`, a runnable `main.tell`, and `tests/smoke_test.tell`. `init` adds the same files to the current directory, or uses the optional name in the generated manifest. Both commands refuse to replace existing project files. The manifest currently records the project name, initial version, and entrypoint; dependency resolution and package installation are not implemented.
+
 ## Options
 
 Both runtimes accept `--version`, `--max-call-depth N`, and `--max-loop-iterations N`. Limits must be positive integers. The native help output lists the supported flags.
@@ -71,4 +81,4 @@ The native command `tell check --types program.tell` also checks primitive type 
 
 ## Not implemented yet
 
-There is no package-management CLI, debugger, or language server. The initial `build` command compiles only the documented native subset. `tell format` is a source formatter, not a compiler.
+There is no package-management CLI, debugger, or language server. `tell new` and `tell init` scaffold a runnable project but do not resolve or install dependencies. The initial `build` command compiles only the documented native subset. `tell format` is a source formatter, not a compiler.

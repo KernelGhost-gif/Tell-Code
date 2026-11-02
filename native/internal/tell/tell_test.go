@@ -53,6 +53,22 @@ func TestSharedConformanceCorpus(t *testing.T) {
 	}
 }
 
+func TestMultipleAssignmentValidatesBeforeMutating(t *testing.T) {
+	runtime := newRuntime("test.tell", nil, &bytes.Buffer{}, DefaultExecutionLimits())
+	runtime.global.set("first", float64(1))
+	runtime.global.set("second", "before")
+	runtime.global.types["second"] = "text"
+	if err := runtime.statement("Set first, second to [2, 3]", runtime.global); err == nil || !strings.Contains(err.Error(), "type mismatch") {
+		t.Fatalf("expected a type mismatch, got %v", err)
+	}
+	if got, _ := runtime.global.get("first"); got != float64(1) {
+		t.Fatalf("first target changed before validation completed: %v", got)
+	}
+	if got, _ := runtime.global.get("second"); got != "before" {
+		t.Fatalf("second target changed after validation failed: %v", got)
+	}
+}
+
 func TestModuleExampleRuns(t *testing.T) {
 	filename := filepath.Join("../../../examples", "modules.tell")
 	source, err := os.ReadFile(filename)
