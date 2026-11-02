@@ -38,6 +38,17 @@ End If.`
 	}
 }
 
+func TestBytecodeCompilesCSVStandardLibrary(t *testing.T) {
+	source := `Use the csv library as tables.
+Let rows be tables.parse("name,score\nAda,42\n").
+Say rows[1][0].
+Say tables.stringify(rows).`
+	want := "Ada\nname,score\nAda,42\n\n"
+	if got := runCompiled(t, source); got != want {
+		t.Fatalf("compiled CSV output = %q, want %q", got, want)
+	}
+}
+
 func TestBytecodeCheckThatAssertion(t *testing.T) {
 	if got, want := runCompiled(t, "Check that 2 plus 2 is equal to 4.\nSay \"passed\"."), "passed\n"; got != want {
 		t.Fatalf("asserting program output = %q, want %q", got, want)

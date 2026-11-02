@@ -323,6 +323,36 @@ func (c *bytecodeCompiler) statement(source string) error {
 		c.code[instruction].Name = expression
 		return nil
 	}
+	if rest, ok := prefixFold(source, "use the "); ok {
+		library, suffix, hasLibrary := splitFoldOnce(rest, " library")
+		if hasLibrary && library != "" {
+			library = strings.ToLower(strings.ReplaceAll(strings.TrimSpace(library), " ", ""))
+			alias := ""
+			if suffix != "" {
+				if !strings.HasPrefix(strings.ToLower(suffix), "as ") {
+					return fmt.Errorf("expected an optional alias after the library name")
+				}
+				alias = strings.TrimSpace(suffix[3:])
+				if !identifier(alias) {
+					return fmt.Errorf("expected a valid library alias")
+				}
+			}
+			canonical := map[string]string{"mathematics": "math", "dates": "datetime", "dateandtime": "datetime"}[library]
+			if canonical == "" {
+				canonical = library
+			}
+			if _, err := moduleValue(canonical); err != nil {
+				return err
+			}
+			if alias == "" {
+				alias = canonical
+			}
+			instruction := c.emit("USE_LIBRARY")
+			c.code[instruction].Name = alias
+			c.code[instruction].Value = canonical
+			return nil
+		}
+	}
 	if rest, ok := prefixFold(source, "use the module "); ok {
 		moduleExpression, alias, separated := splitFoldOnce(rest, " as ")
 		if !separated || !identifier(alias) {
@@ -1008,7 +1038,7 @@ func verifyBytecodeStack(instructions []BytecodeInstruction) error {
 			need, delta = 4, -3
 		case "CALL":
 			need, delta = instruction.Count+1, -instruction.Count
-		case "JUMP", "JUMP_IF_FALSE", "JUMP_IF_TRUE", "REPEAT_NEXT", "ITER_NEXT", "DEFINE_FUNC", "DEFINE_CLASS", "IMPORT_MODULE", "TRY_PUSH", "TRY_POP":
+		case "JUMP", "JUMP_IF_FALSE", "JUMP_IF_TRUE", "REPEAT_NEXT", "ITER_NEXT", "DEFINE_FUNC", "DEFINE_CLASS", "IMPORT_MODULE", "USE_LIBRARY", "TRY_PUSH", "TRY_POP":
 			if instruction.Op == "JUMP_IF_FALSE" || instruction.Op == "JUMP_IF_TRUE" {
 				need = 1
 			}
@@ -1328,6 +1358,17 @@ func executeBytecodeCode(r *runtime, instructions []BytecodeInstruction, functio
 				}
 				r.modules[modulePath] = exports
 				r.global.set(instruction.Name, exports)
+			}
+		case "USE_LIBRARY":
+			library, ok := instruction.Value.(string)
+			if !ok {
+				err = fail("invalid standard-library reference")
+				break
+			}
+			var module any
+			module, err = moduleValue(library)
+			if err == nil {
+				r.global.set(instruction.Name, module)
 			}
 		case "DEFINE_CLASS":
 			spec := classes[instruction.Count]

@@ -7,7 +7,7 @@ Tell has two runtimes:
 - **Native runtime:** a standalone executable written in Go. It runs `.tell` programs directly and does not need Python or Go installed on the user's machine.
 - **Python runtime:** the original interpreter, kept for compatibility, experimentation, and people who want to embed or extend Tell from Python.
 
-Current version: **0.3.0**.
+Current version: **0.3.1**.
 
 ## A first program
 
@@ -222,7 +222,7 @@ Let data be json.loads("{\"answer\": 42}").
 Say data["answer"].
 ```
 
-Native modules currently include `math`, `random`, `statistics`, `json`, and `datetime`. The Python runtime has a similar allowlist.
+Both runtimes provide the `csv` module with `parse(text)` and `stringify(rows)` operations. CSV values are text cells and stringify uses LF line endings. The standard-library modules are `math`, `random`, `statistics`, `json`, `datetime`, and `csv`; exact exports can vary between runtimes. See the [standard library reference](docs/STANDARD_LIBRARY.md).
 
 Tell files can also import another `.tell` file relative to the importing source file:
 

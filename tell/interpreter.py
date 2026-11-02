@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import ast
+import csv
 import datetime
+import io
 import json
 import math
 import operator
@@ -214,6 +216,31 @@ class TellModule:
         if name.startswith("_") or name not in self.exports:
             raise TellError(f"Tell module has no public member {name!r}.")
         return self.exports[name]
+
+
+def _csv_parse(*args: Any, **kwargs: Any) -> list[list[str]]:
+    if kwargs or len(args) != 1 or not isinstance(args[0], str):
+        raise TellError("csv.parse expects one text argument")
+    try:
+        text = args[0].replace("\r\n", "\n")
+        return [row for row in csv.reader(io.StringIO(text, newline="")) if row]
+    except csv.Error as exc:
+        raise TellError(f"csv.parse: {exc}") from exc
+
+
+def _csv_stringify(*args: Any, **kwargs: Any) -> str:
+    if kwargs or len(args) != 1 or not isinstance(args[0], list):
+        raise TellError("csv.stringify expects one list of rows")
+    rows: list[list[str]] = []
+    for row_number, row in enumerate(args[0], 1):
+        if not isinstance(row, list):
+            raise TellError(f"csv.stringify row {row_number} must be a list")
+        if any(not isinstance(cell, str) for cell in row):
+            raise TellError(f"csv.stringify row {row_number} must contain only text")
+        rows.append(row)
+    output = io.StringIO(newline="")
+    csv.writer(output, lineterminator="\n").writerows(rows)
+    return output.getvalue()
 
 
 def _block_header(line: str) -> str | None:
@@ -525,6 +552,7 @@ class Interpreter:
         "statistics": statistics,
         "json": json,
         "datetime": datetime,
+        "csv": TellModule({"parse": _csv_parse, "stringify": _csv_stringify}),
     }
 
     BINOPS: dict[type, Callable[[Any, Any], Any]] = {

@@ -2,6 +2,8 @@ package tell
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -2044,6 +2046,72 @@ func moduleValue(name string) (any, error) {
 			b, e := json.Marshal(a[0])
 			return string(b), e
 		})}, nil
+	case "csv":
+		return map[string]any{
+			"parse": callable(func(a []any) (any, error) {
+				if len(a) != 1 {
+					return nil, fail("csv.parse expects one text argument")
+				}
+				text, ok := a[0].(string)
+				if !ok {
+					return nil, fail("csv.parse expects one text argument")
+				}
+				reader := csv.NewReader(strings.NewReader(text))
+				reader.FieldsPerRecord = -1
+				rows := make([]any, 0)
+				for {
+					record, err := reader.Read()
+					if err == io.EOF {
+						break
+					}
+					if err != nil {
+						return nil, fail("csv.parse: %v", err)
+					}
+					if len(record) == 0 {
+						continue
+					}
+					row := make([]any, len(record))
+					for i, cell := range record {
+						row[i] = cell
+					}
+					rows = append(rows, row)
+				}
+				return rows, nil
+			}),
+			"stringify": callable(func(a []any) (any, error) {
+				if len(a) != 1 {
+					return nil, fail("csv.stringify expects one list of rows")
+				}
+				rows, ok := a[0].([]any)
+				if !ok {
+					return nil, fail("csv.stringify expects one list of rows")
+				}
+				var output bytes.Buffer
+				writer := csv.NewWriter(&output)
+				for rowIndex, value := range rows {
+					row, ok := value.([]any)
+					if !ok {
+						return nil, fail("csv.stringify row %d must be a list", rowIndex+1)
+					}
+					record := make([]string, len(row))
+					for column, cell := range row {
+						text, ok := cell.(string)
+						if !ok {
+							return nil, fail("csv.stringify row %d must contain only text", rowIndex+1)
+						}
+						record[column] = text
+					}
+					if err := writer.Write(record); err != nil {
+						return nil, err
+					}
+				}
+				writer.Flush()
+				if err := writer.Error(); err != nil {
+					return nil, err
+				}
+				return output.String(), nil
+			}),
+		}, nil
 	case "statistics":
 		return map[string]any{"mean": callable(func(a []any) (any, error) {
 			return newRuntime("", nil, nil, DefaultExecutionLimits()).global.values["average"].(callable)(a)

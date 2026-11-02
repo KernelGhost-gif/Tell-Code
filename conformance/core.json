@@ -129,5 +129,15 @@
     "name": "Check that assertion fails",
     "source": "Check that false.",
     "error": "check failed"
+  },
+  {
+    "name": "CSV parse and stringify with quoted text",
+    "source": "Use the csv library.\nLet rows be csv.parse(\"name,note\\nAda,\\\"hello, world\\\"\\n\").\nSay rows[1][1].\nSay csv.stringify([[\"name\", \"note\"], [\"Ada\", \"hello, world\"]]).",
+    "output": "hello, world\nname,note\nAda,\"hello, world\"\n\n"
+  },
+  {
+    "name": "CSV stringify rejects non-text cells",
+    "source": "Use the csv library.\nSay csv.stringify([[\"answer\", 42]]).",
+    "error": "must contain only text"
   }
 ]

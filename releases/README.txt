@@ -1,4 +1,4 @@
-Tell 0.3.0 native binaries
+Tell 0.3.1 native binaries
 
 These executables run Tell programs without Python or a separately installed Go toolchain.
 
@@ -23,5 +23,7 @@ Compile the supported native bytecode subset and execute it:
                tell-windows-amd64.exe run program.tbc
 
 The bytecode compiler supports only a subset of Tell; consult docs/CLI_REFERENCE.md.
+
+The native runtime includes the allowlisted CSV library. Consult docs/STANDARD_LIBRARY.md for its API.
 
 Cross-compilation proves that a target binary was produced. Run target-specific smoke tests before claiming it was executed on that operating system.

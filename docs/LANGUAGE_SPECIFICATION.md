@@ -107,7 +107,7 @@ To limit runaway work, both runtimes default to a 64-level active function-call 
 
 ## Standard library and effects
 
-The runtimes provide overlapping built-ins for common collection, numeric, random, and type operations, plus allowlisted `math`, `random`, `statistics`, `json`, and `datetime` libraries to varying degrees. Exact names/signatures must be checked against runtime documentation and parity tests. File operations use paths relative to the process working directory.
+The runtimes provide overlapping built-ins for common collection, numeric, random, and type operations, plus allowlisted `math`, `random`, `statistics`, `json`, `datetime`, and `csv` libraries to varying degrees. Both runtimes implement `csv.parse(text)` and `csv.stringify(rows)` with text-only cells and LF output; see the [standard library reference](STANDARD_LIBRARY.md) for details. Exact names/signatures of other exports must be checked against runtime documentation and parity tests. File operations use paths relative to the process working directory.
 
 Local modules use `Use the module "relative/path.tell" as alias.`. The path is resolved relative to the importing source file; an in-memory program resolves from the process working directory. A module executes once per interpreter, receives built-ins through its parent scope, and exports its public top-level bindings. Names beginning with `_` are not exported. Circular imports and non-`.tell` paths are rejected. This is a local source-file mechanism, not a package manager.
 
