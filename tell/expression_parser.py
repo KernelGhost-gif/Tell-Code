@@ -239,19 +239,33 @@ class Parser:
             self.require("]", "expected ]")
             node = Expr("list", children=tuple(items), start=token.offset)
         elif token.kind == "{":
-            pairs: list[Expr] = []
-            if self.peek().kind != "}":
-                while True:
-                    pairs.append(self.parse_precedence(1))
-                    self.require(":", "expected : in dictionary")
-                    pairs.append(self.parse_precedence(1))
-                    if self.peek().kind != ",":
-                        break
-                    self.take()
-                    if self.peek().kind == "}":
-                        break
-            self.require("}", "expected }")
-            node = Expr("dict", children=tuple(pairs), start=token.offset)
+            if self.peek().kind == "}":
+                self.take()
+                node = Expr("dict", children=(), start=token.offset)
+            else:
+                first = self.parse_precedence(1)
+                if self.peek().kind == ":":
+                    pairs = [first]
+                    while self.peek().kind == ":":
+                        self.take()
+                        pairs.append(self.parse_precedence(1))
+                        if self.peek().kind != ",":
+                            break
+                        self.take()
+                        if self.peek().kind == "}":
+                            break
+                        pairs.append(self.parse_precedence(1))
+                    self.require("}", "expected }")
+                    node = Expr("dict", children=tuple(pairs), start=token.offset)
+                else:
+                    items = [first]
+                    while self.peek().kind == ",":
+                        self.take()
+                        if self.peek().kind == "}":
+                            break
+                        items.append(self.parse_precedence(1))
+                    self.require("}", "expected } after set")
+                    node = Expr("set", children=tuple(items), start=token.offset)
         else:
             raise ExpressionSyntaxError(f"expected a value, found {token.text!r}", token)
         return self.parse_postfix(node)

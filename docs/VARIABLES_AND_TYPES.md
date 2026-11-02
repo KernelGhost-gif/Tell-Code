@@ -40,7 +40,7 @@ Let scores as list be [10, 20, 30].
 Set username to "Grace".
 ```
 
-Supported built-in annotations are `any`, `nothing`, `boolean`, `number`, `text`, `list`, `tuple`, `dictionary`, `function`, and `class`. A Tell class name can be used as an annotation; instances of subclasses satisfy the base-class annotation.
+Supported built-in annotations are `any`, `nothing`, `boolean`, `number`, `text`, `list`, `tuple`, `set`, `dictionary`, `function`, and `class`. A Tell class name can be used as an annotation; instances of subclasses satisfy the base-class annotation.
 
 At runtime, incompatible values and unknown annotation names produce Tell errors with the source statement location. The native compiler also performs conservative static checks for declared primitive annotations when an initializer or reassignment has a known type. Run `tell check --types program.tell` to request these checks without execution; `tell build` applies them automatically. Unknown or dynamic expressions remain subject to runtime checks. This is not whole-program static typing or general type inference. Tell has no generics, unions, interfaces, or parameter/return annotations yet.
 

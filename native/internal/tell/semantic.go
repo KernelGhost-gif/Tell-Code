@@ -158,7 +158,7 @@ func (a *semanticAnalyzer) checkAnnotation(name, annotation, inferred string) er
 	typeName := strings.ToLower(strings.TrimSpace(annotation))
 	known := map[string]bool{
 		"any": true, "nothing": true, "boolean": true, "number": true,
-		"text": true, "list": true, "tuple": true, "dictionary": true, "function": true, "class": true,
+		"text": true, "list": true, "tuple": true, "set": true, "dictionary": true, "function": true, "class": true,
 	}
 	if !known[typeName] && !a.classes[strings.TrimSpace(annotation)] {
 		return fail("unknown type annotation %q", annotation)
@@ -245,6 +245,8 @@ func inferSemanticType(expr expression, bindings map[string]semanticBinding) str
 		return "list"
 	case tupleExpression:
 		return "tuple"
+	case setExpression:
+		return "set"
 	case dictionaryExpression:
 		return "dictionary"
 	case indexExpression:

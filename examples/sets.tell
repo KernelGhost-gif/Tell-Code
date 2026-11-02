@@ -1,0 +1,14 @@
+Let languages as set be {"Tell", "Go", "Python", "Tell"}.
+Say languages.
+Say "Go" is in languages.
+
+Let compiled_languages be union(languages, set(["C#", "Java"])).
+Say compiled_languages.
+Say intersection(languages, set(["Go", "Rust"])).
+Say difference(languages, set(["Python"])).
+
+Add "C#" to languages.
+Remove "Go" from languages.
+For each language in languages:
+    Say language.
+End loop.

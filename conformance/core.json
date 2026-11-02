@@ -246,6 +246,21 @@
     "output": "(1, 2, 3)\ntrue\n()\n"
   },
   {
+    "name": "set literals deduplicate and support membership and type checks",
+    "source": "Let values as set be {3, 1, 3, 2}.\nSay values.\nSay len(values).\nSay 1 is in values.\nSay values is equal to {2, 3, 1}.\nSay type_of(values).\nSay {}.",
+    "output": "{3, 1, 2}\n3\ntrue\ntrue\nset\n{}\n"
+  },
+  {
+    "name": "set constructor and algebra operations",
+    "source": "Let left be set([1, 2, 2, 3]).\nLet right be set((2, 3, 4)).\nSay left.\nSay union(left, right).\nSay intersection(left, right).\nSay difference(left, right).\nSay set().",
+    "output": "{1, 2, 3}\n{1, 2, 3, 4}\n{2, 3}\n{1}\nset()\n"
+  },
+  {
+    "name": "set addition removal and iteration",
+    "source": "Let values be {2, 1}.\nAdd 2 to values.\nAdd 3 to values.\nRemove 1 from values.\nFor each value in values:\n    Say value.\nEnd loop.",
+    "output": "2\n3\n"
+  },
+  {
     "name": "constructor supports default arguments",
     "source": "Create a class called Counter:\n    When creating a Counter with initial defaulting to 5:\n        Remember initial as this.value.\n    End constructor.\nEnd class.\nLet counter be a new Counter.\nSay counter.value.",
     "output": "5\n"

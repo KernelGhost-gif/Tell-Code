@@ -66,6 +66,20 @@ End loop.`
 	}
 }
 
+func TestBytecodeSupportsSetLiteralsAndIteration(t *testing.T) {
+	source := `Let values as set be {3, 1, 3, 2}.
+Say values.
+Say 2 is in values.
+For each value in values:
+    Say value.
+End loop.
+Say union(values, {4}).`
+	want := "{3, 1, 2}\ntrue\n3\n1\n2\n{3, 1, 2, 4}\n"
+	if got := runCompiled(t, source); got != want {
+		t.Fatalf("compiled set output = %q, want %q", got, want)
+	}
+}
+
 func TestBytecodeCompilesCSVStandardLibrary(t *testing.T) {
 	source := `Use the csv library as tables.
 Let rows be tables.parse("name,score\nAda,42\n").

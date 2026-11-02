@@ -789,6 +789,12 @@ func foldBytecodeExpression(expr expression) expression {
 			items[index] = foldBytecodeExpression(item)
 		}
 		return tupleExpression{items: items}
+	case setExpression:
+		items := make([]expression, len(value.items))
+		for index, item := range value.items {
+			items[index] = foldBytecodeExpression(item)
+		}
+		return setExpression{items: items}
 	case dictionaryExpression:
 		keys, values := make([]expression, len(value.keys)), make([]expression, len(value.values))
 		for index := range value.keys {
@@ -923,6 +929,14 @@ func (c *bytecodeCompiler) compileExpression(expr expression) error {
 			}
 		}
 		instruction := c.emit("TUPLE")
+		c.code[instruction].Count = len(value.items)
+	case setExpression:
+		for _, item := range value.items {
+			if err := c.compileExpression(item); err != nil {
+				return err
+			}
+		}
+		instruction := c.emit("SET")
 		c.code[instruction].Count = len(value.items)
 	case dictionaryExpression:
 		for i, key := range value.keys {
@@ -1150,7 +1164,7 @@ func validateBytecode(instructions []BytecodeInstruction, terminal string, funct
 		if instruction.Count < 0 {
 			return fail("invalid bytecode count at instruction %d", pc)
 		}
-		if (instruction.Op == "LIST" || instruction.Op == "TUPLE" || instruction.Op == "DICT" || instruction.Op == "CALL") && instruction.Count > len(instructions) {
+		if (instruction.Op == "LIST" || instruction.Op == "TUPLE" || instruction.Op == "SET" || instruction.Op == "DICT" || instruction.Op == "CALL") && instruction.Count > len(instructions) {
 			return fail("invalid bytecode count at instruction %d", pc)
 		}
 		if instruction.Op == "DICT" && instruction.Count > len(instructions)/2 {
@@ -1214,7 +1228,7 @@ func verifyBytecodeStack(instructions []BytecodeInstruction) error {
 			need, delta = 1, 1
 		case "BINARY":
 			need, delta = 2, -1
-		case "LIST", "TUPLE":
+		case "LIST", "TUPLE", "SET":
 			need, delta = instruction.Count, 1-instruction.Count
 		case "DICT":
 			need, delta = 2*instruction.Count, 1-2*instruction.Count
@@ -1373,7 +1387,7 @@ func executeBytecodeCode(r *runtime, instructions []BytecodeInstruction, functio
 					stack = append(stack, value)
 				}
 			}
-		case "LIST", "TUPLE":
+		case "LIST", "TUPLE", "SET":
 			items := make([]any, instruction.Count)
 			for i := instruction.Count - 1; i >= 0 && err == nil; i-- {
 				items[i], err = pop()
@@ -1381,6 +1395,8 @@ func executeBytecodeCode(r *runtime, instructions []BytecodeInstruction, functio
 			if err == nil {
 				if instruction.Op == "TUPLE" {
 					stack = append(stack, tupleValue(items))
+				} else if instruction.Op == "SET" {
+					stack = append(stack, newSetValue(items))
 				} else {
 					stack = append(stack, items)
 				}
@@ -1661,6 +1677,8 @@ func executeBytecodeCode(r *runtime, instructions []BytecodeInstruction, functio
 				values = iterable
 			case tupleValue:
 				values = []any(iterable)
+			case setValue:
+				values = []any(iterable)
 			case string:
 				for _, character := range iterable {
 					values = append(values, string(character))
@@ -1669,7 +1687,7 @@ func executeBytecodeCode(r *runtime, instructions []BytecodeInstruction, functio
 					}
 				}
 			default:
-				err = fail("for each needs a list, tuple, or text value")
+				err = fail("for each needs a list, tuple, set, or text value")
 			}
 			if err == nil {
 				if len(values) > r.limits.MaxLoopIterations {

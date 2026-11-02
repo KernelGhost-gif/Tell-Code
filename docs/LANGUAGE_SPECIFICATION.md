@@ -66,9 +66,9 @@ For each index, value in enumerate(["Ada", "Grace"]):
 End loop.
 ```
 
-The current runtime annotations are `any`, `nothing`, `boolean`, `number`, `text`, `list`, `tuple`, `dictionary`, `function`, `class`, and a declared Tell class name. A class annotation accepts instances of that class and its subclasses. Runtime checks always apply. The native CLI additionally offers conservative static validation of known initializer and assignment types with `tell check --types`; `tell build` applies it during compilation. Unknown expressions are deferred to runtime. This is not a whole-program static type system. A variable's existing annotation is preserved by `Set` and ordinary `Let` reassignment.
+The current runtime annotations are `any`, `nothing`, `boolean`, `number`, `text`, `list`, `tuple`, `set`, `dictionary`, `function`, `class`, and a declared Tell class name. A class annotation accepts instances of that class and its subclasses. Runtime checks always apply. The native CLI additionally offers conservative static validation of known initializer and assignment types with `tell check --types`; `tell build` applies it during compilation. Unknown expressions are deferred to runtime. This is not a whole-program static type system. A variable's existing annotation is preserved by `Set` and ordinary `Let` reassignment.
 
-It also includes list/dictionary mutation (`Add`, `Remove`, set item/key), file read/write/append, class field initialization and updates, module imports, library imports, and `Raise an error saying ...`. Exact accepted phrases are implementation-sensitive until covered by the conformance corpus.
+It also includes list/set mutation (`Add`, `Remove`), dictionary/list item updates, file read/write/append, class field initialization and updates, module imports, library imports, and `Raise an error saying ...`. Exact accepted phrases are implementation-sensitive until covered by the conformance corpus.
 
 `Check that expression.` evaluates the expression using Tell truthiness and raises a source-located runtime error when it is false. The native bytecode compiler supports this assertion form too.
 
@@ -76,7 +76,7 @@ Both interpreters support `Try` with an optional `If something goes wrong` handl
 
 ## Expressions
 
-Expressions include numbers, quoted strings, booleans (`true`, `false`), `nothing`, names, lists, tuples, dictionaries, grouping, function calls, indexing, slicing, member access, unary `not`/`+`/`-`, arithmetic, comparisons, membership, and boolean logic. Parentheses with a comma make a tuple: `()`, `(value,)`, or `(first, second)`; `(value)` is grouping. Lists, tuples, and Unicode text support Python-style slices, including an optional step; a zero step is an error. Tuple slices remain tuples. Dictionary literals use `{key: value}` pairs.
+Expressions include numbers, quoted strings, booleans (`true`, `false`), `nothing`, names, lists, tuples, sets, dictionaries, grouping, function calls, indexing, slicing, member access, unary `not`/`+`/`-`, arithmetic, comparisons, membership, and boolean logic. Parentheses with a comma make a tuple: `()`, `(value,)`, or `(first, second)`; `(value)` is grouping. Lists, tuples, and Unicode text support Python-style slices, including an optional step; a zero step is an error. Tuple slices remain tuples. Dictionary literals use `{key: value}` pairs; a brace literal without colons is a set, while `{}` is an empty dictionary.
 
 Tuple/grouping syntax is deterministic:
 
@@ -84,6 +84,7 @@ Tuple/grouping syntax is deterministic:
 grouped-expression = "(" expression ")" ;
 tuple-literal      = "(" ")"
                    | "(" expression "," [ expression { "," expression } [ "," ] ] ")" ;
+set-literal        = "{" expression { "," expression } [ "," ] "}" ;
 ```
 
 The portable operators include symbols and these English forms: `plus`, `minus`, `times`, `divided by`, `modulo`, `to the power of`, `is equal to`, `is not equal to`, `is greater than`, `is at least`, `is less than`, `is at most`, `is in`, `is not in`, `and`, `or`, and `not`.
@@ -162,4 +163,4 @@ Package management, async/concurrency, a static type system, AOT/JIT compilation
 
 ## Native bytecode subset
 
-The Go CLI can compile a deliberately smaller subset with `tell build`. Supported statements are `Let`, `Set`, `Remember ... as this.field`, output statements, bare expressions, `If`/`Otherwise`, `While`, `Repeat`, `For each`, loop break/continue, `Try`/`If something goes wrong`, `Raise an error saying ...`, local module imports, function declarations, `Give back`, and the class subset described above. Local `.tell` module dependencies are compiled and embedded recursively; repeated imports share one module instance, and public top-level bindings are exported. Compiled functions support recursion, named and default arguments, a final variadic parameter, and lexical closures; compiled classes support constructors, fields, instance methods, single inheritance, and overriding. A raised runtime error transfers to the nearest `If something goes wrong` handler; error types and `Finally` are not implemented in bytecode. Expressions use the native expression grammar described above. Unsupported syntax is a compile-time error; it is not copied into the artifact. The emitted `tell-bytecode-v1` artifact is JSON-encoded stack instructions and executes only in the native Go VM. This compiler subset is a tooling extension, not a claim that every construct in this specification compiles.
+The Go CLI can compile a deliberately smaller subset with `tell build`. Supported statements are `Let`, `Set`, `Remember ... as this.field`, output statements, bare expressions, `If`/`Otherwise`, `While`, `Repeat`, `For each`, loop break/continue, `Try`/`If something goes wrong`, `Raise an error saying ...`, local module imports, function declarations, `Give back`, and the class subset described above. Local `.tell` module dependencies are compiled and embedded recursively; repeated imports share one module instance, and public top-level bindings are exported. Compiled functions support recursion, named and default arguments, a final variadic parameter, and lexical closures; compiled classes support constructors, fields, instance methods, single inheritance, and overriding. The VM supports tuple and set literals, set iteration and set algebra through the shared built-ins. A raised runtime error transfers to the nearest `If something goes wrong` handler; error types and `Finally` are not implemented in bytecode. Expressions use the native expression grammar described above. Unsupported syntax is a compile-time error; it is not copied into the artifact. The emitted `tell-bytecode-v1` artifact is JSON-encoded stack instructions and executes only in the native Go VM. This compiler subset is a tooling extension, not a claim that every construct in this specification compiles.

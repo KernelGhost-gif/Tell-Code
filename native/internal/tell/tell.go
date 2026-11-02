@@ -39,6 +39,7 @@ type Error struct{ Message string }
 
 // tupleValue is an immutable, ordered Tell sequence distinct from mutable lists.
 type tupleValue []any
+type setValue []any
 
 func (e *Error) Error() string              { return e.Message }
 func fail(format string, args ...any) error { return &Error{Message: fmt.Sprintf(format, args...)} }
@@ -406,9 +407,55 @@ func sequenceValues(value any) ([]any, bool) {
 		return values, true
 	case tupleValue:
 		return []any(values), true
+	case setValue:
+		return []any(values), true
 	default:
 		return nil, false
 	}
+}
+
+func valuesEqual(left, right any) bool {
+	if leftSet, ok := left.(setValue); ok {
+		rightSet, rightOK := right.(setValue)
+		if !rightOK || len(leftSet) != len(rightSet) {
+			return false
+		}
+		for _, value := range leftSet {
+			if !setContains(rightSet, value) {
+				return false
+			}
+		}
+		return true
+	}
+	leftNumber, leftErr := numberValue(left)
+	rightNumber, rightErr := numberValue(right)
+	if leftErr == nil && rightErr == nil {
+		_, leftBool := left.(bool)
+		_, rightBool := right.(bool)
+		if !leftBool && !rightBool {
+			return leftNumber == rightNumber
+		}
+	}
+	return reflect.DeepEqual(left, right)
+}
+
+func setContains(values setValue, candidate any) bool {
+	for _, value := range values {
+		if valuesEqual(value, candidate) {
+			return true
+		}
+	}
+	return false
+}
+
+func newSetValue(values []any) setValue {
+	result := make(setValue, 0, len(values))
+	for _, value := range values {
+		if !setContains(result, value) {
+			result = append(result, value)
+		}
+	}
+	return result
 }
 
 func parseConstructorHeader(header string) (name string, params []string, ok bool) {
@@ -813,6 +860,9 @@ func typeMatches(typeName string, value any, e *env) (bool, error) {
 	case "tuple":
 		_, ok := value.(tupleValue)
 		return ok, nil
+	case "set":
+		_, ok := value.(setValue)
+		return ok, nil
 	case "dictionary":
 		_, ok := value.(map[string]any)
 		return ok, nil
@@ -1025,6 +1075,8 @@ func (r *runtime) installBuiltins(e *env) {
 			return float64(len(v)), nil
 		case tupleValue:
 			return float64(len(v)), nil
+		case setValue:
+			return float64(len(v)), nil
 		case map[string]any:
 			return float64(len(v)), nil
 		}
@@ -1060,6 +1112,8 @@ func (r *runtime) installBuiltins(e *env) {
 			return tupleValue(append([]any(nil), values...)), nil
 		case tupleValue:
 			return tupleValue(append([]any(nil), values...)), nil
+		case setValue:
+			return tupleValue(append([]any(nil), values...)), nil
 		case string:
 			items := make(tupleValue, 0, utf8.RuneCountInString(values))
 			for _, character := range values {
@@ -1067,9 +1121,67 @@ func (r *runtime) installBuiltins(e *env) {
 			}
 			return items, nil
 		default:
-			return nil, fail("tuple expects a list, tuple, or text")
+			return nil, fail("tuple expects a list, tuple, set, or text")
 		}
 	}))
+	e.set("set", wrap(func(a []any) (any, error) {
+		if len(a) == 0 {
+			return setValue{}, nil
+		}
+		if len(a) != 1 {
+			return nil, fail("set expects zero or one iterable")
+		}
+		switch values := a[0].(type) {
+		case []any:
+			return newSetValue(values), nil
+		case tupleValue:
+			return newSetValue([]any(values)), nil
+		case setValue:
+			return newSetValue([]any(values)), nil
+		case string:
+			items := make([]any, 0, utf8.RuneCountInString(values))
+			for _, character := range values {
+				items = append(items, string(character))
+			}
+			return newSetValue(items), nil
+		default:
+			return nil, fail("set expects a list, tuple, set, or text")
+		}
+	}))
+	setOperation := func(name string, operation string) any {
+		return wrap(func(args []any) (any, error) {
+			if len(args) != 2 {
+				return nil, fail("%s expects two sets", name)
+			}
+			left, leftOK := args[0].(setValue)
+			right, rightOK := args[1].(setValue)
+			if !leftOK || !rightOK {
+				return nil, fail("%s expects two sets", name)
+			}
+			result := make([]any, 0, len(left)+len(right))
+			switch operation {
+			case "union":
+				result = append(result, left...)
+				result = append(result, right...)
+			case "intersection":
+				for _, value := range left {
+					if setContains(right, value) {
+						result = append(result, value)
+					}
+				}
+			case "difference":
+				for _, value := range left {
+					if !setContains(right, value) {
+						result = append(result, value)
+					}
+				}
+			}
+			return newSetValue(result), nil
+		})
+	}
+	e.set("union", setOperation("union", "union"))
+	e.set("intersection", setOperation("intersection", "intersection"))
+	e.set("difference", setOperation("difference", "difference"))
 	e.set("min", wrap(func(a []any) (any, error) { return numericExtreme(a, false) }))
 	e.set("max", wrap(func(a []any) (any, error) { return numericExtreme(a, true) }))
 	e.set("abs", wrap(unaryMath(math.Abs)))
@@ -1389,6 +1501,8 @@ func truthy(v any) bool {
 		return len(x) > 0
 	case tupleValue:
 		return len(x) > 0
+	case setValue:
+		return len(x) > 0
 	case map[string]any:
 		return len(x) > 0
 	}
@@ -1408,6 +1522,8 @@ func typeName(v any) string {
 		return "list"
 	case tupleValue:
 		return "tuple"
+	case setValue:
+		return "set"
 	case map[string]any:
 		return "dictionary"
 	case callable, namedCallable, *userFunction:
@@ -1458,6 +1574,15 @@ func display(v any) string {
 			return "(" + parts[0] + ",)"
 		}
 		return "(" + strings.Join(parts, ", ") + ")"
+	case setValue:
+		if len(x) == 0 {
+			return "set()"
+		}
+		parts := make([]string, len(x))
+		for i, item := range x {
+			parts[i] = display(item)
+		}
+		return "{" + strings.Join(parts, ", ") + "}"
 	case map[string]any:
 		b, e := json.Marshal(x)
 		if e == nil {
@@ -1576,6 +1701,9 @@ func (r *runtime) execNode(n node, e *env) error {
 		if tuple, isTuple := v.(tupleValue); isTuple {
 			items, ok = []any(tuple), true
 		}
+		if set, isSet := v.(setValue); isSet {
+			items, ok = []any(set), true
+		}
 		if !ok {
 			if s, yes := v.(string); yes {
 				items = make([]any, 0, r.limits.MaxLoopIterations+1)
@@ -1586,7 +1714,7 @@ func (r *runtime) execNode(n node, e *env) error {
 					}
 				}
 			} else {
-				return fail("for each needs a list, tuple, or text value")
+				return fail("for each needs a list, tuple, set, or text value")
 			}
 		}
 		loopNames, _ := parseLoopNames(n.name)
@@ -2052,11 +2180,16 @@ func (r *runtime) statement(s string, e *env) error {
 			if err != nil {
 				return err
 			}
-			items, ok := collection.([]any)
-			if !ok {
+			switch items := collection.(type) {
+			case []any:
+				e.set(name, append(items, value))
+			case setValue:
+				if !setContains(items, value) {
+					e.set(name, append(items, value))
+				}
+			default:
 				return fail("%q does not support adding items", name)
 			}
-			e.values[name] = append(items, value)
 			return nil
 		}
 	}
@@ -2071,15 +2204,23 @@ func (r *runtime) statement(s string, e *env) error {
 			if err != nil {
 				return err
 			}
-			items, ok := collection.([]any)
-			if !ok {
-				return fail("%q does not support removing items", name)
-			}
-			for i, item := range items {
-				if reflect.DeepEqual(item, value) {
-					e.values[name] = append(items[:i], items[i+1:]...)
-					return nil
+			switch items := collection.(type) {
+			case []any:
+				for i, item := range items {
+					if valuesEqual(item, value) {
+						e.set(name, append(items[:i], items[i+1:]...))
+						return nil
+					}
 				}
+			case setValue:
+				for i, item := range items {
+					if valuesEqual(item, value) {
+						e.set(name, append(items[:i], items[i+1:]...))
+						return nil
+					}
+				}
+			default:
+				return fail("%q does not support removing items", name)
 			}
 			return fail("item %q was not found", display(value))
 		}
@@ -2362,11 +2503,16 @@ func (r *runtime) statement(s string, e *env) error {
 		if err != nil {
 			return err
 		}
-		xs, ok := v.([]any)
-		if !ok {
+		switch xs := v.(type) {
+		case []any:
+			e.set(m[2], append(xs, val))
+		case setValue:
+			if !setContains(xs, val) {
+				e.set(m[2], append(xs, val))
+			}
+		default:
 			return fail("%q does not support adding items", m[2])
 		}
-		e.values[m[2]] = append(xs, val)
 		return nil
 	}
 	if m := reRemove.FindStringSubmatch(s); m != nil {
@@ -2378,15 +2524,23 @@ func (r *runtime) statement(s string, e *env) error {
 		if err != nil {
 			return err
 		}
-		xs, ok := v.([]any)
-		if !ok {
-			return fail("%q does not support removing items", m[2])
-		}
-		for i, x := range xs {
-			if reflect.DeepEqual(x, val) {
-				e.values[m[2]] = append(xs[:i], xs[i+1:]...)
-				return nil
+		switch xs := v.(type) {
+		case []any:
+			for i, x := range xs {
+				if valuesEqual(x, val) {
+					e.set(m[2], append(xs[:i], xs[i+1:]...))
+					return nil
+				}
 			}
+		case setValue:
+			for i, x := range xs {
+				if valuesEqual(x, val) {
+					e.set(m[2], append(xs[:i], xs[i+1:]...))
+					return nil
+				}
+			}
+		default:
+			return fail("%q does not support removing items", m[2])
 		}
 		return fail("item %q was not found", display(val))
 	}

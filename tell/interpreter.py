@@ -21,6 +21,43 @@ class TellError(Exception):
     """An error in a Tell program."""
 
 
+@dataclass
+class TellSet:
+    items: list[Any]
+
+    def __iter__(self):
+        return iter(self.items)
+
+    def __len__(self) -> int:
+        return len(self.items)
+
+    def __contains__(self, candidate: Any) -> bool:
+        return any(_tell_equal(value, candidate) for value in self.items)
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, TellSet) and len(self.items) == len(other.items) and all(
+            value in other for value in self.items
+        )
+
+    @classmethod
+    def from_values(cls, values: Any) -> TellSet:
+        result = cls([])
+        for value in values:
+            if value not in result:
+                result.items.append(value)
+        return result
+
+
+def _tell_equal(left: Any, right: Any) -> bool:
+    if isinstance(left, bool) or isinstance(right, bool):
+        return type(left) is type(right) and left == right
+    if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+        return left == right
+    if isinstance(left, TellSet):
+        return left == right
+    return type(left) is type(right) and left == right
+
+
 def display(value: Any) -> str:
     if value is None:
         return "nothing"
@@ -40,6 +77,10 @@ def display(value: Any) -> str:
         if len(value) == 1:
             parts += ","
         return "(" + parts + ")"
+    if isinstance(value, TellSet):
+        if not value.items:
+            return "set()"
+        return "{" + ", ".join(display(item) for item in value.items) + "}"
     if isinstance(value, dict):
         def json_value(item: Any) -> Any:
             if isinstance(item, float) and math.isfinite(item) and item.is_integer():
@@ -66,6 +107,8 @@ def display_type(value: Any) -> str:
         return "list"
     if isinstance(value, tuple):
         return "tuple"
+    if isinstance(value, TellSet):
+        return "set"
     if isinstance(value, dict):
         return "dictionary"
     if isinstance(value, TellInstance):
@@ -866,6 +909,8 @@ class Interpreter:
                 return "list"
             if isinstance(value, tuple):
                 return "tuple"
+            if isinstance(value, TellSet):
+                return "set"
             if isinstance(value, dict):
                 return "dictionary"
             return type(value).__name__
@@ -907,16 +952,37 @@ class Interpreter:
             return [[index, value] for index, value in enumerate(values)]
 
         def tuple_values(values: Any = ()) -> tuple[Any, ...]:
-            if isinstance(values, (list, tuple, str)):
+            if isinstance(values, (list, tuple, str, TellSet)):
                 return tuple(values)
-            raise TellError("tuple expects a list, tuple, or text")
+            raise TellError("tuple expects a list, tuple, set, or text")
+
+        def set_values(values: Any = ()) -> TellSet:
+            if isinstance(values, (list, tuple, str, TellSet)):
+                return TellSet.from_values(values)
+            raise TellError("set expects a list, tuple, set, or text")
+
+        def set_operation(name: str, operation: str):
+            def apply(left: Any, right: Any) -> TellSet:
+                if not isinstance(left, TellSet) or not isinstance(right, TellSet):
+                    raise TellError(f"{name} expects two sets")
+                if operation == "union":
+                    values = [*left.items, *right.items]
+                elif operation == "intersection":
+                    values = [item for item in left.items if item in right]
+                else:
+                    values = [item for item in left.items if item not in right]
+                return set_values(values)
+            return apply
 
         builtins = {
             "len": len, "range": range, "sum": sum, "min": min, "max": max,
             "sorted": sorted, "reversed": reversed, "enumerate": enumerate_values,
             "zip": zip, "abs": abs, "round": round, "int": int, "float": float,
             "str": str, "bool": bool, "list": list, "tuple": tuple_values, "dict": dict,
-            "set": set, "any": any, "all": all, "average": average,
+            "set": set_values, "union": set_operation("union", "union"),
+            "intersection": set_operation("intersection", "intersection"),
+            "difference": set_operation("difference", "difference"),
+            "any": any, "all": all, "average": average,
             "map": map_values, "filter": filter_values, "reduce": reduce_values,
             "first": first, "last": last, "type_of": type_of,
             "random_number": random_number, "number": number, "sqrt": math.sqrt,
@@ -1044,6 +1110,8 @@ class Interpreter:
             return [self._eval_expression(item, env) for item in node.children]
         if node.kind == "tuple":
             return tuple(self._eval_expression(item, env) for item in node.children)
+        if node.kind == "set":
+            return self.global_env.get("set")([self._eval_expression(item, env) for item in node.children])
         if node.kind == "dict":
             return {
                 display(self._eval_expression(node.children[index], env)):
@@ -1065,15 +1133,9 @@ class Interpreter:
                 return bool(left) or bool(self._eval_expression(node.children[1], env))
             right = self._eval_expression(node.children[1], env)
             if operator_name == "==":
-                return type(left) is type(right) and left == right or (
-                    isinstance(left, (int, float)) and not isinstance(left, bool)
-                    and isinstance(right, (int, float)) and not isinstance(right, bool) and left == right
-                )
+                return _tell_equal(left, right)
             if operator_name == "!=":
-                return not (type(left) is type(right) and left == right or (
-                    isinstance(left, (int, float)) and not isinstance(left, bool)
-                    and isinstance(right, (int, float)) and not isinstance(right, bool) and left == right
-                ))
+                return not _tell_equal(left, right)
             if operator_name in {"<", ">", "<=", ">="}:
                 left_number = self._try_number(left)
                 right_number = self._try_number(right)
@@ -1082,7 +1144,7 @@ class Interpreter:
             if operator_name in {"in", "notin"}:
                 if isinstance(right, dict):
                     contains = display(left) in right
-                elif isinstance(right, (list, tuple, str)):
+                elif isinstance(right, (list, tuple, str, TellSet)):
                     needle = display(left) if isinstance(right, str) else left
                     contains = needle in right
                 else:
@@ -1422,7 +1484,9 @@ class Interpreter:
             "number": lambda item: isinstance(item, (int, float)) and not isinstance(item, bool),
             "text": lambda item: isinstance(item, str),
             "list": lambda item: isinstance(item, list),
-            "tuple": lambda item: isinstance(item, tuple),
+                "tuple": lambda item: isinstance(item, tuple),
+            "set": lambda item: isinstance(item, TellSet),
+                "set": lambda item: isinstance(item, TellSet),
             "dictionary": lambda item: isinstance(item, dict),
             "function": lambda item: callable(item) and not isinstance(item, TellClass),
             "class": lambda item: isinstance(item, TellClass),
@@ -1685,21 +1749,28 @@ class Interpreter:
         parts = _split_once_casefold(rest, " to ") if rest is not None else None
         if parts and re.fullmatch(r"(?:[^\W\d]|_)\w*", parts[1]):
             collection = env.get(parts[1])
-            if not isinstance(collection, list):
+            value = self.evaluate(parts[0], env)
+            if isinstance(collection, list):
+                collection.append(value)
+            elif isinstance(collection, TellSet):
+                if value not in collection:
+                    collection.items.append(value)
+            else:
                 raise TellError(f"'{parts[1]}' does not support adding items.")
-            collection.append(self.evaluate(parts[0], env))
             return
         rest = _take_prefix(statement, "remove ")
         parts = _split_once_casefold(rest, " from ") if rest is not None else None
         if parts and re.fullmatch(r"(?:[^\W\d]|_)\w*", parts[1]):
             collection = env.get(parts[1])
-            if not isinstance(collection, list):
+            if not isinstance(collection, (list, TellSet)):
                 raise TellError(f"'{parts[1]}' does not support removing items.")
             value = self.evaluate(parts[0], env)
-            try:
-                collection.remove(value)
-            except ValueError as exc:
-                raise TellError(f"item {value!r} was not found") from exc
+            for index, item in enumerate(collection.items if isinstance(collection, TellSet) else collection):
+                if _tell_equal(item, value):
+                    del (collection.items if isinstance(collection, TellSet) else collection)[index]
+                    break
+            else:
+                raise TellError(f"item {value!r} was not found")
             return
         rest = _take_prefix(statement, "raise an error saying ")
         if rest:

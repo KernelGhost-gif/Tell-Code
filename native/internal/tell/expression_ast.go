@@ -24,6 +24,7 @@ type binaryExpression struct {
 }
 type listExpression struct{ items []expression }
 type tupleExpression struct{ items []expression }
+type setExpression struct{ items []expression }
 type dictionaryExpression struct{ keys, values []expression }
 type callArgument struct {
 	name  string
@@ -51,6 +52,7 @@ func (unaryExpression) isExpression()      {}
 func (binaryExpression) isExpression()     {}
 func (listExpression) isExpression()       {}
 func (tupleExpression) isExpression()      {}
+func (setExpression) isExpression()        {}
 func (dictionaryExpression) isExpression() {}
 func (callExpression) isExpression()       {}
 func (memberExpression) isExpression()     {}
@@ -205,19 +207,22 @@ func (p *expressionParser) parsePrefix() (expression, error) {
 		value = listExpression{items: items}
 	case "{":
 		keys, values := []expression{}, []expression{}
-		if p.peek() != "}" {
+		if p.peek() == "}" {
+			p.take()
+			value = dictionaryExpression{keys: keys, values: values}
+			break
+		}
+		first, err := p.parsePrecedence(1)
+		if err != nil {
+			return nil, err
+		}
+		if p.peek() == ":" {
+			key := first
 			for {
-				key, err := p.parsePrecedence(1)
-				if err != nil {
-					return nil, err
-				}
-				if p.peek() != ":" {
-					return nil, p.syntaxError("expected : in dictionary")
-				}
 				p.take()
-				item, err := p.parsePrecedence(1)
-				if err != nil {
-					return nil, err
+				item, itemErr := p.parsePrecedence(1)
+				if itemErr != nil {
+					return nil, itemErr
 				}
 				keys, values = append(keys, key), append(values, item)
 				if p.peek() != "," {
@@ -227,13 +232,38 @@ func (p *expressionParser) parsePrefix() (expression, error) {
 				if p.peek() == "}" {
 					break
 				}
+				key, err = p.parsePrecedence(1)
+				if err != nil {
+					return nil, err
+				}
+				if p.peek() != ":" {
+					return nil, p.syntaxError("expected : in dictionary")
+				}
 			}
+			if p.peek() != "}" {
+				return nil, p.syntaxError("expected }")
+			}
+			p.take()
+			value = dictionaryExpression{keys: keys, values: values}
+		} else {
+			items := []expression{first}
+			for p.peek() == "," {
+				p.take()
+				if p.peek() == "}" {
+					break
+				}
+				item, itemErr := p.parsePrecedence(1)
+				if itemErr != nil {
+					return nil, itemErr
+				}
+				items = append(items, item)
+			}
+			if p.peek() != "}" {
+				return nil, p.syntaxError("expected } after set")
+			}
+			p.take()
+			value = setExpression{items: items}
 		}
-		if p.peek() != "}" {
-			return nil, p.syntaxError("expected }")
-		}
-		p.take()
-		value = dictionaryExpression{keys: keys, values: values}
 	case "ident":
 		value = nameExpression{name: t.text}
 	default:
@@ -406,6 +436,16 @@ func (r *runtime) evalExpression(expr expression, e *env) (any, error) {
 			items = append(items, value)
 		}
 		return items, nil
+	case setExpression:
+		items := make([]any, 0, len(x.items))
+		for _, item := range x.items {
+			value, err := r.evalExpression(item, e)
+			if err != nil {
+				return nil, err
+			}
+			items = append(items, value)
+		}
+		return newSetValue(items), nil
 	case dictionaryExpression:
 		items := make(map[string]any, len(x.keys))
 		for i, keyExpr := range x.keys {
@@ -608,10 +648,10 @@ func applyBinary(op string, a, b any) (any, error) {
 		return truthy(b), nil
 	}
 	if op == "==" {
-		return reflect.DeepEqual(a, b), nil
+		return valuesEqual(a, b), nil
 	}
 	if op == "!=" {
-		return !reflect.DeepEqual(a, b), nil
+		return !valuesEqual(a, b), nil
 	}
 	if op == "<" {
 		return compare(a, b) < 0, nil
@@ -642,6 +682,8 @@ func applyBinary(op string, a, b any) (any, error) {
 					break
 				}
 			}
+		case setValue:
+			found = setContains(container, a)
 		case string:
 			found = strings.Contains(container, fmt.Sprint(a))
 		case map[string]any:

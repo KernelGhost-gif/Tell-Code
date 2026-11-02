@@ -10,6 +10,11 @@ class ExpressionParserTests(unittest.TestCase):
         self.assertEqual(parse("(1,)").kind, "tuple")
         self.assertEqual(parse("(1, 2)").kind, "tuple")
 
+    def test_set_literals_remain_distinct_from_dictionary_literals(self):
+        self.assertEqual(parse("{}").kind, "dict")
+        self.assertEqual(parse('{"a": 1, "b": 2}').kind, "dict")
+        self.assertEqual(parse("{1, 2, 1}").kind, "set")
+
     def test_pratt_precedence_and_right_associative_power(self):
         tree = parse("2 plus 3 times 4 to the power of 2")
         self.assertEqual(tree.kind, "binary")
