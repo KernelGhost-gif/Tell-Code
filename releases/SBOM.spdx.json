@@ -9,7 +9,7 @@
       "Tool: scripts/generate-sbom.py",
       "Organization: Tell Language contributors"
     ],
-    "created": "2026-11-03T15:58:29Z"
+    "created": "2026-11-03T16:01:54Z"
   },
   "packages": [
     {
@@ -41,7 +41,7 @@
       "checksums": [
         {
           "algorithm": "SHA256",
-          "checksumValue": "17385783f0e75d733374c08cf8d5efff05451fccae3fb5285e6c323061c2f32e"
+          "checksumValue": "73ddc3122e656ecac5c5f6b642ea2669ac9e411b43a1db04ed826f7bc19d159c"
         }
       ],
       "licenseConcluded": "NOASSERTION",
@@ -56,7 +56,7 @@
       "checksums": [
         {
           "algorithm": "SHA256",
-          "checksumValue": "fc984669587452b9b233e173c4bb03da77e5e5ae698003a8e2718fcd67b1302a"
+          "checksumValue": "7fc3adeca235eca28054ba95fe46943ff4680419da3c64f60770322285069705"
         }
       ],
       "licenseConcluded": "NOASSERTION",
@@ -71,7 +71,7 @@
       "checksums": [
         {
           "algorithm": "SHA256",
-          "checksumValue": "552447684a219f648186df0a1ca8d33b01d213a15a8738aec28b65e93b6e11c2"
+          "checksumValue": "d85c0dcce7e1813b35a12a744558617b6952492d9a9e598ca6b1bf0edc5f287e"
         }
       ],
       "licenseConcluded": "NOASSERTION",
@@ -86,7 +86,7 @@
       "checksums": [
         {
           "algorithm": "SHA256",
-          "checksumValue": "6076bd6fed0150fc911bdcb08fda3be5cfa08b4702acd3cfd01fb87b9cd31910"
+          "checksumValue": "965037c369e4bed667be2a13b0b05dc56025456fc0c9f92542797552042d216f"
         }
       ],
       "licenseConcluded": "NOASSERTION",
@@ -101,7 +101,7 @@
       "checksums": [
         {
           "algorithm": "SHA256",
-          "checksumValue": "3abded88b45d38e18d3600942e28233f2ea50476bc05f4791911ea0d1a842709"
+          "checksumValue": "b2be62198190f0a4b5ec74291acad4bfe4e622269b7ed8354d8214ed78556ee8"
         }
       ],
       "licenseConcluded": "NOASSERTION",
@@ -116,7 +116,7 @@
       "checksums": [
         {
           "algorithm": "SHA256",
-          "checksumValue": "8199ac785d0be35b8f591ec6adca0ed5633cd61e48411488883a36d36a1245f6"
+          "checksumValue": "c1636a0b85eeb435a4043e7fa2e445eb5c8f598f5449b03d7e1a7ff18963677b"
         }
       ],
       "licenseConcluded": "NOASSERTION",

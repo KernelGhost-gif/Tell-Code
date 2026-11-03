@@ -25,8 +25,5 @@ Run Tell source tests:
 Software bill of materials:
   SBOM.spdx.json (SPDX 2.3)
 
-Third-party notices:
-  THIRD_PARTY_NOTICES.txt
-
 The macOS and Windows binaries are cross-compiled from the source. Their actual
 execution should be smoke-tested on the corresponding operating systems.

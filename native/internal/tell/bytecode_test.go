@@ -448,6 +448,42 @@ func TestBytecodePreservesRuntimeTypeAndConstantRules(t *testing.T) {
 	}
 }
 
+func TestBytecodeSupportsListAndSetMutation(t *testing.T) {
+	source := `Let values be [1, 2, 2].
+Add 3 to values.
+Remove 1 from values.
+Say values.
+
+Let tags as set be {1, 2}.
+Add 3 to tags.
+Add 2 to tags.
+Remove 1 from tags.
+Say tags.
+
+To mutate_local:
+    Let local_values be [4].
+    Add 5 to local_values.
+    Remove 4 from local_values.
+    Give back local_values.
+End function.
+Say mutate_local().`
+	want := "[2, 2, 3]\n{2, 3}\n[5]\n"
+	if got := runCompiled(t, source); got != want {
+		t.Fatalf("compiled collection mutation output = %q, want %q", got, want)
+	}
+}
+
+func TestBytecodeRemoveMissingCollectionValueReturnsRuntimeError(t *testing.T) {
+	artifact, err := Compile("Let values be [1].\nRemove 2 from values.", "remove-missing.tell")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = RunBytecode(artifact, "remove-missing.tbc", bytes.NewReader(nil), &bytes.Buffer{})
+	if err == nil || !strings.Contains(err.Error(), `item "2" was not found`) {
+		t.Fatalf("expected a missing-item error, got %v", err)
+	}
+}
+
 func TestBytecodeRejectsUnsupportedConstructs(t *testing.T) {
 	_, err := Compile("Start a parallel task called worker.", "unsupported.tell")
 	if err == nil || !strings.Contains(err.Error(), "unsupported statement") {
