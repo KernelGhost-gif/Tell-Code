@@ -1,0 +1,9 @@
+# Node.js must be installed and available on PATH.
+Use the JavaScript library called node:path as paths.
+Let file be "/projects/tell/main.js".
+Say paths.basename(file).
+Say paths.extname(file).
+
+# Named arguments are passed to JavaScript as a final options object.
+Let formatted be paths.format(dir="/tmp", name="main", ext=".js").
+Say formatted.

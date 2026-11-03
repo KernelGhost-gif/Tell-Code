@@ -7,9 +7,9 @@ Tell has two runtimes:
 - **Native runtime:** a standalone executable written in Go. It runs `.tell` programs directly and does not need Python or Go installed on the user's machine.
 - **Python runtime:** the original interpreter, kept for compatibility, experimentation, and people who want to embed or extend Tell from Python.
 
-Current version: **0.3.6**.
+Current version: **0.3.7**.
 
-Tell can optionally call functions from installed Python modules using the native-runtime bridge. See [Python interoperability](docs/INTEROPERABILITY.md) and [the working example](examples/python_interop.tell).
+Tell can optionally call functions from installed Python modules and JavaScript/Node.js modules from either runtime. Foreign calls cross a JSON boundary and run in a separate process. See [foreign-language interoperability](docs/INTEROPERABILITY.md), [the Python example](examples/python_interop.tell), and [the JavaScript example](examples/javascript_interop.tell).
 
 ## A first program
 
@@ -130,7 +130,7 @@ After installing Tell with `python -m pip install .`, launch it with `tell-ide` 
 | Basic file read/write/append | Yes | Yes |
 | Try / error handling | Yes | Yes |
 | Math, random, JSON, statistics, date/time libraries | Core functions | Python-backed allowlist |
-| Full Python module ecosystem | No | No, intentionally allowlisted |
+| Full Python module ecosystem | Optional Python process bridge | Python imports in-process |\n| JavaScript/Node.js module functions | Optional Node.js process bridge | Optional Node.js process bridge |
 | Constructors, fields, instance methods, single inheritance | Yes | Yes |
 | Local `.tell` modules with public exports and import caching | Yes | Yes |
 | Static methods, access modifiers, multiple inheritance | Planned | Planned |
