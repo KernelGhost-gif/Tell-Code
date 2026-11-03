@@ -1,6 +1,8 @@
 # Foreign-language interoperability
 
-Tell currently has an optional Python module adapter. Ordinary Tell programs and the Go runtime do not require Python. A program that imports a Python module requires that module to be installed in the Python environment used by the adapter.
+Tell can call public functions from Python modules and JavaScript/Node.js modules. These adapters let a Tell program reuse existing package ecosystems without translating every dependency into Tell. The native Go runtime and Python interpreter both implement the two bridges.
+
+## Python
 
 ```tell
 Use the Python library called statistics as stats.
@@ -9,20 +11,29 @@ Say stats.mean(scores).
 Say stats.fmean(data=scores).
 ```
 
-Module names may be dotted Python import names. If no alias is supplied, Tell uses the final module-name component. Public module functions can be called with positional or named arguments. Arguments and return values cross the Go/Python boundary as JSON values: `nothing`, booleans, numbers, text, lists/tuples, and dictionaries with text keys. Python objects, callbacks, class instances, NumPy arrays, and identity-preserving handles are not supported by this adapter. Convert such values to JSON-compatible structures in Python before returning them.
+Module names are dotted Python import names. If no alias is supplied, Tell uses the final module-name component. Public module functions accept positional and named arguments. The native runtime starts the selected Python executable for each call; set `TELL_PYTHON_EXECUTABLE` to select it. Otherwise it searches for `python3` and then `python`. The Python interpreter imports modules in its current process.
 
-The Python interpreter imports the requested module in its current process. The native Go runtime starts the selected Python executable for each foreign function call, sends one JSON request over standard input, and reads one JSON response. Set `TELL_PYTHON_EXECUTABLE` to select the executable; otherwise Go searches for `python3` and then `python`. A call has a 30-second process limit. Python module imports and functions execute with the host user's permissions; this bridge is not a sandbox. Python's own standard output is isolated from Tell's output channel.
+## JavaScript and Node.js
 
-The bridge uses only Go's standard library and Python's standard library for transport. No third-party bridge dependency is vendored. Python packages remain user-managed and are not installed automatically by Tell. The Go adapter currently supports module functions only; it does not keep Python process state between calls.
+```tell
+Use the JavaScript library called node:path as paths.
+Say paths.basename("/projects/tell/main.js").
 
-Run the example with the native executable:
-
-```powershell
-tell run examples/python_interop.tell
+# An installed npm package can be imported the same way:
+Use the JavaScript library called mathjs as maths.
+Say maths.sqrt(144).
 ```
 
-```sh
-tell run examples/python_interop.tell
-```
+The module specifier may be a Node.js built-in such as `node:path`, an installed npm package such as `mathjs` or `@scope/package`, a package subpath, or a relative JavaScript file such as `./helpers.mjs`. Relative module specifiers resolve from the process working directory. If the alias is omitted, Tell derives one from the final module or file name.
 
-See [the architecture notes](ARCHITECTURE.md) for the wider compiler/runtime boundaries. C ABI, Rust, JavaScript, JVM, .NET, and browser/WASM adapters remain future work.
+Public JavaScript exports that are functions can be called with positional arguments. Tell named arguments are passed to JavaScript as one final options object, which works with APIs that accept an options parameter. The adapter supports CommonJS and ECMAScript modules, including functions that return promises. Node.js must be installed and the package must already be available; Tell does not install npm packages.
+
+Set `TELL_NODE_EXECUTABLE` to select the Node.js executable. Otherwise Tell searches `PATH` for `node`. Each native-runtime or Python-runtime JavaScript call starts a fresh Node.js process and has a 30-second timeout. Module state is not preserved between calls. JavaScript modules can print to stdout without corrupting Tell's JSON response channel.
+
+## Shared boundary and limitations
+
+Arguments and results cross the foreign-language boundary as JSON values: nothing/null, booleans, finite numbers, text, lists/arrays, and dictionaries/objects with text keys. Python tuples and Tell sets are converted to JSON arrays. Functions, callbacks, class instances, cyclic objects, BigInt values, non-finite numbers, and identity-preserving handles are not supported. Convert complex objects to JSON-compatible structures in the foreign runtime before returning them.
+
+The Go runtime uses its standard library for process management and JSON transport. No third-party language bridge is vendored, and packages are managed by the host language's package manager. The bridge does not sandbox foreign code. Imported modules and their functions run with the host user's permissions and may access files, networks, credentials, and other resources available to that account. Only import code you trust.
+
+C, C++, Rust, JVM, .NET, and browser/WASM adapters are not included in this release. They remain possible future adapters; JavaScript and Python support should not be mistaken for universal source-language compatibility.

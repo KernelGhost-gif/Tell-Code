@@ -6,7 +6,7 @@ Updated 2026-11-03 against `main`. v0.3.6 adds the optional Tell IDE described b
 
 - Tell has a Python interpreter and an independent native Go runtime. Each has a hand-written lexer and Pratt expression parser. The parsers now build expression ASTs for common `Let`, `Set`, output, assertion, return, raise, loop-control, and expression statements; both runtimes execute these nodes directly, and the native bytecode compiler consumes the same Go nodes. Block and unmigrated statement parsing remain separate, line-oriented implementations with legacy recognition. Python retains a restricted host-AST compatibility path.
 - Go's `tell build` emits verified stack bytecode for a subset. It does not compile all Tell programs or emit native machine code.
-- The latest GitHub release is v0.3.5. Both the native runtime and tagged release GitHub Actions workflows passed.
+- The latest GitHub release is v0.3.6. Both the native runtime and tagged release GitHub Actions workflows passed.
 - The shared conformance corpus is executed by both runtime suites; set conformance cases were added in this checkpoint.
 
 ## Implemented in the current local change set
@@ -54,3 +54,12 @@ The v0.3.6 implementation is committed to `main` and published at https://github
 - Added quiet REPL modes to both runtimes so IDE shells can use a persistent session without terminal banners or prompts. Added IDE startup documentation and launcher metadata.
 - The Windows GUI was opened locally; a Tell program produced `4`, and the persistent shell retained `answer = 40` and evaluated `answer plus 2` as `42`. These are live smoke checks, not substitutes for runtime suites. The UI requires Tkinter. The Go executable is distributed separately from the optional Python/Tk UI.
 - The IDE does not include a debugger, LSP, semantic diagnostics, or formatter integration. Highlighting is lexical only. v0.3.6 is published; the Python/Tk desktop UI is distributed in the source package rather than embedded in native binaries.
+
+## v0.3.7 polyglot expansion
+
+- Added optional JavaScript/Node.js interoperability to both the Python interpreter and native Go runtime. Tell can import Node built-ins, installed npm packages, scoped packages, package subpaths, and relative JavaScript modules, then invoke public exported functions.
+- Added matching bytecode support, including validation and execution of JavaScript imports in compiled Tell programs.
+- Foreign calls use JSON-compatible values, support asynchronous JavaScript exports, and enforce a 30-second process timeout. Tell named arguments are passed as one final JavaScript options object.
+- Added native interpreter, bytecode, and Python interpreter tests plus a runnable Node.js example. CI and release workflows install Node.js so the bridge is exercised.
+- This is a process-based interoperability layer, not an embedded runtime or sandbox. Python and Node.js must be installed for their respective bridges; state, callbacks, opaque objects, and non-JSON values do not cross the boundary.
+- C/C++, Rust, JVM, .NET, browser/WASM bridges, a general FFI, package manager, and full native compiler pipeline remain future work.
