@@ -63,6 +63,8 @@ The REPL keeps variables and functions between entries, accepts multiline blocks
 
 `_` contains the most recent bare expression result. Commands are `:help`, `:clear`, `:exit`, `exit`, and `quit`. The native REPL runs independently of Python.
 
+Launch the desktop editor and shell through the Python package with `python -m tell ide`, `tell ide`, or the installed `tell-ide` script. The standalone Go executable does not include the optional desktop application. See [IDE Guide](IDE.md).
+
 ## Create a project
 
 ```text

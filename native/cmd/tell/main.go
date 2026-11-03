@@ -14,12 +14,13 @@ import (
 	"github.com/KernelGhost-gif/Tell-Code/native/internal/tell"
 )
 
-var version = "0.3.5"
+var version = "0.3.6"
 
 func main() {
 	check := flag.Bool("check", false, "parse the program without running it")
 	typeCheck := flag.Bool("types", false, "check statically knowable type annotations (native runtime)")
 	showVersion := flag.Bool("version", false, "print the Tell version")
+	quietREPL := flag.Bool("quiet-repl", false, "omit terminal prompts and banner (for IDE integrations)")
 	buildOutput := flag.String("output", "", "write compiled bytecode to this path")
 	defaults := tell.DefaultExecutionLimits()
 	maxCallDepth := flag.Int("max-call-depth", defaults.MaxFunctionCallDepth, "maximum nested Tell function calls")
@@ -125,7 +126,7 @@ func main() {
 		return
 	}
 	if replMode {
-		runREPL(limits)
+		runREPL(limits, *quietREPL)
 		return
 	}
 	if testMode {
@@ -340,18 +341,22 @@ func displayTestPath(filename string) string {
 	return filename
 }
 
-func runREPL(limits tell.ExecutionLimits) {
+func runREPL(limits tell.ExecutionLimits, quiet bool) {
 	reader := bufio.NewReader(os.Stdin)
 	session := tell.NewSessionWithLimits(reader, os.Stdout, limits)
 	session.SetEchoExpressions(true)
-	fmt.Printf("Tell Interactive Shell\nTell %s (native Go runtime)\nType :help for commands, :exit to leave.\n", version)
+	if !quiet {
+		fmt.Printf("Tell Interactive Shell\nTell %s (native Go runtime)\nType :help for commands, :exit to leave.\n", version)
+	}
 	var pending []string
 	for {
 		prompt := ">>> "
 		if len(pending) > 0 {
 			prompt = "... "
 		}
-		fmt.Print(prompt)
+		if !quiet {
+			fmt.Print(prompt)
+		}
 		line, err := reader.ReadString('\n')
 		if err != nil && len(line) == 0 {
 			if len(pending) > 0 {
@@ -371,7 +376,9 @@ func runREPL(limits tell.ExecutionLimits) {
 				fmt.Println("Enter Tell statements or complete blocks. Bare expressions print their result. Commands: :help, :clear, :exit.")
 				continue
 			case ":clear":
-				fmt.Print("\033[2J\033[H")
+				if !quiet {
+					fmt.Print("\033[2J\033[H")
+				}
 				continue
 			}
 		}

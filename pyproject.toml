@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tell-language"
-version = "0.3.5"
+version = "0.3.6"
 description = "Tell, a sentence-first programming language with Python and native runtimes"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -13,6 +13,7 @@ authors = [{ name = "Tell Language contributors" }]
 
 [project.scripts]
 tell = "tell.__main__:main"
+tell-ide = "tell.ide:main"
 
 [tool.setuptools]
 packages = ["tell"]

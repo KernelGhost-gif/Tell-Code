@@ -2,20 +2,20 @@
   "spdxVersion": "SPDX-2.3",
   "dataLicense": "CC0-1.0",
   "SPDXID": "SPDXRef-DOCUMENT",
-  "name": "Tell 0.3.5 native release",
-  "documentNamespace": "https://github.com/KernelGhost-gif/Tell-Code/spdx/0.3.5",
+  "name": "Tell 0.3.6 native release",
+  "documentNamespace": "https://github.com/KernelGhost-gif/Tell-Code/spdx/0.3.6",
   "creationInfo": {
     "creators": [
       "Tool: scripts/generate-sbom.py",
       "Organization: Tell Language contributors"
     ],
-    "created": "2026-11-03T16:01:54Z"
+    "created": "2026-11-03T16:14:41Z"
   },
   "packages": [
     {
       "name": "Tell",
       "SPDXID": "SPDXRef-Tell",
-      "versionInfo": "0.3.5",
+      "versionInfo": "0.3.6",
       "downloadLocation": "https://github.com/KernelGhost-gif/Tell-Code",
       "filesAnalyzed": false,
       "licenseConcluded": "MIT",
@@ -41,7 +41,7 @@
       "checksums": [
         {
           "algorithm": "SHA256",
-          "checksumValue": "73ddc3122e656ecac5c5f6b642ea2669ac9e411b43a1db04ed826f7bc19d159c"
+          "checksumValue": "db680de17e9ac74a11ddb38881cc485f3d670e57b3bc41943ddbfae38eaf7e76"
         }
       ],
       "licenseConcluded": "NOASSERTION",
@@ -56,7 +56,7 @@
       "checksums": [
         {
           "algorithm": "SHA256",
-          "checksumValue": "7fc3adeca235eca28054ba95fe46943ff4680419da3c64f60770322285069705"
+          "checksumValue": "9d3f132badc4924c637f42f22dccc8d8c727514b3e065ee1321b69ee6254939f"
         }
       ],
       "licenseConcluded": "NOASSERTION",
@@ -71,7 +71,7 @@
       "checksums": [
         {
           "algorithm": "SHA256",
-          "checksumValue": "d85c0dcce7e1813b35a12a744558617b6952492d9a9e598ca6b1bf0edc5f287e"
+          "checksumValue": "4395d2dc652258584601b6f840c921d4f579855939e2f93c2283dc9d3bbb8c41"
         }
       ],
       "licenseConcluded": "NOASSERTION",
@@ -86,7 +86,7 @@
       "checksums": [
         {
           "algorithm": "SHA256",
-          "checksumValue": "965037c369e4bed667be2a13b0b05dc56025456fc0c9f92542797552042d216f"
+          "checksumValue": "cbf1182c48f2870178360f81d67bd72a179f8d1b71a314c823a55d9dc7bb92c6"
         }
       ],
       "licenseConcluded": "NOASSERTION",
@@ -101,7 +101,7 @@
       "checksums": [
         {
           "algorithm": "SHA256",
-          "checksumValue": "b2be62198190f0a4b5ec74291acad4bfe4e622269b7ed8354d8214ed78556ee8"
+          "checksumValue": "523c74e48228abfaf0b3d802a861c07e257e279eff2669d4ffa316e21bc03331"
         }
       ],
       "licenseConcluded": "NOASSERTION",
@@ -116,7 +116,7 @@
       "checksums": [
         {
           "algorithm": "SHA256",
-          "checksumValue": "c1636a0b85eeb435a4043e7fa2e445eb5c8f598f5449b03d7e1a7ff18963677b"
+          "checksumValue": "dc922b92458763b72e1195f9f09f9a2f412f8097136c8a34b18259e5c060df09"
         }
       ],
       "licenseConcluded": "NOASSERTION",

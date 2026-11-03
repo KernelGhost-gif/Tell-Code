@@ -17,6 +17,7 @@ def repl(
     *,
     max_call_depth=Interpreter.DEFAULT_MAX_FUNCTION_CALL_DEPTH,
     max_loop_iterations=Interpreter.DEFAULT_MAX_LOOP_ITERATIONS,
+    quiet: bool = False,
 ) -> int:
     interpreter = Interpreter(
         input_fn=lambda prompt: (output_stream.write(prompt), output_stream.flush(), input_stream.readline().rstrip("\r\n"))[2],
@@ -25,9 +26,10 @@ def repl(
         max_loop_iterations=max_loop_iterations,
     )
     interpreter.echo_expressions = True
-    print(f"Tell Interactive Shell\nTell {__version__}\nType :help for commands, :exit to leave.", file=output_stream)
+    if not quiet:
+        print(f"Tell Interactive Shell\nTell {__version__}\nType :help for commands, :exit to leave.", file=output_stream)
     pending: list[str] = []
-    interactive = bool(getattr(input_stream, "isatty", lambda: False)())
+    interactive = not quiet and bool(getattr(input_stream, "isatty", lambda: False)())
     while True:
         if interactive:
             output_stream.write("... " if pending else ">>> ")
@@ -51,7 +53,8 @@ def repl(
                 print("Enter Tell statements or complete blocks. Bare expressions print their result. Commands: :help, :clear, :exit.", file=output_stream)
                 continue
             if command == ":clear":
-                output_stream.write("\033[2J\033[H")
+                if not quiet:
+                    output_stream.write("\033[2J\033[H")
                 continue
         pending.append(line)
         source = "\n".join(pending)
@@ -145,14 +148,15 @@ def run_tests(
 def main() -> int:
     parser = argparse.ArgumentParser(
         prog="tell",
-        description="Run, check, test, build, and format Tell programs written as ordinary instructions.",
+        description="Run, check, test, build, format, and edit Tell programs written as ordinary instructions.",
     )
-    parser.add_argument("command_or_file", nargs="?", help="run, check, test, format, or a .tell source file")
+    parser.add_argument("command_or_file", nargs="?", help="run, check, test, format, ide, or a .tell source file")
     parser.add_argument("file", nargs="?", help="Source file (use - to read UTF-8 source from stdin)")
     parser.add_argument("--version", action="version", version=f"Tell {__version__}")
     parser.add_argument("--check", action="store_true", help="Parse the program without running it")
     parser.add_argument("--max-call-depth", type=int, default=Interpreter.DEFAULT_MAX_FUNCTION_CALL_DEPTH)
     parser.add_argument("--max-loop-iterations", type=int, default=Interpreter.DEFAULT_MAX_LOOP_ITERATIONS)
+    parser.add_argument("--quiet-repl", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
 
     if args.max_call_depth < 1 or args.max_loop_iterations < 1:
@@ -173,7 +177,12 @@ def main() -> int:
         )
 
     if command == "repl" and args.file is None:
-        return repl(max_call_depth=args.max_call_depth, max_loop_iterations=args.max_loop_iterations)
+        return repl(max_call_depth=args.max_call_depth, max_loop_iterations=args.max_loop_iterations, quiet=args.quiet_repl)
+
+    if command == "ide" and args.file is None:
+        from .ide import main as ide_main
+
+        return ide_main()
 
     if command in {"run", "check", "format"}:
         if args.file is None:

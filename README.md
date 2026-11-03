@@ -7,7 +7,7 @@ Tell has two runtimes:
 - **Native runtime:** a standalone executable written in Go. It runs `.tell` programs directly and does not need Python or Go installed on the user's machine.
 - **Python runtime:** the original interpreter, kept for compatibility, experimentation, and people who want to embed or extend Tell from Python.
 
-Current version: **0.3.5**.
+Current version: **0.3.6**.
 
 Tell can optionally call functions from installed Python modules using the native-runtime bridge. See [Python interoperability](docs/INTEROPERABILITY.md) and [the working example](examples/python_interop.tell).
 
@@ -99,6 +99,16 @@ Or install the package:
 python -m pip install .
 tell examples/hello.tell
 ```
+
+## Desktop IDE
+
+Tell includes a Python Tk desktop IDE with a tabbed `.tell` editor, line numbers, syntax colours, block-aware indentation, file open/save, Find, and a persistent interactive shell. Run, syntax check, bytecode build, and project tests invoke the native Go runtime when it is available. The Python runtime is the fallback. The IDE is optional and does not change the standalone native runtime.
+
+```powershell
+python -m tell ide
+```
+
+After installing Tell with `python -m pip install .`, launch it with `tell-ide` (or `tell ide`). Tkinter is included with the standard Windows Python installer; on some Linux distributions install `python3-tk`. See the [IDE guide](docs/IDE.md) for shortcuts and runtime selection.
 
 ## Language features
 

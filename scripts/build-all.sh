@@ -37,7 +37,7 @@ done
 cat > "$STAGE/README.txt" <<README
 Tell ${VERSION} native binaries
 
-These executables run Tell programs without a separate Go installation. Python is only needed when a program explicitly imports a Python module.
+These executables run Tell programs without a separate Go installation. Python is only needed when a program explicitly imports a Python module. The optional desktop IDE needs Python and Tkinter; start it with: python -m tell ide
 
 Choose the binary matching your operating system and CPU:
   tell-linux-amd64       Linux x86-64

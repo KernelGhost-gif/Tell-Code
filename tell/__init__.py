@@ -3,4 +3,4 @@
 from .interpreter import Interpreter, Parser, TellError
 
 __all__ = ["Interpreter", "Parser", "TellError"]
-__version__ = "0.3.5"
+__version__ = "0.3.6"
