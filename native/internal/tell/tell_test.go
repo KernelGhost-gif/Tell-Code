@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -50,6 +51,27 @@ func TestSharedConformanceCorpus(t *testing.T) {
 				t.Fatalf("output mismatch: got %q, want %q", got, testCase.Output)
 			}
 		})
+	}
+}
+
+func TestOptionalPythonModuleInterop(t *testing.T) {
+	python, err := exec.LookPath("python3")
+	if err != nil {
+		python, err = exec.LookPath("python")
+	}
+	if err != nil {
+		t.Skip("Python is optional for the native runtime")
+	}
+	t.Setenv("TELL_PYTHON_EXECUTABLE", python)
+	var output bytes.Buffer
+	source := `Use the Python library called statistics as stats.
+Say stats.mean([1, 2, 3]).
+Say stats.fmean(data=[4, 8]).`
+	if err := RunWithIO(source, "python-interop.tell", bytes.NewReader(nil), &output); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := output.String(), "2\n6\n"; got != want {
+		t.Fatalf("Python interop output = %q, want %q", got, want)
 	}
 }
 

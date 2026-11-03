@@ -7,7 +7,9 @@ Tell has two runtimes:
 - **Native runtime:** a standalone executable written in Go. It runs `.tell` programs directly and does not need Python or Go installed on the user's machine.
 - **Python runtime:** the original interpreter, kept for compatibility, experimentation, and people who want to embed or extend Tell from Python.
 
-Current version: **0.3.4**.
+Current version: **0.3.5**.
+
+Tell can optionally call functions from installed Python modules using the native-runtime bridge. See [Python interoperability](docs/INTEROPERABILITY.md) and [the working example](examples/python_interop.tell).
 
 ## A first program
 
@@ -30,7 +32,9 @@ Hello, Ada!
 You are an adult.
 ```
 
-## Run Tell without Python
+## Run Tell natively
+
+The Go executable runs ordinary `.tell` programs without Python installed. Programs that explicitly import Python modules need a Python runtime; see [Python interoperability](docs/INTEROPERABILITY.md).
 
 See [examples/language-core.tell](examples/language-core.tell) for Unicode identifiers, named arguments, short-circuit logic, and an otherwise-if chain.
 

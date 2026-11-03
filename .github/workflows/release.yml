@@ -27,6 +27,9 @@ jobs:
       - name: Run native tests
         working-directory: native
         run: go test ./...
+      - name: Vet native code
+        working-directory: native
+        run: go vet ./...
       - name: Build release binaries and checksums
         run: ./scripts/build-all.sh
       - name: Run Tell source examples as tests
@@ -39,4 +42,6 @@ jobs:
           releases/tell-*
           releases/SHA256SUMS
           releases/README.txt
+          releases/SBOM.spdx.json
+          releases/THIRD_PARTY_NOTICES.txt
           --generate-notes

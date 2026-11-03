@@ -1,12 +1,12 @@
 # Tell engineering checkpoint
 
-Updated 2026-11-02 against local `main`. The current checkpoint adds end-to-end set support to both runtimes and native bytecode, in addition to the earlier tuple work. Go is installed under the task workspace tools directory.
+Updated 2026-11-03 against local `main`. v0.3.5 adds ordered sets and an optional Python module adapter to the existing Go runtime, bytecode VM, and Python runtime. Go is installed under the task workspace tools directory.
 
 ## Architecture and verified baseline
 
 - Tell has a Python interpreter and an independent native Go runtime. Each has a hand-written lexer and Pratt expression parser. The parsers now build expression ASTs for common `Let`, `Set`, output, assertion, return, raise, loop-control, and expression statements; both runtimes execute these nodes directly, and the native bytecode compiler consumes the same Go nodes. Block and unmigrated statement parsing remain separate, line-oriented implementations with legacy recognition. Python retains a restricted host-AST compatibility path.
 - Go's `tell build` emits verified stack bytecode for a subset. It does not compile all Tell programs or emit native machine code.
-- The most recent GitHub-published release is v0.3.1. Local release binaries are generated artifacts and have not been published.
+- The latest GitHub release before this checkpoint is v0.3.4.
 - The shared conformance corpus is executed by both runtime suites; set conformance cases were added in this checkpoint.
 
 ## Implemented in the current local change set
@@ -19,15 +19,17 @@ Updated 2026-11-02 against local `main`. The current checkpoint adds end-to-end 
 - Recent parser work moves common assignments, instance member assignments, output/assertion, return/raise, loop-control, bare expression statements, and `Tell object to method` calls to pre-parsed AST nodes in both runtimes. The Go bytecode compiler lowers the typed statements directly, including `SET_MEMBER`.
 - Both expression Pratt parsers now distinguish grouping from empty, singleton, and multi-value tuple literals. Both runtimes implement immutable tuple values, canonical display, `tuple` type inspection/annotation, length, indexing, slicing, membership, concatenation, iteration, and destructuring. The Go bytecode compiler emits `TUPLE` and the VM preserves tuple identity through indexing, slicing, loops, and multiple assignment.
 - Both Pratt parsers distinguish set literals from dictionaries (`{}` remains an empty dictionary; brace literals without key/value colons are sets). Both runtimes implement insertion-ordered, duplicate-free sets with constructors, type inspection/annotations, length, membership, iteration, equality, `Add`/`Remove`, and `union`/`intersection`/`difference`. Shared conformance tests cover those semantics. The native bytecode compiler emits a verified `SET` instruction and supports set literals, membership, iteration, and algebra built-ins.
+- `Use the Python library called module.name as alias.` imports Python modules in the Python runtime and exposes public module functions through an optional JSON bridge in the native Go runtime and bytecode VM. Positional/named arguments and JSON-compatible return values work; the native adapter starts Python only when a foreign function is called. Python module state, callbacks, opaque objects, and non-JSON return values are unsupported. See `docs/INTEROPERABILITY.md`.
 - The Go CLI's `tell new` and `tell init` scaffold runnable project files, tests, and a minimal `tell.toml`, with path validation and overwrite protection. They do not resolve or install dependencies.
 - `docs/COLLECTIONS.md` and the language specification document the implemented contracts; the README and CLI reference describe available behavior.
 
 ## Checks run during this checkpoint
 
-- Python: `python -m unittest discover -s tests -v` passes all 36 unittest methods, including the shared corpus.
-- Native: `go test -count=1 ./...` and `go vet ./...` pass both Go packages. The Go commands must run from `native/`.
+- Python: `python -m unittest discover -s tests -v` passes all 37 unittest methods, including the shared corpus and Python-module call.
+- Native: `go test -count=1 ./...` and `go vet ./...` pass both Go packages. Native source and bytecode integration tests call Python's `statistics` module when Python is installed; they skip when no Python executable is available.
 - The shared corpus covers tuple and set literals, constructors, annotations, display, equality, membership, set algebra, mutation and iteration, along with earlier tuple indexing, slicing, multiple assignment and destructuring. Native bytecode tests cover tuple and set values, set membership, iteration and algebra.
 - The current source cross-builds for Linux amd64/arm64, macOS amd64/arm64, and Windows amd64/arm64. A temporary Windows AMD64 build ran `examples/sets.tell`; a focused set program produced identical output in source and bytecode modes. Cross-builds establish compilation only; the other five targets were not run on their target operating systems.
+- Release builds produce an SPDX 2.3 SBOM alongside the six native binaries and SHA-256 checksums. The release workflow uploads the SBOM.
 - `go test -race` is unavailable on this host because `gcc`, `clang`, and `cl` are not present on PATH.
 
 ## Incomplete and known limitations
@@ -43,4 +45,4 @@ Updated 2026-11-02 against local `main`. The current checkpoint adds end-to-end 
 
 ## Source control and publishing
 
-The current work is on local `main`. Binary publication is a separate release step; the current checkpoint has no tagged release.
+The v0.3.5 implementation is prepared for tagged release after the local six-target build and smoke checks. Cross-compilation does not establish execution on non-Windows hosts.

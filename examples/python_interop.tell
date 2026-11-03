@@ -1,0 +1,7 @@
+# This example needs Python available to the runtime.
+Use the Python library called statistics as stats.
+
+Let scores be [12, 18, 24, 30].
+Say "Mean: {stats.mean(scores)}".
+Say "Population standard deviation: {stats.pstdev(scores)}".
+Say "Named argument: {stats.fmean(data=scores)}".

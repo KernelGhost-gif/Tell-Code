@@ -1,6 +1,6 @@
 # CLI Reference
 
-The native Go executable runs Tell without Python. The Python runtime can be launched with `python -m tell` or through the installed `tell` entry point.
+The native Go executable runs ordinary Tell programs without Python; programs that explicitly import Python modules require a Python executable for those calls. The Python runtime can be launched with `python -m tell` or through the installed `tell` entry point.
 
 ## Run and check programs
 

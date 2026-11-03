@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -77,6 +78,22 @@ Say union(values, {4}).`
 	want := "{3, 1, 2}\ntrue\n3\n1\n2\n{3, 1, 2, 4}\n"
 	if got := runCompiled(t, source); got != want {
 		t.Fatalf("compiled set output = %q, want %q", got, want)
+	}
+}
+
+func TestBytecodeSupportsOptionalPythonInterop(t *testing.T) {
+	python, err := exec.LookPath("python3")
+	if err != nil {
+		python, err = exec.LookPath("python")
+	}
+	if err != nil {
+		t.Skip("Python is optional for the native runtime")
+	}
+	t.Setenv("TELL_PYTHON_EXECUTABLE", python)
+	source := `Use the Python library called statistics as stats.
+Say stats.mean([1, 2, 3]).`
+	if got, want := runCompiled(t, source), "2\n"; got != want {
+		t.Fatalf("compiled Python interop output = %q, want %q", got, want)
 	}
 }
 

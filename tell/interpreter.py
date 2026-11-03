@@ -4,6 +4,7 @@ import ast
 import csv
 import datetime
 import io
+import importlib
 import json
 import math
 import operator
@@ -1775,6 +1776,21 @@ class Interpreter:
         rest = _take_prefix(statement, "raise an error saying ")
         if rest:
             raise TellError(str(self.evaluate(rest, env)))
+        python_import = re.fullmatch(
+            r"use the python library called ([A-Za-z_][A-Za-z0-9_.]*)(?: as ((?:[^\W\d]|_)\w*))?",
+            statement,
+            re.I,
+        )
+        if python_import:
+            module_name = python_import.group(1)
+            if any(not part or part.startswith("_") for part in module_name.split(".")):
+                raise TellError(f"Invalid Python module name {module_name!r}.")
+            alias = python_import.group(2) or module_name.rsplit(".", 1)[-1]
+            try:
+                env.set(alias, importlib.import_module(module_name))
+            except ImportError as exc:
+                raise TellError(f"Could not import Python module {module_name!r}: {exc}") from exc
+            return
         rest = _take_prefix(statement, "use the ")
         if rest is not None:
             library_text, suffix = _split_once_casefold(rest, " library") or ("", "")

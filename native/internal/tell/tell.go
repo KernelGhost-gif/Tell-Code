@@ -799,6 +799,8 @@ func (e *env) set(name string, v any) { e.values[name] = v }
 
 type callable func([]any) (any, error)
 type namedCallable func([]any, map[string]any) (any, error)
+type pythonModule struct{ name string }
+type pythonFunction struct{ module, name string }
 type userFunction struct {
 	name    string
 	params  []string
@@ -1528,6 +1530,10 @@ func typeName(v any) string {
 		return "dictionary"
 	case callable, namedCallable, *userFunction:
 		return "function"
+	case pythonFunction:
+		return "function"
+	case pythonModule:
+		return "module"
 	case *userClass:
 		return "class"
 	case *userInstance:
@@ -1589,6 +1595,8 @@ func display(v any) string {
 			return string(b)
 		}
 		return fmt.Sprint(x)
+	case pythonModule:
+		return "<Python module " + x.name + ">"
 	default:
 		return fmt.Sprint(v)
 	}
@@ -2232,6 +2240,22 @@ func (r *runtime) statement(s string, e *env) error {
 		}
 		return fail("%s", display(value))
 	}
+	if rest, ok := prefixFold(s, "use the python library called "); ok {
+		name, alias, hasAlias := splitFoldOnce(rest, " as ")
+		name = strings.TrimSpace(name)
+		if !hasAlias {
+			alias = name[strings.LastIndex(name, ".")+1:]
+		}
+		if !identifier(alias) {
+			return fail("expected a valid alias for Python module %q", name)
+		}
+		module, err := newPythonModule(name)
+		if err != nil {
+			return fail("%v", err)
+		}
+		e.set(alias, module)
+		return nil
+	}
 	if rest, ok := prefixFold(s, "use the "); ok {
 		if index := strings.Index(strings.ToLower(rest), " library"); index >= 0 {
 			requested := strings.TrimSpace(rest[:index])
@@ -2705,7 +2729,7 @@ func invoke(v any, args []any) (any, error) {
 
 func isCallableValue(value any) bool {
 	switch value.(type) {
-	case callable, namedCallable, *userFunction, *userClass, *bytecodeClassValue:
+	case callable, namedCallable, *userFunction, *userClass, *bytecodeClassValue, pythonFunction:
 		return true
 	default:
 		return false
@@ -2714,6 +2738,8 @@ func isCallableValue(value any) bool {
 
 func invokeNamed(v any, args []any, named map[string]any) (any, error) {
 	switch f := v.(type) {
+	case pythonFunction:
+		return callPython(f.module, f.name, args, named)
 	case namedCallable:
 		return f(args, named)
 	case callable:

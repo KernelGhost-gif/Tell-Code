@@ -37,7 +37,7 @@ done
 cat > "$STAGE/README.txt" <<README
 Tell ${VERSION} native binaries
 
-These executables run Tell programs without Python or a separate Go installation.
+These executables run Tell programs without a separate Go installation. Python is only needed when a program explicitly imports a Python module.
 
 Choose the binary matching your operating system and CPU:
   tell-linux-amd64       Linux x86-64
@@ -63,9 +63,21 @@ Run Tell source tests:
   Linux/macOS: ./tell-linux-amd64 test
   Windows:     tell-windows-amd64.exe test
 
+Software bill of materials:
+  SBOM.spdx.json (SPDX 2.3)
+
+Third-party notices:
+  THIRD_PARTY_NOTICES.txt
+
 The macOS and Windows binaries are cross-compiled from the source. Their actual
 execution should be smoke-tested on the corresponding operating systems.
 README
+
+python3 "$ROOT/scripts/generate-sbom.py" \
+  --version "$VERSION" \
+  --directory "$STAGE" \
+  --native-dir "$ROOT/native"
+cp "$ROOT/THIRD_PARTY_NOTICES.txt" "$STAGE/THIRD_PARTY_NOTICES.txt"
 
 if command -v sha256sum >/dev/null 2>&1; then
   (cd "$STAGE" && sha256sum tell-* > SHA256SUMS)

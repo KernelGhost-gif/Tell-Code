@@ -1,0 +1,171 @@
+{
+  "spdxVersion": "SPDX-2.3",
+  "dataLicense": "CC0-1.0",
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "name": "Tell 0.3.5 native release",
+  "documentNamespace": "https://github.com/KernelGhost-gif/Tell-Code/spdx/0.3.5",
+  "creationInfo": {
+    "creators": [
+      "Tool: scripts/generate-sbom.py",
+      "Organization: Tell Language contributors"
+    ],
+    "created": "2026-11-03T15:58:29Z"
+  },
+  "packages": [
+    {
+      "name": "Tell",
+      "SPDXID": "SPDXRef-Tell",
+      "versionInfo": "0.3.5",
+      "downloadLocation": "https://github.com/KernelGhost-gif/Tell-Code",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "copyrightText": "NOASSERTION",
+      "primaryPackagePurpose": "APPLICATION"
+    },
+    {
+      "name": "Go standard library",
+      "SPDXID": "SPDXRef-Go-Stdlib",
+      "versionInfo": "go1.27.3",
+      "downloadLocation": "https://go.dev/dl/",
+      "filesAnalyzed": false,
+      "licenseConcluded": "BSD-3-Clause",
+      "licenseDeclared": "BSD-3-Clause",
+      "copyrightText": "Copyright The Go Authors"
+    }
+  ],
+  "files": [
+    {
+      "fileName": "tell-darwin-amd64",
+      "SPDXID": "SPDXRef-File-tell-darwin-amd64",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "17385783f0e75d733374c08cf8d5efff05451fccae3fb5285e6c323061c2f32e"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "fileTypes": [
+        "BINARY"
+      ]
+    },
+    {
+      "fileName": "tell-darwin-arm64",
+      "SPDXID": "SPDXRef-File-tell-darwin-arm64",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "fc984669587452b9b233e173c4bb03da77e5e5ae698003a8e2718fcd67b1302a"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "fileTypes": [
+        "BINARY"
+      ]
+    },
+    {
+      "fileName": "tell-linux-amd64",
+      "SPDXID": "SPDXRef-File-tell-linux-amd64",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "552447684a219f648186df0a1ca8d33b01d213a15a8738aec28b65e93b6e11c2"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "fileTypes": [
+        "BINARY"
+      ]
+    },
+    {
+      "fileName": "tell-linux-arm64",
+      "SPDXID": "SPDXRef-File-tell-linux-arm64",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "6076bd6fed0150fc911bdcb08fda3be5cfa08b4702acd3cfd01fb87b9cd31910"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "fileTypes": [
+        "BINARY"
+      ]
+    },
+    {
+      "fileName": "tell-windows-amd64.exe",
+      "SPDXID": "SPDXRef-File-tell-windows-amd64-exe",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "3abded88b45d38e18d3600942e28233f2ea50476bc05f4791911ea0d1a842709"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "fileTypes": [
+        "BINARY"
+      ]
+    },
+    {
+      "fileName": "tell-windows-arm64.exe",
+      "SPDXID": "SPDXRef-File-tell-windows-arm64-exe",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "8199ac785d0be35b8f591ec6adca0ed5633cd61e48411488883a36d36a1245f6"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "fileTypes": [
+        "BINARY"
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Tell"
+    },
+    {
+      "spdxElementId": "SPDXRef-Tell",
+      "relationshipType": "DEPENDS_ON",
+      "relatedSpdxElement": "SPDXRef-Go-Stdlib"
+    },
+    {
+      "spdxElementId": "SPDXRef-Tell",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-File-tell-darwin-amd64"
+    },
+    {
+      "spdxElementId": "SPDXRef-Tell",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-File-tell-darwin-arm64"
+    },
+    {
+      "spdxElementId": "SPDXRef-Tell",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-File-tell-linux-amd64"
+    },
+    {
+      "spdxElementId": "SPDXRef-Tell",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-File-tell-linux-arm64"
+    },
+    {
+      "spdxElementId": "SPDXRef-Tell",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-File-tell-windows-amd64-exe"
+    },
+    {
+      "spdxElementId": "SPDXRef-Tell",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-File-tell-windows-arm64-exe"
+    }
+  ]
+}

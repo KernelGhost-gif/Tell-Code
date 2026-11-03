@@ -488,6 +488,11 @@ func (r *runtime) evalExpression(expr expression, e *env) (any, error) {
 			return nil, err
 		}
 		switch object := value.(type) {
+		case pythonModule:
+			if strings.HasPrefix(x.member, "_") || !pythonIdentifier.MatchString(x.member) {
+				return nil, fail("invalid or private Python member %q", x.member)
+			}
+			return pythonFunction{module: object.name, name: x.member}, nil
 		case map[string]any:
 			member, ok := object[x.member]
 			if !ok {

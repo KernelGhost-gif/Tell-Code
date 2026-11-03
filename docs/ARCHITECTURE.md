@@ -11,6 +11,8 @@ Tell has two independent runtimes:
 
 Both runtimes own separate environments, built-ins, class/instance implementations, module loaders, and standard-library adapters. Local modules execute in an environment parented by the runtime globals, export public top-level bindings, and are cached by resolved file path per interpreter. `conformance/core.json` is the shared executable corpus. Each runtime test runner executes those same programs and compares output against the declared expected output.
 
+The optional Python adapter is deliberately outside ordinary runtime startup. The Python implementation imports requested modules in its current process. The native Go runtime invokes a configured Python executable per foreign function call and exchanges JSON values over stdin/stdout. Named and positional arguments work; opaque Python objects and persistent Python-side module state do not cross calls. This keeps the default Go runtime independent of Python while making the dependency explicit for programs that choose the adapter.
+
 ## Current execution path
 
 ```text

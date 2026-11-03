@@ -14,7 +14,7 @@ import (
 	"github.com/KernelGhost-gif/Tell-Code/native/internal/tell"
 )
 
-var version = "0.3.4"
+var version = "0.3.5"
 
 func main() {
 	check := flag.Bool("check", false, "parse the program without running it")

@@ -91,6 +91,14 @@ Say answer.
         )
         self.assertEqual(output, ["(1, 2)", "{1, 2}", "yes"])
 
+    def test_python_module_interop_uses_imported_modules_and_named_arguments(self):
+        output, _ = self.run_tell('''
+Use the Python library called statistics as stats.
+Say stats.mean([1, 2, 3]).
+Say stats.fmean(data=[4, 8]).
+''')
+        self.assertEqual(output, ["2", "6"])
+
     def test_input_and_number_conversion(self):
         output, _ = self.run_tell('''
 Ask "Age? " and save the answer as raw_age.
