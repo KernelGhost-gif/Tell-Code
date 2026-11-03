@@ -1,6 +1,6 @@
 # Tell engineering checkpoint
 
-Updated 2026-11-03 against local `main`. v0.3.5 remains the latest published runtime. This local v0.3.6 change adds the optional Tell IDE described below; it is not yet published. Go is installed under the task workspace tools directory.
+Updated 2026-11-03 against `main`. v0.3.6 adds the optional Tell IDE described below and is published with all six native targets. Both GitHub workflows passed. Go is installed under the task workspace tools directory.
 
 ## Architecture and verified baseline
 
@@ -45,7 +45,7 @@ Updated 2026-11-03 against local `main`. v0.3.5 remains the latest published run
 
 ## Source control and publishing
 
-The v0.3.5 implementation is committed to `main` and published at https://github.com/KernelGhost-gif/Tell-Code/releases/tag/v0.3.5. Both GitHub Actions workflows passed, including the six-target release build. The v0.3.6 IDE work is in progress. Cross-compilation does not establish execution on non-Windows hosts.
+The v0.3.6 implementation is committed to `main` and published at https://github.com/KernelGhost-gif/Tell-Code/releases/tag/v0.3.6. Both GitHub Actions workflows passed, including the six-target release build. Cross-compilation does not establish execution on non-Windows hosts.
 
 ## Tell IDE (v0.3.6 local work)
 
@@ -53,4 +53,4 @@ The v0.3.5 implementation is committed to `main` and published at https://github
 - Run (F5), check (F7), bytecode build (Ctrl+B), and tests (Ctrl+T) launch the native Go runtime when available. Python runtime fallback supports run/check/test. Editor buffer can run from a temporary sibling file, preserving relative module resolution; program stdin is routed from the shell input area.
 - Added quiet REPL modes to both runtimes so IDE shells can use a persistent session without terminal banners or prompts. Added IDE startup documentation and launcher metadata.
 - The Windows GUI was opened locally; a Tell program produced `4`, and the persistent shell retained `answer = 40` and evaluated `answer plus 2` as `42`. These are live smoke checks, not substitutes for runtime suites. The UI requires Tkinter. The Go executable is distributed separately from the optional Python/Tk UI.
-- The IDE does not include a debugger, LSP, semantic diagnostics, or formatter integration. Highlighting is lexical only. A release has not yet been created for v0.3.6.
+- The IDE does not include a debugger, LSP, semantic diagnostics, or formatter integration. Highlighting is lexical only. v0.3.6 is published; the Python/Tk desktop UI is distributed in the source package rather than embedded in native binaries.
