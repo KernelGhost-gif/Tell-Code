@@ -801,6 +801,8 @@ type callable func([]any) (any, error)
 type namedCallable func([]any, map[string]any) (any, error)
 type pythonModule struct{ name string }
 type pythonFunction struct{ module, name string }
+type javascriptModule struct{ name string }
+type javascriptFunction struct{ module, name string }
 type userFunction struct {
 	name    string
 	params  []string
@@ -1534,6 +1536,10 @@ func typeName(v any) string {
 		return "function"
 	case pythonModule:
 		return "module"
+	case javascriptFunction:
+		return "function"
+	case javascriptModule:
+		return "module"
 	case *userClass:
 		return "class"
 	case *userInstance:
@@ -1597,6 +1603,8 @@ func display(v any) string {
 		return fmt.Sprint(x)
 	case pythonModule:
 		return "<Python module " + x.name + ">"
+	case javascriptModule:
+		return "<JavaScript module " + x.name + ">"
 	default:
 		return fmt.Sprint(v)
 	}
@@ -2240,6 +2248,22 @@ func (r *runtime) statement(s string, e *env) error {
 		}
 		return fail("%s", display(value))
 	}
+	if rest, ok := prefixFold(s, "use the javascript library called "); ok {
+		name, alias, hasAlias := splitFoldOnce(rest, " as ")
+		name = strings.TrimSpace(name)
+		module, err := newJavaScriptModule(name)
+		if err != nil {
+			return fail("%v", err)
+		}
+		if !hasAlias {
+			alias = defaultJavaScriptAlias(name)
+		}
+		if !identifier(alias) {
+			return fail("expected a valid alias for JavaScript module %q", name)
+		}
+		e.set(alias, module)
+		return nil
+	}
 	if rest, ok := prefixFold(s, "use the python library called "); ok {
 		name, alias, hasAlias := splitFoldOnce(rest, " as ")
 		name = strings.TrimSpace(name)
@@ -2729,7 +2753,7 @@ func invoke(v any, args []any) (any, error) {
 
 func isCallableValue(value any) bool {
 	switch value.(type) {
-	case callable, namedCallable, *userFunction, *userClass, *bytecodeClassValue, pythonFunction:
+	case callable, namedCallable, *userFunction, *userClass, *bytecodeClassValue, pythonFunction, javascriptFunction:
 		return true
 	default:
 		return false
@@ -2740,6 +2764,8 @@ func invokeNamed(v any, args []any, named map[string]any) (any, error) {
 	switch f := v.(type) {
 	case pythonFunction:
 		return callPython(f.module, f.name, args, named)
+	case javascriptFunction:
+		return callJavaScript(f.module, f.name, args, named)
 	case namedCallable:
 		return f(args, named)
 	case callable:

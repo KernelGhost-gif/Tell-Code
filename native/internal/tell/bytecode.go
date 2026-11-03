@@ -435,6 +435,24 @@ func (c *bytecodeCompiler) statement(source string) error {
 		c.code[instruction].Name = expression
 		return nil
 	}
+	if rest, ok := prefixFold(source, "use the javascript library called "); ok {
+		moduleName, alias, hasAlias := splitFoldOnce(rest, " as ")
+		moduleName = strings.TrimSpace(moduleName)
+		module, err := newJavaScriptModule(moduleName)
+		if err != nil {
+			return err
+		}
+		if !hasAlias {
+			alias = defaultJavaScriptAlias(moduleName)
+		}
+		if !identifier(alias) {
+			return fmt.Errorf("expected a valid alias for JavaScript module %q", moduleName)
+		}
+		instruction := c.emit("USE_JAVASCRIPT")
+		c.code[instruction].Name = alias
+		c.code[instruction].Value = module.name
+		return nil
+	}
 	if rest, ok := prefixFold(source, "use the python library called "); ok {
 		moduleName, alias, hasAlias := splitFoldOnce(rest, " as ")
 		moduleName = strings.TrimSpace(moduleName)
@@ -1227,6 +1245,13 @@ func validateBytecode(instructions []BytecodeInstruction, terminal string, funct
 				return fail("invalid Python module reference at instruction %d", pc)
 			}
 		}
+		if instruction.Op == "USE_JAVASCRIPT" {
+			moduleName, ok := instruction.Value.(string)
+			_, moduleErr := newJavaScriptModule(moduleName)
+			if !ok || moduleErr != nil || !identifier(instruction.Name) {
+				return fail("invalid JavaScript module reference at instruction %d", pc)
+			}
+		}
 		if instruction.Op == "DEFINE_FUNC" && instruction.Count >= functionCount {
 			return fail("invalid bytecode function reference at instruction %d", pc)
 		}
@@ -1287,7 +1312,7 @@ func verifyBytecodeStack(instructions []BytecodeInstruction) error {
 			need, delta = 4, -3
 		case "CALL":
 			need, delta = instruction.Count+1, -instruction.Count
-		case "JUMP", "JUMP_IF_FALSE", "JUMP_IF_TRUE", "REPEAT_NEXT", "ITER_NEXT", "DEFINE_FUNC", "DEFINE_CLASS", "IMPORT_MODULE", "USE_LIBRARY", "USE_PYTHON", "TRY_PUSH", "TRY_POP":
+		case "JUMP", "JUMP_IF_FALSE", "JUMP_IF_TRUE", "REPEAT_NEXT", "ITER_NEXT", "DEFINE_FUNC", "DEFINE_CLASS", "IMPORT_MODULE", "USE_LIBRARY", "USE_PYTHON", "USE_JAVASCRIPT", "TRY_PUSH", "TRY_POP":
 			if instruction.Op == "JUMP_IF_FALSE" || instruction.Op == "JUMP_IF_TRUE" {
 				need = 1
 			}
@@ -1694,6 +1719,17 @@ func executeBytecodeCode(r *runtime, instructions []BytecodeInstruction, functio
 			if err == nil {
 				r.global.set(instruction.Name, module)
 			}
+		case "USE_JAVASCRIPT":
+			moduleName, ok := instruction.Value.(string)
+			if !ok {
+				err = fail("invalid JavaScript module reference")
+				break
+			}
+			var module javascriptModule
+			module, err = newJavaScriptModule(moduleName)
+			if err == nil {
+				r.global.set(instruction.Name, module)
+			}
 		case "DEFINE_CLASS":
 			spec := classes[instruction.Count]
 			class := &bytecodeClassValue{name: spec.Name, methods: map[string]BytecodeFunction{}, closure: r.global, functions: functions, classes: classes}
@@ -2025,6 +2061,11 @@ func bytecodeMember(r *runtime, value any, name string, functions []BytecodeFunc
 			return nil, fail("invalid or private Python member %q", name)
 		}
 		return pythonFunction{module: object.name, name: name}, nil
+	case javascriptModule:
+		if strings.HasPrefix(name, "_") || !javaScriptIdentifier.MatchString(name) {
+			return nil, fail("invalid or private JavaScript member %q", name)
+		}
+		return javascriptFunction{module: object.name, name: name}, nil
 	case map[string]any:
 		member, ok := object[name]
 		if !ok {
