@@ -1,12 +1,12 @@
 # Tell engineering checkpoint
 
-Updated 2026-11-03 against local `main`. v0.3.5 adds ordered sets and an optional Python module adapter to the existing Go runtime, bytecode VM, and Python runtime. Go is installed under the task workspace tools directory.
+Updated 2026-11-03 against `main` at `1e72aef`. v0.3.5 adds ordered sets and an optional Python module adapter to the existing Go runtime, bytecode VM, and Python runtime. The v0.3.5 GitHub release is published with all six native targets, checksums, an SPDX SBOM, and third-party notices. Go is installed under the task workspace tools directory.
 
 ## Architecture and verified baseline
 
 - Tell has a Python interpreter and an independent native Go runtime. Each has a hand-written lexer and Pratt expression parser. The parsers now build expression ASTs for common `Let`, `Set`, output, assertion, return, raise, loop-control, and expression statements; both runtimes execute these nodes directly, and the native bytecode compiler consumes the same Go nodes. Block and unmigrated statement parsing remain separate, line-oriented implementations with legacy recognition. Python retains a restricted host-AST compatibility path.
 - Go's `tell build` emits verified stack bytecode for a subset. It does not compile all Tell programs or emit native machine code.
-- The latest GitHub release before this checkpoint is v0.3.4.
+- The latest GitHub release is v0.3.5. Both the native runtime and tagged release GitHub Actions workflows passed.
 - The shared conformance corpus is executed by both runtime suites; set conformance cases were added in this checkpoint.
 
 ## Implemented in the current local change set
@@ -45,4 +45,4 @@ Updated 2026-11-03 against local `main`. v0.3.5 adds ordered sets and an optiona
 
 ## Source control and publishing
 
-The v0.3.5 implementation is prepared for tagged release after the local six-target build and smoke checks. Cross-compilation does not establish execution on non-Windows hosts.
+The v0.3.5 implementation is committed to `main` and published at https://github.com/KernelGhost-gif/Tell-Code/releases/tag/v0.3.5. Both GitHub Actions workflows passed, including the six-target release build. Cross-compilation does not establish execution on non-Windows hosts.
