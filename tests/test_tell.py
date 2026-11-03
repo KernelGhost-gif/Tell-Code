@@ -1,6 +1,7 @@
 import os
 import json
 import io
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -98,6 +99,15 @@ Say stats.mean([1, 2, 3]).
 Say stats.fmean(data=[4, 8]).
 ''')
         self.assertEqual(output, ["2", "6"])
+ 
+    @unittest.skipUnless(shutil.which("node"), "Node.js is optional for the Python runtime")
+    def test_javascript_module_interop_uses_node_modules(self):
+        output, _ = self.run_tell('''
+Use the JavaScript library called node:path as paths.
+Say paths.basename("/projects/tell/main.js").
+Say paths.extname("/projects/tell/main.js").
+''')
+        self.assertEqual(output, ["main.js", ".js"])
 
     def test_input_and_number_conversion(self):
         output, _ = self.run_tell('''

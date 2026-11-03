@@ -96,6 +96,20 @@ Say stats.mean([1, 2, 3]).`
 		t.Fatalf("compiled Python interop output = %q, want %q", got, want)
 	}
 }
+ 
+func TestBytecodeSupportsOptionalJavaScriptInterop(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("Node.js is optional for the native runtime")
+	}
+	t.Setenv("TELL_NODE_EXECUTABLE", node)
+	source := `Use the JavaScript library called node:path as paths.
+Say paths.basename("/projects/tell/main.js").
+Say paths.extname("/projects/tell/main.js").`
+	if got, want := runCompiled(t, source), "main.js\n.js\n"; got != want {
+		t.Fatalf("compiled JavaScript interop output = %q, want %q", got, want)
+	}
+}
 
 func TestBytecodeCompilesCSVStandardLibrary(t *testing.T) {
 	source := `Use the csv library as tables.

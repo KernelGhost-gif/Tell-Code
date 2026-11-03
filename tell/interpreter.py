@@ -5,6 +5,9 @@ import csv
 import datetime
 import io
 import importlib
+import os
+import shutil
+import subprocess
 import json
 import math
 import operator
@@ -96,6 +99,9 @@ def display(value: Any) -> str:
 
 
 def display_type(value: Any) -> str:
+    if value is None:def display_type(value: Any) -> str:
+    if isinstance(value, JavaScriptModule):
+        return "module"
     if value is None:
         return "nothing"
     if isinstance(value, bool):
@@ -283,6 +289,131 @@ class TellModule:
         if name.startswith("_") or name not in self.exports:
             raise TellError(f"Tell module has no public member {name!r}.")
         return self.exports[name]
+
+
+_JS_MODULE_SPECIFIER = re.compile(
+    r"^(?:node:[A-Za-z0-9_./-]+|(?:@[A-Za-z0-9_.-]+/)?[A-Za-z0-9][A-Za-z0-9_.-]*(?:/[A-Za-z0-9_.-]+)*|\.{1,2}/[A-Za-z0-9_./-]+)$"
+)
+_JS_EXPORT_NAME = re.compile(r"^[A-Za-z_$][A-Za-z0-9_$]*$")
+_JS_REPLY_MARKER = "\x1eTELL_JSON\x1e"
+_JS_BRIDGE = r"""
+import fs from "node:fs";
+import { createRequire } from "node:module";
+const require = createRequire(process.cwd() + "/.tell-polyglot.cjs");
+const marker = "\u001eTELL_JSON\u001e";
+function reply(value) { process.stdout.write(marker + JSON.stringify(value) + "\n"); }
+try {
+  const request = JSON.parse(fs.readFileSync(0, "utf8"));
+  let imported;
+  try { imported = await import(request.module); }
+  catch (importError) { imported = require(request.module); }
+  let owner = null;
+  let fn = null;
+  for (const candidate of [imported, imported && imported.default]) {
+    if (candidate && typeof candidate[request.function] === "function") {
+      owner = candidate;
+      fn = candidate[request.function];
+      break;
+    }
+  }
+  if (!fn) throw new TypeError(request.function + " is not an exported function");
+  const args = Array.isArray(request.args) ? [...request.args] : [];
+  if (request.kwargs && Object.keys(request.kwargs).length) args.push(request.kwargs);
+  const result = await fn.apply(owner, args);
+  if (typeof result === "undefined") throw new TypeError("function returned undefined; return a JSON-compatible value");
+  const encoded = JSON.stringify({ result });
+  if (encoded === undefined) throw new TypeError("function returned a non-JSON value");
+  reply(JSON.parse(encoded));
+} catch (error) {
+  reply({ error: (error && error.name ? error.name : "Error") + ": " + (error && error.message ? error.message : String(error)) });
+}
+"""
+
+
+def _to_javascript_json(value: Any) -> Any:
+    if value is None or isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise TellError("JavaScript bridge values must be finite JSON numbers.")
+        return value
+    if isinstance(value, TellSet):
+        return [_to_javascript_json(item) for item in value.items]
+    if isinstance(value, (list, tuple)):
+        return [_to_javascript_json(item) for item in value]
+    if isinstance(value, dict):
+        if any(not isinstance(key, str) for key in value):
+            raise TellError("JavaScript bridge dictionaries must have text keys.")
+        return {key: _to_javascript_json(item) for key, item in value.items()}
+    raise TellError(f"JavaScript bridge cannot convert {type(value).__name__} to JSON.")
+
+
+class JavaScriptFunction:
+    def __init__(self, module: str, name: str):
+        self.module = module
+        self.name = name
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        if not _JS_EXPORT_NAME.fullmatch(self.name) or self.name.startswith("_"):
+            raise TellError(f"Invalid or private JavaScript export {self.name!r}.")
+        executable = os.environ.get("TELL_NODE_EXECUTABLE") or shutil.which("node")
+        if not executable:
+            raise TellError("JavaScript interoperability needs Node.js on PATH or TELL_NODE_EXECUTABLE set.")
+        request = {
+            "module": self.module,
+            "function": self.name,
+            "args": _to_javascript_json(list(args)),
+            "kwargs": _to_javascript_json(kwargs),
+        }
+        try:
+            payload = json.dumps(request, ensure_ascii=False, allow_nan=False)
+        except (TypeError, ValueError) as exc:
+            raise TellError(f"JavaScript bridge arguments must be JSON-compatible: {exc}") from exc
+        try:
+            completed = subprocess.run(
+                [executable, "--input-type=module", "-e", _JS_BRIDGE],
+                input=payload,
+                text=True,
+                capture_output=True,
+                timeout=30,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise TellError(f"JavaScript call {self.module}.{self.name} exceeded the 30 second limit.") from exc
+        except OSError as exc:
+            raise TellError(f"Could not start Node.js bridge: {exc}") from exc
+        if completed.returncode != 0:
+            raise TellError(f"Could not run Node.js bridge: {completed.stderr.strip()}")
+        marker_index = completed.stdout.rfind(_JS_REPLY_MARKER)
+        if marker_index < 0:
+            raise TellError("JavaScript bridge returned no JSON response.")
+        try:
+            response = json.loads(completed.stdout[marker_index + len(_JS_REPLY_MARKER):].strip())
+        except json.JSONDecodeError as exc:
+            raise TellError(f"JavaScript bridge returned invalid JSON: {exc}") from exc
+        if response.get("error"):
+            raise TellError(f"JavaScript call {self.module}.{self.name} failed: {response['error']}")
+        return response.get("result")
+
+
+class JavaScriptModule:
+    def __init__(self, specifier: str):
+        if not _JS_MODULE_SPECIFIER.fullmatch(specifier) or "\x00" in specifier:
+            raise TellError(f"Invalid JavaScript module specifier {specifier!r}.")
+        self.specifier = specifier
+
+    def __getattr__(self, name: str) -> JavaScriptFunction:
+        if name.startswith("_") or not _JS_EXPORT_NAME.fullmatch(name):
+            raise AttributeError(f"Invalid or private JavaScript export {name!r}.")
+        return JavaScriptFunction(self.specifier, name)
+
+    def __str__(self) -> str:
+        return f"<JavaScript module {self.specifier}>"
+
+
+def _default_javascript_alias(specifier: str) -> str:
+    name = specifier.rsplit(":", 1)[-1].rstrip("/").rsplit("/", 1)[-1]
+    return name.rsplit(".", 1)[0] if "." in name else name
 
 
 def _csv_parse(*args: Any, **kwargs: Any) -> list[list[str]]:
@@ -1790,6 +1921,18 @@ class Interpreter:
                 env.set(alias, importlib.import_module(module_name))
             except ImportError as exc:
                 raise TellError(f"Could not import Python module {module_name!r}: {exc}") from exc
+            return
+        javascript_import = re.fullmatch(
+            r"use the javascript library called (.+?)(?: as ((?:[^\W\d]|_)\w*))?",
+            statement,
+            re.I,
+        )
+        if javascript_import:
+            specifier = javascript_import.group(1).strip()
+            alias = javascript_import.group(2) or _default_javascript_alias(specifier)
+            if not re.fullmatch(r"(?:[^\W\d]|_)\w*", alias):
+                raise TellError(f"Invalid JavaScript module alias {alias!r}.")
+            env.set(alias, JavaScriptModule(specifier))
             return
         rest = _take_prefix(statement, "use the ")
         if rest is not None:

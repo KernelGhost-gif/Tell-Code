@@ -74,6 +74,24 @@ Say stats.fmean(data=[4, 8]).`
 		t.Fatalf("Python interop output = %q, want %q", got, want)
 	}
 }
+ 
+func TestOptionalJavaScriptModuleInterop(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("Node.js is optional for the native runtime")
+	}
+	t.Setenv("TELL_NODE_EXECUTABLE", node)
+	var output bytes.Buffer
+	source := `Use the JavaScript library called node:path as paths.
+Say paths.basename("/projects/tell/main.js").
+Say paths.extname("/projects/tell/main.js").`
+	if err := RunWithIO(source, "javascript-interop.tell", bytes.NewReader(nil), &output); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := output.String(), "main.js\n.js\n"; got != want {
+		t.Fatalf("JavaScript interop output = %q, want %q", got, want)
+	}
+}
 
 func TestParserBuildsExpressionASTsForCommonStatements(t *testing.T) {
 	nodes, err := parse("Let answer be 1 plus 2.\nSet answer to answer plus 1.\nSay answer.", "ast.tell")
