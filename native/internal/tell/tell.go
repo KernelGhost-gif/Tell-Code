@@ -801,8 +801,6 @@ type callable func([]any) (any, error)
 type namedCallable func([]any, map[string]any) (any, error)
 type pythonModule struct{ name string }
 type pythonFunction struct{ module, name string }
-type javascriptModule struct{ name string }
-type javascriptFunction struct{ module, name string }
 type userFunction struct {
 	name    string
 	params  []string

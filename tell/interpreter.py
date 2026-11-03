@@ -99,7 +99,6 @@ def display(value: Any) -> str:
 
 
 def display_type(value: Any) -> str:
-    if value is None:def display_type(value: Any) -> str:
     if isinstance(value, JavaScriptModule):
         return "module"
     if value is None:
