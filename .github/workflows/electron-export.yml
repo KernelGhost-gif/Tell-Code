@@ -1,0 +1,78 @@
+name: Export Electron source and run a desktop smoke test
+
+on:
+  push:
+    branches:
+      - scratch/electron-github-export-20261104
+
+permissions:
+  contents: read
+
+jobs:
+  electron:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out export trigger
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Clone official Electron source repository
+        run: |
+          git clone --depth 1 https://github.com/electron/electron.git electron-source
+          git -C electron-source log -1 --format='%H %cs %s' > electron-source-commit.txt
+          tar -czf electron-source.tar.gz --exclude=.git -C electron-source .
+
+      - name: Install prebuilt Electron runtime and create smoke app
+        run: |
+          mkdir electron-smoke
+          cd electron-smoke
+          npm init -y
+          npm install --no-audit --no-fund electron@latest
+          cat > main.js <<'EOF'
+          const { app, BrowserWindow } = require('electron');
+          app.whenReady().then(() => {
+            const win = new BrowserWindow({
+              width: 900,
+              height: 600,
+              show: true,
+              webPreferences: { contextIsolation: true, nodeIntegration: false }
+            });
+            win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(
+              '<!doctype html><html><body style="font:24px sans-serif;background:#101827;color:#f5f7ff;display:grid;place-items:center;height:95vh"><main><h1>Electron is running</h1><p>Official prebuilt Electron runtime · local smoke test</p></main></body></html>'
+            ));
+            win.webContents.once('did-finish-load', () => {
+              console.log('ELECTRON_SMOKE_READY:' + process.versions.electron);
+              setTimeout(() => app.quit(), 1800);
+            });
+          });
+          app.on('window-all-closed', () => app.quit());
+          EOF
+          set +e
+          timeout 20s xvfb-run -a ./node_modules/.bin/electron --no-sandbox --disable-gpu --disable-dev-shm-usage main.js > ../electron-smoke.log 2>&1
+          status=$?
+          set -e
+          cat ../electron-smoke.log
+          test "$status" -eq 0
+          grep -q 'ELECTRON_SMOKE_READY:' ../electron-smoke.log
+          node -p "'Electron runtime: ' + require('./node_modules/electron/package.json').version" > ../electron-runtime-version.txt
+          cd ..
+          tar -czf electron-linux-x64-runtime.tar.gz -C electron-smoke main.js package.json node_modules/electron
+
+      - name: Upload repository and runnable runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-source-and-linux-runtime
+          path: |
+            electron-source.tar.gz
+            electron-source-commit.txt
+            electron-linux-x64-runtime.tar.gz
+            electron-runtime-version.txt
+            electron-smoke.log
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
