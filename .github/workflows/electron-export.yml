@@ -25,7 +25,8 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/electron/electron.git electron-source
           git -C electron-source log -1 --format='%H %cs %s' > electron-source-commit.txt
-          tar -czf electron-source.tar.gz --exclude=.git -C electron-source .
+          du -sh electron-source/.git > electron-git-metadata-size.txt
+          tar -czf electron-source-repository.tar.gz -C electron-source .
 
       - name: Install prebuilt Electron runtime and create smoke app
         run: |
@@ -68,7 +69,8 @@ jobs:
         with:
           name: electron-source-and-linux-runtime
           path: |
-            electron-source.tar.gz
+            electron-source-repository.tar.gz
+            electron-git-metadata-size.txt
             electron-source-commit.txt
             electron-linux-x64-runtime.tar.gz
             electron-runtime-version.txt
