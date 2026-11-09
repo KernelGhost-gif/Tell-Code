@@ -527,7 +527,10 @@ func (r *runtime) evalExpression(expr expression, e *env) (any, error) {
 			}
 			named[argument.name] = arg
 		}
+		previousLine, previousColumn := r.callSiteLine, r.callSiteColumn
+		r.callSiteLine, r.callSiteColumn = x.line, x.column
 		result, err := invokeNamed(callee, args, named)
+		r.callSiteLine, r.callSiteColumn = previousLine, previousColumn
 		if err != nil {
 			return nil, withSourceLocation(err, r.filename, x.line, x.column)
 		}
