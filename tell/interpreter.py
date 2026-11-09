@@ -1111,77 +1111,6 @@ class Interpreter:
     def translate_expression(self, expression: str) -> str:
         return _translate_expression_text(expression)
 
-    @staticmethod
-    def _normalize_expression_words(text: str) -> str:
-        """Translate Tell operator phrases without rewriting quoted text."""
-        phrases = [
-            ("the current repetition number", "_repeat_index"),
-            ("the current item", "_current_item"),
-            ("the answer", "_last_answer"),
-            ("is greater than or equal to", " >= "),
-            ("is less than or equal to", " <= "),
-            ("is not equal to", " != "), ("isn't equal to", " != "),
-            ("is greater than", " > "), ("is more than", " > "),
-            ("is less than", " < "), ("is below", " < "),
-            ("is at least", " >= "), ("is at most", " <= "),
-            ("is not in", " not in "), ("is equal to", " == "),
-            ("isn't", " != "), ("is not", " != "),
-            ("to the power of", " ** "), ("multiplied by", " * "),
-            ("divided by", " / "), ("modulo", " % "),
-            ("plus", " + "), ("minus", " - "), ("times", " * "),
-            ("is in", " in "), ("is", " == "),
-        ]
-        out: list[str] = []
-        index = 0
-        quote: str | None = None
-        escaped = False
-        while index < len(text):
-            char = text[index]
-            if quote is not None:
-                out.append(char)
-                if escaped:
-                    escaped = False
-                elif char == "\\":
-                    escaped = True
-                elif char == quote:
-                    quote = None
-                index += 1
-                continue
-            if char in "'\"":
-                quote = char
-                out.append(char)
-                index += 1
-                continue
-
-            matched = False
-            for phrase, replacement in phrases:
-                end = index + len(phrase)
-                if text[index:end].casefold() != phrase:
-                    continue
-                before = text[index - 1] if index else " "
-                after = text[end] if end < len(text) else " "
-                if (before.isalnum() or before == "_") or (after.isalnum() or after == "_"):
-                    continue
-                out.append(replacement)
-                index = end
-                matched = True
-                break
-            if matched:
-                continue
-
-            if char.isalpha() or char == "_":
-                end = index + 1
-                while end < len(text) and (text[end].isalnum() or text[end] == "_"):
-                    end += 1
-                word = text[index:end]
-                canonical = {"true": "True", "false": "False", "nothing": "None"}.get(word.casefold(), word)
-                out.append(canonical)
-                index = end
-                continue
-            out.append(char)
-            index += 1
-        return "".join(out)
-
     def evaluate(self, expression: str, env: Environment) -> Any:
         translated = self.translate_expression(expression)
         try:
@@ -1241,7 +1170,13 @@ class Interpreter:
                 left_number = self._try_number(left)
                 right_number = self._try_number(right)
                 left, right = (left_number, right_number) if left_number is not None and right_number is not None else (display(left), display(right))
-                return {"<": operator.lt, ">": operator.gt, "<=": operator.le, ">=": operator.ge}[operator_name](left, right)
+                if operator_name == "<":
+                    return left < right
+                if operator_name == ">":
+                    return left > right
+                if operator_name == "<=":
+                    return left <= right
+                return left >= right
             if operator_name in {"in", "notin"}:
                 if isinstance(right, dict):
                     contains = display(left) in right
