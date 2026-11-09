@@ -23,6 +23,16 @@ class TellError(Exception):
     """An error in a Tell program."""
 
 
+class TellSyntaxError(TellError):
+    """A source syntax error with a stable source coordinate."""
+
+    def __init__(self, message: str, filename: str, line: int, column: int):
+        super().__init__(message)
+        self.filename = filename
+        self.line = max(1, line)
+        self.column = max(1, column)
+
+
 @dataclass
 class TellSet:
     items: list[Any]
@@ -762,10 +772,18 @@ class Parser:
         return line
 
     def parse(self) -> list[Node]:
-        nodes, stop = self.parse_block(set())
-        if stop is not None:
-            raise TellError(f"Unexpected '{stop}' on line {self.index}.")
-        return nodes
+        try:
+            nodes, stop = self.parse_block(set())
+            if stop is not None:
+                raise TellError(f"Unexpected '{stop}' on line {self.index}.")
+            return nodes
+        except TellSyntaxError:
+            raise
+        except TellError as exc:
+            match = re.search(r"\\bline\\s+(\\d+)\\b", str(exc), re.IGNORECASE)
+            line = int(match.group(1)) if match else max(1, min(self.index, len(self.lines) or 1))
+            column = self._source_column(line)
+            raise TellSyntaxError(str(exc), self.filename, line, column) from exc
 
     def _parse_if_block(self, condition: str, line_no: int) -> Node:
         body, stop = self.parse_block({"otherwise:", "otherwise-if", "end if."})
