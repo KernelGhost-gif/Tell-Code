@@ -179,7 +179,7 @@ func lex(s string) ([]token, error) {
 					return nil, fail("invalid numeric exponent at line %d, column %d", line, column)
 				}
 			}
-			if _, err := strconv.ParseFloat(s[start:i], 64); err != nil {
+			if _, err := parseFloatPortable(s[start:i]); err != nil {
 				line, column := position(start)
 				return nil, fail("invalid number %q at line %d, column %d", s[start:i], line, column)
 			}
