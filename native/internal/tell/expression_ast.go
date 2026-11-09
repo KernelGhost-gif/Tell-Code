@@ -399,7 +399,7 @@ func (r *runtime) evalExpression(expr expression, e *env) (any, error) {
 	case literalExpression:
 		switch x.token.kind {
 		case "number":
-			return strconv.ParseFloat(x.token.text, 64)
+			return parseFloatPortable(x.token.text)
 		case "string":
 			return r.interpolate(x.token.text, e), nil
 		case "true":
