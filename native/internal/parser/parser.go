@@ -96,32 +96,28 @@ func operatorName(k lexer.Kind) string {
 	}
 }
 
-func unquoteString(raw string) (string,error) {
-	if len(raw)<2 { return "",fmt.Errorf("string literal is too short") }
-	if raw[0]=='"' { return strconv.Unquote(raw) }
-	if raw[0]!=39 { return "",fmt.Errorf("unknown string delimiter") }
-	var escaped strings.Builder
-	for i:=1; i<len(raw)-1; i++ {
-		current:=raw[i]
-		if current==92 && i+1<len(raw)-1 {
-			next:=raw[i+1]
-			if next==39 {
-				escaped.WriteByte(39)
-			} else {
-				escaped.WriteByte(92)
-				escaped.WriteByte(next)
-			}
-			i++
-			continue
-		}
-		if current==34 {
-			escaped.WriteByte(92)
-			escaped.WriteByte(34)
-		} else {
-			escaped.WriteByte(current)
-		}
+func unquoteString(raw string) (string, error) {
+	if len(raw) < 2 {
+		return "", fmt.Errorf("string literal is too short")
 	}
-	return strconv.Unquote("\""+escaped.String()+"\"")
+	if raw[0] == '"' {
+		return strconv.Unquote(raw)
+	}
+	if raw[0] != 39 {
+		return "", fmt.Errorf("unknown string delimiter")
+	}
+
+	body := raw[1 : len(raw)-1]
+	var result strings.Builder
+	for len(body) > 0 {
+		r, _, tail, err := strconv.UnquoteChar(body, 39)
+		if err != nil {
+			return "", err
+		}
+		result.WriteRune(r)
+		body = tail
+	}
+	return result.String(), nil
 }
 func (p *parser) parsePrefix() (ast.Expr, error) {
 	t := p.take()
