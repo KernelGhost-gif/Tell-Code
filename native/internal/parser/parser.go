@@ -96,6 +96,29 @@ func operatorName(k lexer.Kind) string {
 	}
 }
 
+func unquoteString(raw string) (string,error) {
+	if len(raw)<2 { return "",fmt.Errorf("string literal is too short") }
+	if raw[0]=='"' { return strconv.Unquote(raw) }
+	if raw[0]!='\\'' { return "",fmt.Errorf("unknown string delimiter") }
+	var escaped strings.Builder
+	for i:=1; i<len(raw)-1; i++ {
+		current:=raw[i]
+		if current=='\\\\' && i+1<len(raw)-1 {
+			next:=raw[i+1]
+			if next=='\\'' {
+				escaped.WriteByte('\\'')
+			} else {
+				escaped.WriteByte('\\\\')
+				escaped.WriteByte(next)
+			}
+			i++
+			continue
+		}
+		if current=='"' { escaped.WriteString(\`\\\"\`) } else { escaped.WriteByte(current) }
+	}
+	return strconv.Unquote("\"" + escaped.String() + "\"")
+}
+
 func (p *parser) parsePrefix() (ast.Expr, error) {
 	t := p.take()
 	switch t.Kind {
@@ -109,7 +132,7 @@ func (p *parser) parsePrefix() (ast.Expr, error) {
 		}
 		return &ast.Literal{Value:value, SourceSpan:t.Span}, nil
 	case lexer.String:
-		value, err := strconv.Unquote(t.Lexeme(p.source))
+		value, err := unquoteString(t.Lexeme(p.source))
 		if err != nil { return nil, p.fail(t, "invalid string literal") }
 		return &ast.Literal{Value:value, SourceSpan:t.Span}, nil
 	case lexer.True: return &ast.Literal{Value:true, SourceSpan:t.Span}, nil
