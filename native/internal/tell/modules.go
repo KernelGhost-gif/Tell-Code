@@ -122,8 +122,6 @@ func (f *userFunction) callNamed(args []any, named map[string]any, receiver *use
 	if f.runtime.callDepth >= f.runtime.limits.MaxFunctionCallDepth {
 		return nil, fail("maximum function call depth (%d) exceeded", f.runtime.limits.MaxFunctionCallDepth)
 	}
-	f.runtime.callDepth++
-	defer func() { f.runtime.callDepth-- }()
 	local := newEnv(f.closure)
 	for name, value := range bindings {
 		local.set(name, value)
@@ -131,6 +129,23 @@ func (f *userFunction) callNamed(args []any, named map[string]any, receiver *use
 	if receiver != nil {
 		local.set("this", receiver)
 	}
+	caller := f.runtime.global
+	if len(f.runtime.callFrames) > 0 {
+		caller = f.runtime.callFrames[len(f.runtime.callFrames)-1].Locals
+	}
+	frame := callFrame{
+		Function: f.name,
+		Caller: caller,
+		Locals: local,
+		CallSiteLine: f.runtime.callSiteLine,
+		CallSiteColumn: f.runtime.callSiteColumn,
+	}
+	f.runtime.callFrames = append(f.runtime.callFrames, frame)
+	f.runtime.callDepth++
+	defer func() {
+		f.runtime.callFrames = f.runtime.callFrames[:len(f.runtime.callFrames)-1]
+		f.runtime.callDepth--
+	}()
 	for index, parameter := range parameterNames {
 		if _, exists := bindings[parameter]; exists {
 			continue
