@@ -43,8 +43,8 @@ func safeWrite(root, name, content string) error {
 }
 
 func main() {
-	fixtures := flag.String("fixtures", "../../conformance/runtime-v1.json", "conformance suite JSON")
-	binary := flag.String("tell", "../../releases/tell-linux-amd64", "native Tell executable")
+	fixtures := flag.String("fixtures", "../conformance/runtime-v1.json", "conformance suite JSON")
+	binary := flag.String("tell", "../releases/tell-linux-amd64", "native Tell executable")
 	flag.Parse()
 	data, err := os.ReadFile(*fixtures)
 	if err != nil { fatal(err) }
@@ -68,9 +68,10 @@ func main() {
 		timeout := time.Duration(tc.TimeoutSeconds) * time.Second
 		if timeout <= 0 { timeout = 10 * time.Second }
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		args := []string{"run", filename}
+		args := []string{"run"}
 		if tc.MaxCallDepth > 0 { args = append(args, "--max-call-depth", fmt.Sprint(tc.MaxCallDepth)) }
 		if tc.MaxLoopIterations > 0 { args = append(args, "--max-loop-iterations", fmt.Sprint(tc.MaxLoopIterations)) }
+		args = append(args, filename)
 		cmd := exec.CommandContext(ctx, path, args...)
 		cmd.Dir = workdir
 		cmd.Stdin = strings.NewReader(tc.Stdin)
