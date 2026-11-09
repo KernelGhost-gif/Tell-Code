@@ -720,7 +720,7 @@ func numberValue(v any) (float64, error) {
 		}
 		return 0, nil
 	case string:
-		f, e := strconv.ParseFloat(strings.TrimSpace(n), 64)
+		f, e := parseFloatPortable(n)
 		if e != nil {
 			return 0, fail("%q is not a number", n)
 		}
@@ -798,6 +798,9 @@ func display(v any) string {
 		}
 		return "false"
 	case float64:
+		if x == 0 {
+			return "0"
+		}
 		if math.IsNaN(x) {
 			return "NaN"
 		}
