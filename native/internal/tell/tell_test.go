@@ -459,3 +459,24 @@ func TestParserRejectsUnclosedBlock(t *testing.T) {
 		t.Fatal("expected parser error")
 	}
 }
+
+func TestDivisionDiagnosticPointsAtOperator(t *testing.T) {
+	_, err := runTest(t, "Say 1 divided by 0.", "")
+	if err == nil {
+		t.Fatal("expected division-by-zero error")
+	}
+	if !strings.Contains(err.Error(), "test.tell:1:7: division by zero") {
+		t.Fatalf("expected operator source coordinate, got %v", err)
+	}
+}
+
+func TestNothingMemberDiagnosticPointsAtAccess(t *testing.T) {
+	source := "Let value be nothing.\nSay value.name."
+	_, err := runTest(t, source, "")
+	if err == nil {
+		t.Fatal("expected null member access error")
+	}
+	if !strings.Contains(err.Error(), "test.tell:2:10:") {
+		t.Fatalf("expected member access source coordinate, got %v", err)
+	}
+}
