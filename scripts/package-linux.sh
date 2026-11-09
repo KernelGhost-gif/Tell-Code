@@ -54,4 +54,4 @@ cp "$RPM_FILE" "$OUT/tell_$VERSION""_linux_$RPM_ARCH.rpm"
 mkdir -p "$TMP/archive"
 cp "$BINARY" "$TMP/archive/tell"
 tar -C "$TMP/archive" -czf "$OUT/tell_$VERSION""_linux_$ARCH.tar.gz" tell
-cp "$BINARY" "$OUT/tell-linux-$ARCH"
+if [[ "$BINARY" != "$OUT/tell-linux-$ARCH" ]]; then cp "$BINARY" "$OUT/tell-linux-$ARCH"; fi
