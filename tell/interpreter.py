@@ -1266,11 +1266,15 @@ class Interpreter:
             if operator_name == "/":
                 return a / b
             if operator_name == "//":
-                return math.floor(a / b)
+                quotient = a / b
+                return quotient if not math.isfinite(quotient) else math.floor(quotient)
             if operator_name == "%":
-                return math.fmod(a, b)
+                try:
+                    return math.fmod(a, b)
+                except ValueError:
+                    return math.nan
             if operator_name == "**":
-                return math.pow(a, b)
+                return self._ieee_power(a, b)
             raise TellError(f"unsupported operator {operator_name!r}")
         if node.kind == "conditional":
             consequent, condition, alternative = node.children
@@ -1318,6 +1322,19 @@ class Interpreter:
             named = {name: value for value, name in zip(values, node.names) if name is not None}
             return function(*positional, **named)
         raise TellError(f"That kind of expression is not supported yet: {node.kind}.")
+
+    @staticmethod
+    def _ieee_power(base: float, exponent: float) -> float:
+        negative_base = math.copysign(1.0, base) < 0
+        odd_integer_exponent = math.isfinite(exponent) and exponent.is_integer() and int(exponent) % 2 != 0
+        if base == 0 and exponent < 0:
+            return -math.inf if negative_base and odd_integer_exponent else math.inf
+        try:
+            return math.pow(base, exponent)
+        except OverflowError:
+            return -math.inf if negative_base and odd_integer_exponent else math.inf
+        except (ValueError, ZeroDivisionError):
+            return math.nan
 
     @staticmethod
     def _try_number(value: Any) -> float | None:
