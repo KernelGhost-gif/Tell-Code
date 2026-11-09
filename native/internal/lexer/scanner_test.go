@@ -15,3 +15,14 @@ func TestScannerTracksUTF8ByteOffsetsAndColumns(t *testing.T) {
 	eof:=scanner.Next()
 	if eof.Kind!=EOF || eof.Span.Start.Line!=2 || eof.Span.Start.Column!=1 { t.Fatalf("unexpected EOF: %#v",eof) }
 }
+
+func TestTokenScanningDoesNotAllocate(t *testing.T) {
+	s := &scanner{source:"identifier42", line:1, column:1}
+	allocs := testing.AllocsPerRun(1000, func() {
+		s.offset=0
+		s.line=1
+		s.column=1
+		_ = s.Next()
+	})
+	if allocs != 0 { t.Fatalf("Next allocated %.2f objects per token; want zero",allocs) }
+}
