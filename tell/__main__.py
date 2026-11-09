@@ -9,6 +9,7 @@ from typing import TextIO
 
 from . import __version__
 from .diagnostics import make_diagnostic, exit_code
+from .semantic import SemanticError, analyze as analyze_types
 from .interpreter import Interpreter, Parser, TellError, TellSyntaxError, format_source
 
 
@@ -228,8 +229,7 @@ def main() -> int:
             return 0
         if should_check:
             if args.types:
-                from .semantic import analyze
-                analyze(source, display_name)
+                analyze_types(source, display_name)
             else:
                 Parser(source, display_name).parse()
             print(f"Looks good: {display_name}")
@@ -247,13 +247,10 @@ def main() -> int:
         diagnostic = make_diagnostic(exc, filename, "SyntaxError")
         print(diagnostic, file=sys.stderr)
         return exit_code(diagnostic.kind)
-    except Exception as exc:
-        from .semantic import SemanticError
-        if isinstance(exc, SemanticError):
-            diagnostic = make_diagnostic(exc, filename, "TypeError")
-            print(diagnostic, file=sys.stderr)
-            return exit_code(diagnostic.kind)
-        raise
+    except SemanticError as exc:
+        diagnostic = make_diagnostic(exc, filename, "TypeError")
+        print(diagnostic, file=sys.stderr)
+        return exit_code(diagnostic.kind)
     except TellError as exc:
         diagnostic = make_diagnostic(exc, filename, "RuntimeError")
         print(diagnostic, file=sys.stderr)
