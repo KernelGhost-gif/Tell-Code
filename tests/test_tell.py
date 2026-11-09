@@ -85,12 +85,16 @@ Say answer.
         self.assertEqual(output, ["42"])
         self.assertEqual(env.get("answer"), 42)
 
-    def test_legacy_python_expression_forms_remain_available(self):
+    def test_tell_expression_forms_use_only_the_tell_ast(self):
         output = []
         Interpreter(output_fn=output.append).run(
             'Say (1, 2).\nSay {1, 2}.\nSay "yes" if true else "no".'
         )
         self.assertEqual(output, ["(1, 2)", "{1, 2}", "yes"])
+
+    def test_python_only_comprehensions_do_not_fall_back_to_host_ast(self):
+        with self.assertRaisesRegex(TellError, "I couldn't understand the expression"):
+            Interpreter().run("Say [item for item in [1, 2]].", "no-host-ast.tell")
 
     def test_python_module_interop_uses_imported_modules_and_named_arguments(self):
         output, _ = self.run_tell('''
