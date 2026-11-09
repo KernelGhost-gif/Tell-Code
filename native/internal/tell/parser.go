@@ -1,6 +1,7 @@
 package tell
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -22,14 +23,40 @@ func DefaultExecutionLimits() ExecutionLimits {
 	return ExecutionLimits{MaxFunctionCallDepth: maxFunctionCallDepth, MaxLoopIterations: maxLoopIterations}
 }
 
-type Error struct{ Message string }
+type Error struct {
+	Message string
+	Filename string
+	Line int
+	Column int
+}
 
 // tupleValue is an immutable, ordered Tell sequence distinct from mutable lists.
 type tupleValue []any
 type setValue []any
 
-func (e *Error) Error() string              { return e.Message }
-func fail(format string, args ...any) error { return &Error{Message: fmt.Sprintf(format, args...)} }
+func (e *Error) Error() string {
+	if e.Filename != "" && e.Line > 0 {
+		return fmt.Sprintf("%s:%d:%d: %s", e.Filename, e.Line, e.Column, e.Message)
+	}
+	return e.Message
+}
+
+func fail(format string, args ...any) error {
+	return &Error{Message: fmt.Sprintf(format, args...)}
+}
+
+// withSourceLocation attaches the first meaningful source span to an error.
+// Nested expression errors keep their more precise location.
+func withSourceLocation(err error, filename string, line, column int) error {
+	if err == nil {
+		return nil
+	}
+	var located *Error
+	if errors.As(err, &located) && located.Filename != "" && located.Line > 0 {
+		return err
+	}
+	return &Error{Message: err.Error(), Filename: filename, Line: line, Column: column}
+}
 
 type node struct {
 	kind, text               string
