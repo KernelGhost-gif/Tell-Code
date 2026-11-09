@@ -37,6 +37,14 @@ jobs:
           go build -trimpath -o ../dist/tell-linux-amd64 ./cmd/tell
           cd ..
           python scripts/conformance.py --runtime both --fixtures conformance/smoke-v1.json --native-bin dist/tell-linux-amd64
+      - name: Validate Linux archive, Debian and RPM packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm
+          bash scripts/package-linux.sh 0.0.0 amd64 dist/tell-linux-amd64 dist
+          dpkg-deb --info dist/tell_0.0.0_linux_amd64.deb
+          rpm -qpi dist/tell_0.0.0_linux_x86_64.rpm
+          tar -tzf dist/tell_0.0.0_linux_amd64.tar.gz
       - name: Upload native test binary
         uses: actions/upload-artifact@v4
         with:
