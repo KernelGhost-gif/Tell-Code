@@ -217,6 +217,13 @@ func inferSemanticType(expr expression, bindings map[string]semanticBinding) str
 		if inferSemanticType(value.operand, bindings) == "number" {
 			return "number"
 		}
+	case conditionalExpression:
+		consequent := inferSemanticType(value.consequent, bindings)
+		alternative := inferSemanticType(value.alternative, bindings)
+		if consequent == alternative {
+			return consequent
+		}
+		return ""
 	case binaryExpression:
 		left := inferSemanticType(value.left, bindings)
 		right := inferSemanticType(value.right, bindings)
