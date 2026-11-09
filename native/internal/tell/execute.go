@@ -14,7 +14,7 @@ func (r *runtime) execute(nodes []node, e *env) error {
 			if errors.As(err, &s) {
 				return err
 			}
-			return fail("%s:%d:%d: %v", r.filename, n.line, n.column, err)
+			return withSourceLocation(err, r.filename, n.line, n.column)
 		}
 	}
 	return nil
@@ -22,7 +22,7 @@ func (r *runtime) execute(nodes []node, e *env) error {
 func (r *runtime) execNode(n node, e *env) error {
 	switch n.kind {
 	case "if":
-		v, err := r.eval(n.condition, e)
+		v, err := r.evalAt(n.condition, e, n.line, n.column+len("If "))
 		if err != nil {
 			return err
 		}
@@ -33,7 +33,7 @@ func (r *runtime) execNode(n node, e *env) error {
 	case "while":
 		iterations := 0
 		for {
-			v, err := r.eval(n.condition, e)
+			v, err := r.evalAt(n.condition, e, n.line, n.column+len("While "))
 			if err != nil {
 				return err
 			}
@@ -57,7 +57,7 @@ func (r *runtime) execNode(n node, e *env) error {
 			}
 		}
 	case "repeat":
-		v, err := r.eval(n.condition, e)
+		v, err := r.evalAt(n.condition, e, n.line, n.column+len("Repeat "))
 		if err != nil {
 			return err
 		}
@@ -85,7 +85,7 @@ func (r *runtime) execNode(n node, e *env) error {
 		}
 		return nil
 	case "for":
-		v, err := r.eval(n.condition, e)
+		v, err := r.evalAt(n.condition, e, n.line, n.column+len("For each ")+len(n.name)+len(" in "))
 		if err != nil {
 			return err
 		}
