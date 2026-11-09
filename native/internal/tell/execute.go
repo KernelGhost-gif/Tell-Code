@@ -85,7 +85,7 @@ func (r *runtime) execNode(n node, e *env) error {
 		}
 		return nil
 	case "for":
-		v, err := r.evalAt(n.condition, e, n.line, n.column+len("For each ")+len(n.name)+len(" in "))
+		v, err := r.evalAt(n.condition, e, n.line, n.column+len("For each ")+len([]rune(n.name))+len(" in "))
 		if err != nil {
 			return err
 		}
