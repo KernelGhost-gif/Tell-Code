@@ -744,7 +744,47 @@ func parse(source, filename string) ([]node, error) {
 	if stop != "" {
 		return nil, fail("unexpected %q", stop)
 	}
+	if err := validateNodeExpressions(n, p.lines, filename); err != nil {
+		return nil, err
+	}
 	return n, nil
+}
+
+func validateNodeExpressions(nodes []node, lines []string, filename string) error {
+	for _, current := range nodes {
+		expressionText := ""
+		column := current.column
+		switch current.kind {
+		case "if":
+			expressionText = current.condition
+			column += len("If ")
+		case "while":
+			expressionText = current.condition
+			column += len("While ")
+		case "repeat":
+			expressionText = current.condition
+			column += len("Repeat ")
+		case "for":
+			expressionText = current.condition
+			if current.line > 0 && current.line <= len(lines) {
+				raw := strings.TrimLeft(lines[current.line-1], " \t")
+				if separator := strings.Index(strings.ToLower(raw), " in "); separator >= 0 {
+					column += utf8.RuneCountInString(raw[:separator+len(" in ")])
+				}
+			}
+		}
+		if expressionText != "" {
+			if _, err := parseTellExpressionAt(expressionText, current.line, column); err != nil {
+				return err
+			}
+		}
+		for _, child := range [][]node{current.body, current.otherwise, current.handler} {
+			if err := validateNodeExpressions(child, lines, filename); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 var (
