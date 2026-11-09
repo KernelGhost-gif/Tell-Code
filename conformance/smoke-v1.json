@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "tests": [
+    {
+      "name": "scalar arithmetic",
+      "filename": "smoke-arithmetic.tell",
+      "source_code": "Say 2 plus 3 times 4.\n",
+      "expected_stdout": "14\n",
+      "expected_stderr": "",
+      "expected_exit_code": 0
+    },
+    {
+      "name": "portable boolean and null rendering",
+      "filename": "smoke-scalars.tell",
+      "source_code": "Say true.\nSay false.\nSay nothing.\n",
+      "expected_stdout": "true\nfalse\nnothing\n",
+      "expected_stderr": "",
+      "expected_exit_code": 0
+    }
+  ]
+}
