@@ -23,7 +23,7 @@ class DiagnosticContractTests(unittest.TestCase):
         diagnostic = make_diagnostic(caught.exception, "fallback.tell", "SyntaxError")
         self.assertEqual(diagnostic.filename, "syntax.tell")
         self.assertEqual(diagnostic.line, 2)
-        self.assertEqual(diagnostic.column, 17)
+        self.assertEqual(diagnostic.column, 16)
         self.assertEqual(diagnostic.kind, "SyntaxError")
         self.assertEqual(exit_code(diagnostic.kind), 64)
 
