@@ -920,7 +920,7 @@ func (c *bytecodeCompiler) compileExpression(expr expression) error {
 		instructionValue := value.token
 		switch instructionValue.kind {
 		case "number":
-			parsed, err := strconv.ParseFloat(instructionValue.text, 64)
+			parsed, err := parseFloatPortable(instructionValue.text)
 			if err != nil {
 				return err
 			}
