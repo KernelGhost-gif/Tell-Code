@@ -640,6 +640,42 @@ class Parser:
         line = self.lines[line_no - 1]
         return len(line) - len(line.lstrip(" \t")) + 1
 
+    def _validate_expression(self, expression: str, line_no: int, column: int, expression_offset: int = 0) -> None:
+        try:
+            parse_expression(_translate_expression_text(expression))
+        except ExpressionSyntaxError as exc:
+            token = exc.token
+            error_line = line_no + token.line - 1
+            error_column = column + expression_offset + token.column - 1 if token.line == 1 else token.column
+            raise TellSyntaxError(str(exc), self.filename, error_line, error_column) from exc
+
+    def _validate_statement_expression(self, text: str, line_no: int, column: int) -> None:
+        candidate: str | None = None
+        offset = 0
+        lowered = text.casefold()
+        if lowered.startswith("let "):
+            rest = _take_prefix(text, "let ") or ""
+            rest = _take_prefix(rest, "constant ") or rest
+            parts = _split_once_casefold(rest, " be ")
+            if parts:
+                candidate = parts[1]
+                offset = text.find(candidate) if candidate else 0
+        elif lowered.startswith("set "):
+            rest = _take_prefix(text, "set ") or ""
+            parts = _split_once_casefold(rest, " to ")
+            if parts:
+                candidate = parts[1]
+                offset = text.find(candidate) if candidate else 0
+        else:
+            for prefix in ("say ", "show ", "print ", "check that ", "give back ", "return ", "raise an error saying "):
+                candidate_part = _take_prefix(text, prefix)
+                if candidate_part is not None and candidate_part:
+                    candidate = candidate_part
+                    offset = len(text) - len(text.lstrip()) + len(prefix)
+                    break
+        if candidate:
+            self._validate_expression(candidate, line_no, column, offset)
+
     @staticmethod
     def _parse_simple_statement(text: str) -> dict[str, Any] | None:
         def parsed_expression(expression: str) -> TellExpr | None:
@@ -874,11 +910,13 @@ class Parser:
             condition = _take_prefix(header, "if ") if header is not None else None
             if condition:
                 condition = re.sub(r",\s*then$", "", condition, flags=re.I).strip()
+                self._validate_expression(condition, line_no, self._source_column(line_no), len("If "))
                 nodes.append(self._parse_if_block(condition, line_no))
                 continue
 
             condition = _take_prefix(header, "while ") if header is not None else None
             if condition:
+                self._validate_expression(condition, line_no, self._source_column(line_no), len("While "))
                 body, stop = self.parse_block({"end while."})
                 if stop != "end while.":
                     raise TellError(f"While block on line {line_no} needs 'End while.'.")
@@ -888,6 +926,8 @@ class Parser:
             repeat_rest = _take_prefix(header, "repeat ") if header is not None else None
             repeat_end = repeat_rest.casefold().rfind(" times") if repeat_rest is not None else -1
             if repeat_end > 0:
+                count_expression = repeat_rest[:repeat_end].strip()
+                self._validate_expression(count_expression, line_no, self._source_column(line_no), len("Repeat "))
                 body, stop = self.parse_block({"end repeat."})
                 if stop != "end repeat.":
                     raise TellError(f"Repeat block on line {line_no} needs 'End repeat.'.")
@@ -901,6 +941,8 @@ class Parser:
                 re.fullmatch(r"(?:[^\W\d]|_)\w*", name) for name in loop_names
             ) and len(set(loop_names)) == len(loop_names)
             if for_parts and valid_loop_names and for_parts[1]:
+                item_offset = line.casefold().find(for_parts[1].casefold())
+                self._validate_expression(for_parts[1], line_no, self._source_column(line_no), max(0, item_offset))
                 body, stop = self.parse_block({"end loop."})
                 if stop != "end loop.":
                     raise TellError(f"For-each block on line {line_no} needs 'End loop.'.")
@@ -928,6 +970,8 @@ class Parser:
 
             statement_text = self._remove_sentence_end(line)
             simple = self._parse_simple_statement(statement_text)
+            if simple is None:
+                self._validate_statement_expression(statement_text, line_no, self._source_column(line_no))
             nodes.append(Node("statement", {"text": statement_text, "simple": simple}, line_no, self._source_column(line_no)))
 
         return nodes, None
