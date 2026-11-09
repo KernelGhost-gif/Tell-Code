@@ -17,6 +17,7 @@ REQUIRE_MACOS_SIGNING="${REQUIRE_MACOS_SIGNING-1}"
 mkdir -p "$TMP/root/usr/local/bin"
 lipo -create "$TMP/tell-amd64" "$TMP/tell-arm64" -output "$TMP/root/usr/local/bin/tell"
 chmod 755 "$TMP/root/usr/local/bin/tell"
+if [[ -z "$TELL_CODESIGN_IDENTITY" && "$REQUIRE_MACOS_SIGNING" == "1" ]]; then echo "TELL_CODESIGN_IDENTITY is required for release packaging." >&2; exit 2; fi
 if [[ -n "$TELL_CODESIGN_IDENTITY" ]]; then codesign --force --options runtime --timestamp --sign "$TELL_CODESIGN_IDENTITY" "$TMP/root/usr/local/bin/tell"; fi
 tar -C "$TMP/root/usr/local/bin" -czf "$OUT/tell_$VERSION""_darwin_universal.tar.gz" tell
 PKG="$OUT/tell_$VERSION""_darwin_universal.pkg"
