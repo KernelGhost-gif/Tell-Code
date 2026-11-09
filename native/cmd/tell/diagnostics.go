@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	runtimeLocation = regexp.MustCompile("^(.*):([0-9]+):([0-9]+):\\\\s*(.*)$")
+	runtimeLocation = regexp.MustCompile("^(.*):([0-9]+):([0-9]+):\\s*(.*)$")
 	tokenLocation   = regexp.MustCompile("(?i)(?:at )?line ([0-9]+), column ([0-9]+)")
 	lineLocation    = regexp.MustCompile("(?i)line ([0-9]+)")
 )
