@@ -30,6 +30,13 @@ func TestRunRejectsUnknownName(t *testing.T) {
 	if err==nil || !strings.Contains(err.Error(),"NameError") { t.Fatalf("unexpected error: %v",err) }
 }
 
+func TestSyntaxDiagnosticUsesTokenCoordinates(t *testing.T) {
+	_,err:=Run(context.Background(),"2 + )","loc.tell",nil)
+	if err==nil { t.Fatal("expected syntax error") }
+	want:=`[SyntaxError] File "loc.tell", line 1, col 5: expected expression`
+	if got:=err.Error(); got!=want { t.Fatalf("got %q, want %q",got,want) }
+}
+
 func TestRunHonoursContext(t *testing.T) {
 	ctx,cancel:=context.WithCancel(context.Background()); cancel()
 	if _,err:=Run(ctx,"1 + 2","sample.tell",nil); err==nil { t.Fatal("expected context cancellation") }
