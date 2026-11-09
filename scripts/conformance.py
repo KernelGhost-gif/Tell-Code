@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from typing import Any
 
@@ -20,40 +21,54 @@ class Result:
     exit_code: int
 
 
-def native_command(binary: str) -> list[str]:
-    path = Path(binary)
+def command_for(runtime: str, native_bin: str | None) -> list[str]:
+    if runtime == "python":
+        return [sys.executable, "-m", "tell", "run"]
+    if not native_bin:
+        raise ValueError("--native-bin is required for the native runtime")
+    path = Path(native_bin)
     if not path.is_absolute():
         path = (ROOT / path).resolve()
     if not path.is_file():
         raise FileNotFoundError(f"native Tell executable not found: {path}")
-    return [str(path), "run", "-"]
+    return [str(path), "run"]
 
 
-def command_for(runtime: str, native_bin: str | None) -> list[str]:
-    if runtime == "python":
-        return [sys.executable, "-m", "tell", "run", "-"]
-    if not native_bin:
-        raise ValueError("--native-bin is required for the native runtime")
-    return native_command(native_bin)
+def write_case_files(workdir: Path, case: dict[str, Any]) -> str:
+    filename = case.get("filename") or f"{case['name'].replace(' ', '-')}.tell"
+    def write_relative(name: str, content: str) -> None:
+        path = Path(name)
+        if path.is_absolute() or ".." in path.parts:
+            raise ValueError(f"fixture path escapes temporary directory: {name}")
+        target = workdir / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+    write_relative(filename, case["source_code"])
+    for name, content in case.get("files", {}).items():
+        write_relative(name, content)
+    return filename
 
 
 def execute(command: list[str], case: dict[str, Any]) -> Result:
-    args = list(command)
-    for key, flag in (("max_call_depth", "--max-call-depth"),
-                      ("max_loop_iterations", "--max-loop-iterations")):
-        if key in case:
-            args.extend([flag, str(case[key])])
-    env = os.environ.copy()
-    env["PYTHONPATH"] = str(ROOT) + os.pathsep + env.get("PYTHONPATH", "")
-    try:
-        process = subprocess.run(
-            args, cwd=ROOT, input=case["source_code"], text=True, encoding="utf-8",
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            timeout=float(case.get("timeout_seconds", 10)), env=env, check=False,
-        )
-    except subprocess.TimeoutExpired as exc:
-        return Result("", f"conformance timeout after {exc.timeout}s", 124)
-    return Result(process.stdout, process.stderr, process.returncode)
+    with tempfile.TemporaryDirectory(prefix="tell-conformance-") as temp:
+        workdir = Path(temp)
+        filename = write_case_files(workdir, case)
+        args = list(command) + [filename]
+        for key, flag in (("max_call_depth", "--max-call-depth"),
+                          ("max_loop_iterations", "--max-loop-iterations")):
+            if key in case:
+                args.extend([flag, str(case[key])])
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(ROOT) + os.pathsep + env.get("PYTHONPATH", "")
+        try:
+            process = subprocess.run(
+                args, cwd=workdir, input=case.get("stdin", ""), text=True, encoding="utf-8",
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                timeout=float(case.get("timeout_seconds", 10)), env=env, check=False,
+            )
+        except subprocess.TimeoutExpired:
+            return Result("", "conformance timeout", 124)
+        return Result(process.stdout, process.stderr, process.returncode)
 
 
 def compare(case: dict[str, Any], result: Result) -> list[str]:
