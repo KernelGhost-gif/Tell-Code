@@ -42,3 +42,22 @@ begin
     ExistingPath := '';
   Result := Pos(';' + Uppercase(Param) + ';', ';' + Uppercase(ExistingPath) + ';') = 0;
 end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  ExistingPath: String;
+  AppPath: String;
+begin
+  if CurUninstallStep = usUninstall then
+  begin
+    AppPath := ExpandConstant('{app}');
+    if RegQueryStringValue(HKLM, 'SYSTEM\CurrentControlSet\Control\Session Manager\Environment', 'Path', ExistingPath) then
+    begin
+      StringChangeEx(ExistingPath, ';' + AppPath, '', True);
+      StringChangeEx(ExistingPath, AppPath + ';', '', True);
+      if CompareText(ExistingPath, AppPath) = 0 then
+        ExistingPath := '';
+      RegWriteExpandStringValue(HKLM, 'SYSTEM\CurrentControlSet\Control\Session Manager\Environment', 'Path', ExistingPath);
+    end;
+  end;
+end;
