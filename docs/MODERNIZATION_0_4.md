@@ -84,3 +84,16 @@ Required edge classes include numeric overflow and underflow, integer range boun
 - Windows and macOS binaries receive native smoke tests on hosted runners.
 - SHA256SUMS are generated from final artifacts, not intermediate files.
 - macOS release is not published unless Developer ID signing and notarization credentials are configured.
+
+## Production Go runtime source decomposition
+
+The former 3,259-line native/internal/tell/tell.go implementation has been decomposed into cohesive files within the existing runtime package:
+
+- parser.go: source cleaning, statement/block parsing, and parsed statement nodes.
+- runtime.go: environments, execution limits, runtime values, type declarations, built-ins, and sessions.
+- execute.go: block and node execution.
+- statement.go: statement execution and module/file statement handling.
+- modules.go: module loading, invocation, and standard-library bridges.
+- lexer.go: expression translation, tokenization, source coordinates, and expression entry points.
+
+This is deliberately a same-package decomposition first. It reduces file-level coupling and keeps the runtime API stable; package-level extraction follows only where dependencies can be made acyclic without duplicating runtime types. The new internal compiler packages remain separately testable.
