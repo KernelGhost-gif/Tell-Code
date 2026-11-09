@@ -1,0 +1,152 @@
+# Tell Language Grammar v1 (EBNF)
+
+This grammar describes the portable Tell 0.4 language surface implemented by the shared parser and the production runtimes. Keyword matching is case-insensitive. Identifiers are Unicode letters or underscore followed by Unicode letters, digits, or underscore. Whitespace and comments are ignored outside quoted text. A line-oriented statement normally ends with a period; a block header ends with a colon. A physical newline terminates a simple statement.
+
+## Lexical grammar
+
+    letter          = UnicodeLetter | "_" ;
+    digit           = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
+    identifier      = letter, { letter | digit } ;
+    integer         = digit, { digit } ;
+    exponent        = ("e" | "E"), [ "+" | "-" ], integer ;
+    number          = integer, [ ".", { digit } ], [ exponent ]
+                    | ".", integer, [ exponent ] ;
+    escape          = "\", ( "\" | "'" | '"' | "n" | "r" | "t" | "u", hex, hex, hex, hex ) ;
+    single-string   = "'", { escape | any-character-except-quote-or-newline }, "'" ;
+    double-string   = '"', { escape | any-character-except-quote-or-newline }, '"' ;
+    string          = single-string | double-string ;
+    boolean         = "true" | "false" ;
+    nothing         = "nothing" | "null" | "nil" ;
+    comment         = "#", { any-character-except-newline } ;
+
+The logical words and, or, and not are operators. The word in and phrase is in are membership operators. The language recognizes natural-language operator phrases (for example, is greater than, is equal to, plus, times, divided by, and to the power of) outside quoted strings; each phrase maps to the corresponding symbolic operator before Pratt parsing.
+
+## Program and statements
+
+    program             = { statement | block } ;
+    statement           = declaration
+                        | assignment
+                        | output
+                        | assertion
+                        | return-statement
+                        | raise-statement
+                        | call-statement
+                        | import-statement
+                        | file-statement
+                        | loop-control
+                        | expression-statement ;
+
+    declaration         = "Let", [ "constant" ], binding-list,
+                          [ "as", type-name ], "be", expression, "." ;
+    binding-list        = identifier, { ",", identifier } ;
+    assignment          = "Set", assignment-target, "to", expression, "." ;
+    assignment-target   = identifier
+                        | identifier, { ",", identifier }
+                        | expression, ".", identifier ;
+    output              = ("Say" | "Show" | "Print"), expression, "." ;
+    assertion           = "Check that", expression, "." ;
+    return-statement    = ("Give back" | "Return"), [ expression ], "." ;
+    raise-statement     = "Raise an error saying", expression, "." ;
+    call-statement      = "Tell", identifier, "to", identifier,
+                          [ "with", argument-list ], "." ;
+    import-statement    = "Use the module", string, [ "as", identifier ], "."
+                        | "Use the Python library called", identifier, [ "as", identifier ], "."
+                        | "Use the JavaScript library called", string, [ "as", identifier ], "."
+                        | "Use the", identifier, "library", "." ;
+    file-statement      = file-read | file-write ;
+    file-read           = "Read the file", string, "into", identifier, "." ;
+    file-write          = "Write", expression, "to the file", string, "." ;
+    loop-control        = "Stop this loop", "."
+                        | "Break out of this loop", "."
+                        | "Skip to the next repetition", "."
+                        | "Continue to the next repetition", "." ;
+    expression-statement= expression, "." ;
+
+## Blocks and declarations
+
+    block               = if-block | while-block | repeat-block | for-block
+                        | function-block | class-block | try-block ;
+    if-block            = "If", expression, ":", block-body,
+                          { ("Otherwise if" | "Else if"), expression, ":", block-body },
+                          [ ("Otherwise" | "Else"), ":", block-body ],
+                          ("End if" | "End if.") ;
+    while-block         = "While", expression, ":", block-body, ("End while" | "End while.") ;
+    repeat-block        = "Repeat", expression, "times", ":", block-body,
+                          ("End repeat" | "End repeat.") ;
+    for-block           = "For each", binding-list, "in", expression, ":",
+                          block-body, ("End loop" | "End loop.") ;
+    function-block      = function-header, ":", block-body, ("End function" | "End function.") ;
+    function-header     = "To", identifier, [ "with", parameter-list ]
+                        | "To", identifier, "(", [ parameter-list ], ")" ;
+    parameter-list      = parameter, { ("and" | ","), parameter } ;
+    parameter           = identifier, [ "defaulting to", expression ]
+                        | "all remaining values as", identifier ;
+    class-block         = "Create a class called", identifier,
+                          [ "based on", identifier ], ":", { class-member },
+                          ("End class" | "End class.") ;
+    class-member        = constructor-block | function-block ;
+    constructor-block   = "When creating", [ "a" | "an" ], identifier,
+                          [ "with", parameter-list ], ":", block-body,
+                          ("End constructor" | "End constructor.") ;
+    try-block           = "Try", ":", block-body,
+                          [ "If something goes wrong", ":", block-body ],
+                          ("End try" | "End try.") ;
+    block-body          = { statement | block } ;
+
+## Expressions
+
+Expressions are parsed by a deterministic Pratt parser. The binding powers below define precedence from lowest to highest. Binary operators at a row are left-associative except exponentiation, which is right-associative. The conditional expression is right-associative.
+
+    expression          = conditional ;
+    conditional         = logical-or, [ "if", logical-or, "else", conditional ] ;
+    logical-or          = logical-and, { "or", logical-and } ;
+    logical-and         = comparison, { "and", comparison } ;
+    comparison          = additive, { compare-operator, additive } ;
+    additive            = multiplicative, { ("+" | "-" | "plus" | "minus"), multiplicative } ;
+    multiplicative      = unary, { ("*" | "/" | "//" | "%" | "times" | "divided by" | "modulo"), unary } ;
+    unary               = ("+" | "-" | "not"), unary | power ;
+    power               = postfix, [ ("**" | "to the power of"), unary ] ;
+    postfix             = primary, { call | member | index | slice } ;
+    call                = "(", [ argument-list ], ")" ;
+    argument-list       = argument, { ",", argument } ;
+    argument            = [ identifier, "=" ], expression ;
+    member              = ".", identifier ;
+    index               = "[", expression, "]" ;
+    slice               = "[", [ expression ], ":", [ expression ],
+                          [ ":", [ expression ] ], "]" ;
+    primary             = number | string | boolean | nothing | identifier
+                        | "(", expression, ")"
+                        | "[", [ expression-list ], "]"
+                        | "(", expression, ",", [ expression-list ], ")"
+                        | "{", [ expression-list ], "}"
+                        | "{", expression, ":", expression,
+                              { ",", expression, ":", expression }, "}" ;
+    expression-list     = expression, { ",", expression } ;
+
+## Precedence table
+
+| Binding power | Operators |
+|---:|---|
+| 1 | if … else, or |
+| 2 | and |
+| 3 | ==, !=, <, <=, >, >=, in, not in |
+| 4 | +, - |
+| 5 | *, /, //, % |
+| 6 | ** (right-associative) |
+| 7 | unary +, -, not |
+| 8 | function call, member, index, slice |
+
+## Semantic constraints
+
+1. Function scopes capture the defining lexical environment. Nested functions preserve captured bindings after the parent function returns.
+2. Names resolve in the nearest lexical scope. Declaration creates a binding in the current scope; assignment updates an existing binding.
+3. nothing, null, and nil represent the same value.
+4. The scalar number type is IEEE-754 binary64. Boolean and valid numeric text values are coercible to numbers by numeric operators; invalid numeric text is a runtime type error. Text addition concatenates when its left operand is text.
+5. Logical operators short-circuit and return boolean values.
+6. Accessing a member or index on nothing is a runtime error. Missing variables are name errors.
+7. The default active Tell call depth is 64; the default maximum iteration count per loop is 1,000,000.
+8. Source lines and columns are 1-based; byte offsets are zero-based; columns count Unicode code points. The conformance diagnostics contract defines exact rendering and exit status.
+
+## Compatibility note
+
+This is the 0.4 common grammar target. The runtime still supports a larger set of statement conveniences and standard-library phrases than the expression vertical slice in native/internal/parser. The production Python and Go statement parsers remain authoritative for statements until their full productions have been moved into the shared AST. A grammar feature is considered portable only when both production runtimes pass the same conformance case.
