@@ -4,6 +4,7 @@ package pipeline
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/KernelGhost-gif/Tell-Code/native/internal/compiler"
@@ -24,6 +25,10 @@ func Run(ctx context.Context, source, filename string, globals map[string]vm.Val
 	if err:=ctx.Err(); err!=nil { return Result{},err }
 	expression,err:=parser.New(source).Parse()
 	if err!=nil {
+		var parseErr *parser.ParseError
+		if errors.As(err,&parseErr) {
+			return Result{},&diagnostic.Error{Kind:diagnostic.SyntaxError,Filename:filename,Line:parseErr.Line,Column:parseErr.Column,Message:parseErr.Message}
+		}
 		return Result{},&diagnostic.Error{Kind:diagnostic.SyntaxError,Filename:filename,Line:1,Column:1,Message:err.Error()}
 	}
 
