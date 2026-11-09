@@ -93,8 +93,8 @@ Say answer.
         self.assertEqual(output, ["(1, 2)", "{1, 2}", "yes"])
 
     def test_python_only_comprehensions_do_not_fall_back_to_host_ast(self):
-        with self.assertRaisesRegex(TellError, "I couldn't understand the expression"):
-            Interpreter().run("Say [item for item in [1, 2]].", "no-host-ast.tell")
+        with self.assertRaises(TellSyntaxError):
+            Parser("Say [item for item in [1, 2]].", "no-host-ast.tell").parse()
 
     def test_python_module_interop_uses_imported_modules_and_named_arguments(self):
         output, _ = self.run_tell('''
