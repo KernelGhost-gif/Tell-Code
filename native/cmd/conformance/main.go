@@ -29,48 +29,60 @@ type suite struct {
 }
 
 func main() {
-	fixtures:=flag.String("fixtures","../../conformance/runtime-v1.json","conformance suite JSON")
-	binary:=flag.String("tell","../../releases/tell-linux-amd64","native Tell executable")
+	fixtures := flag.String("fixtures", "../../conformance/runtime-v1.json", "conformance suite JSON")
+	binary := flag.String("tell", "../../releases/tell-linux-amd64", "native Tell executable")
 	flag.Parse()
-	data,err:=os.ReadFile(*fixtures)
-	if err!=nil { fatal(err) }
+	data, err := os.ReadFile(*fixtures)
+	if err != nil { fatal(err) }
 	var tests suite
-	if err:=json.Unmarshal(data,&tests); err!=nil { fatal(err) }
-	if tests.SchemaVersion!=1 { fatal(fmt.Errorf("unsupported conformance schema version %d",tests.SchemaVersion)) }
-	path,err:=filepath.Abs(*binary)
-	if err!=nil { fatal(err) }
-	passed,failed:=0,0
-	for _,tc:=range tests.Tests {
-		timeout:=time.Duration(tc.TimeoutSeconds)*time.Second
-		if timeout<=0 { timeout=10*time.Second }
-		ctx,cancel:=context.WithTimeout(context.Background(),timeout)
-		args:=[]string{"run","-"}
-		if tc.MaxCallDepth>0 { args=append(args,"--max-call-depth",fmt.Sprint(tc.MaxCallDepth)) }
-		if tc.MaxLoopIterations>0 { args=append(args,"--max-loop-iterations",fmt.Sprint(tc.MaxLoopIterations)) }
-		cmd:=exec.CommandContext(ctx,path,args...)
-		cmd.Stdin=bytes.NewBufferString(tc.SourceCode)
-		var stdout,stderr bytes.Buffer
-		cmd.Stdout=&stdout; cmd.Stderr=&stderr
-		runErr:=cmd.Run()
-		exitCode:=0
-		if runErr!=nil {
-			if ctx.Err()!=nil { exitCode=124; stderr.Reset(); fmt.Fprintf(&stderr,"conformance timeout after %s",timeout) } else if exit,ok:=runErr.(*exec.ExitError); ok { exitCode=exit.ExitCode() } else { exitCode=127; fmt.Fprint(&stderr,runErr) }
+	if err := json.Unmarshal(data, &tests); err != nil { fatal(err) }
+	if tests.SchemaVersion != 1 { fatal(fmt.Errorf("unsupported conformance schema version %d", tests.SchemaVersion)) }
+	path, err := filepath.Abs(*binary)
+	if err != nil { fatal(err) }
+
+	passed, failed := 0, 0
+	for _, tc := range tests.Tests {
+		timeout := time.Duration(tc.TimeoutSeconds) * time.Second
+		if timeout <= 0 { timeout = 10 * time.Second }
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		args := []string{"run", "-"}
+		if tc.MaxCallDepth > 0 { args = append(args, "--max-call-depth", fmt.Sprint(tc.MaxCallDepth)) }
+		if tc.MaxLoopIterations > 0 { args = append(args, "--max-loop-iterations", fmt.Sprint(tc.MaxLoopIterations)) }
+		cmd := exec.CommandContext(ctx, path, args...)
+		cmd.Stdin = bytes.NewBufferString(tc.SourceCode)
+		var stdout, stderr bytes.Buffer
+		cmd.Stdout, cmd.Stderr = &stdout, &stderr
+		runErr := cmd.Run()
+		exitCode := 0
+		if runErr != nil {
+			if ctx.Err() != nil {
+				exitCode = 124
+				stderr.Reset()
+				fmt.Fprint(&stderr, "conformance timeout")
+			} else if exit, ok := runErr.(*exec.ExitError); ok {
+				exitCode = exit.ExitCode()
+			} else {
+				exitCode = 127
+				fmt.Fprint(&stderr, runErr)
+			}
 		}
 		cancel()
-		ok:=stdout.String()==tc.ExpectedStdout && stderr.String()==tc.ExpectedStderr && exitCode==tc.ExpectedExitCode
-		if ok { passed++; fmt.Printf("PASS %s
-",tc.Name) } else {
-			failed++
-			fmt.Printf("FAIL %s
-  stdout expected %q got %q
-  stderr expected %q got %q
-  exit expected %d got %d
-",tc.Name,tc.ExpectedStdout,stdout.String(),tc.ExpectedStderr,stderr.String(),tc.ExpectedExitCode,exitCode)
+		if stdout.String() == tc.ExpectedStdout && stderr.String() == tc.ExpectedStderr && exitCode == tc.ExpectedExitCode {
+			passed++
+			fmt.Println("PASS", tc.Name)
+			continue
 		}
+		failed++
+		fmt.Println("FAIL", tc.Name)
+		fmt.Println("  stdout expected", fmt.Sprintf("%q", tc.ExpectedStdout), "got", fmt.Sprintf("%q", stdout.String()))
+		fmt.Println("  stderr expected", fmt.Sprintf("%q", tc.ExpectedStderr), "got", fmt.Sprintf("%q", stderr.String()))
+		fmt.Println("  exit expected", tc.ExpectedExitCode, "got", exitCode)
 	}
-	fmt.Printf("Conformance: %d passed, %d failed.
-",passed,failed)
-	if failed>0 { os.Exit(1) }
+	fmt.Println("Conformance:", passed, "passed,", failed, "failed.")
+	if failed > 0 { os.Exit(1) }
 }
 
-func fatal(err error) { fmt.Fprintln(os.Stderr,"conformance:",err); os.Exit(2) }
+func fatal(err error) {
+	fmt.Fprintln(os.Stderr, "conformance:", err)
+	os.Exit(2)
+}
