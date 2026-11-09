@@ -13,19 +13,22 @@ import (
 type expression interface{ isExpression() }
 
 type literalExpression struct{ token token }
-type nameExpression struct{ name string }
+type nameExpression struct { name string; line, column int }
 type unaryExpression struct {
 	operator string
-	operand  expression
+	operand expression
+	line, column int
 }
 type binaryExpression struct {
-	operator    string
+	operator string
 	left, right expression
+	line, column int
 }
 type conditionalExpression struct {
 	consequent expression
 	condition expression
 	alternative expression
+	line, column int
 }
 type listExpression struct{ items []expression }
 type tupleExpression struct{ items []expression }
@@ -37,18 +40,21 @@ type callArgument struct {
 }
 type callExpression struct {
 	callee expression
-	args   []callArgument
+	args []callArgument
+	line, column int
 }
 type memberExpression struct {
-	value  expression
+	value expression
 	member string
+	line, column int
 }
 type indexExpression struct {
-	value      expression
-	index      expression
+	value expression
+	index expression
 	start, end expression
-	step       expression
-	isSlice    bool
+	step expression
+	isSlice bool
+	line, column int
 }
 
 func (literalExpression) isExpression()    {}
@@ -128,7 +134,7 @@ func (p *expressionParser) parsePrecedence(min int) (expression, error) {
 		if prec == 0 || prec < min {
 			break
 		}
-		p.take()
+		operatorToken := p.take()
 		next := prec + 1
 		if op == "**" {
 			next = prec
@@ -137,10 +143,10 @@ func (p *expressionParser) parsePrecedence(min int) (expression, error) {
 		if err != nil {
 			return nil, err
 		}
-		left = binaryExpression{operator: op, left: left, right: right}
+		left = binaryExpression{operator: op, left: left, right: right, line:operatorToken.line, column:operatorToken.column}
 	}
 	if min <= 1 && p.peek() == "if" {
-		p.take()
+		conditionalToken := p.take()
 		condition, err := p.parsePrecedence(1)
 		if err != nil {
 			return nil, err
@@ -153,7 +159,7 @@ func (p *expressionParser) parsePrecedence(min int) (expression, error) {
 		if err != nil {
 			return nil, err
 		}
-		left = conditionalExpression{consequent:left, condition:condition, alternative:alternative}
+		left = conditionalExpression{consequent:left, condition:condition, alternative:alternative, line:conditionalToken.line, column:conditionalToken.column}
 	}
 	return left, nil
 }
@@ -169,7 +175,7 @@ func (p *expressionParser) parsePrefix() (expression, error) {
 		if err != nil {
 			return nil, err
 		}
-		value = unaryExpression{operator: t.kind, operand: operand}
+		value = unaryExpression{operator: t.kind, operand: operand, line:t.line, column:t.column}
 	case "(":
 		if p.peek() == ")" {
 			p.take()
@@ -288,7 +294,7 @@ func (p *expressionParser) parsePrefix() (expression, error) {
 			value = setExpression{items: items}
 		}
 	case "ident":
-		value = nameExpression{name: t.text}
+		value = nameExpression{name:t.text, line:t.line, column:t.column}
 	default:
 		return nil, fail("expected a value, found %q at line %d, column %d", t.text, t.line, t.column)
 	}
@@ -299,7 +305,7 @@ func (p *expressionParser) parsePostfix(value expression) (expression, error) {
 	for {
 		switch p.peek() {
 		case "(":
-			p.take()
+			callToken := p.take()
 			args := []callArgument{}
 			hasNamed := false
 			if p.peek() != ")" {
@@ -331,16 +337,17 @@ func (p *expressionParser) parsePostfix(value expression) (expression, error) {
 				return nil, p.syntaxError("expected ) after arguments")
 			}
 			p.take()
-			value = callExpression{callee: value, args: args}
+			value = callExpression{callee:value, args:args, line:callToken.line, column:callToken.column}
 		case ".":
-			p.take()
+			memberToken := p.take()
 			if p.peek() != "ident" {
 				return nil, p.syntaxError("expected a member name after .")
 			}
-			value = memberExpression{value: value, member: p.take().text}
+			memberName := p.take()
+			value = memberExpression{value:value, member:memberName.text, line:memberToken.line, column:memberToken.column}
 		case "[":
-			p.take()
-			part := indexExpression{value: value}
+			indexToken := p.take()
+			part := indexExpression{value:value, line:indexToken.line, column:indexToken.column}
 			if p.peek() != ":" && p.peek() != "]" {
 				index, err := p.parsePrecedence(1)
 				if err != nil {
@@ -403,7 +410,11 @@ func (r *runtime) evalExpression(expr expression, e *env) (any, error) {
 			return nil, nil
 		}
 	case nameExpression:
-		return e.get(x.name)
+		value, err := e.get(x.name)
+		if err != nil {
+			return nil, withSourceLocation(err, r.filename, x.line, x.column)
+		}
+		return value, nil
 	case unaryExpression:
 		value, err := r.evalExpression(x.operand, e)
 		if err != nil {
@@ -414,7 +425,7 @@ func (r *runtime) evalExpression(expr expression, e *env) (any, error) {
 		}
 		n, err := numberValue(value)
 		if err != nil {
-			return nil, err
+			return nil, withSourceLocation(err, r.filename, x.line, x.column)
 		}
 		if x.operator == "-" {
 			return -n, nil
@@ -447,7 +458,11 @@ func (r *runtime) evalExpression(expr expression, e *env) (any, error) {
 		if x.operator == "and" || x.operator == "or" {
 			return truthy(right), nil
 		}
-		return applyBinary(x.operator, left, right)
+		result, err := applyBinary(x.operator, left, right)
+		if err != nil {
+			return nil, withSourceLocation(err, r.filename, x.line, x.column)
+		}
+		return result, nil
 	case listExpression:
 		items := make([]any, 0, len(x.items))
 		for _, item := range x.items {
@@ -513,123 +528,106 @@ func (r *runtime) evalExpression(expr expression, e *env) (any, error) {
 			}
 			named[argument.name] = arg
 		}
-		return invokeNamed(callee, args, named)
+		result, err := invokeNamed(callee, args, named)
+		if err != nil {
+			return nil, withSourceLocation(err, r.filename, x.line, x.column)
+		}
+		return result, nil
 	case memberExpression:
-		value, err := r.evalExpression(x.value, e)
+		result, err := r.evalMemberExpression(x, e)
 		if err != nil {
-			return nil, err
+			return nil, withSourceLocation(err, r.filename, x.line, x.column)
 		}
-		switch object := value.(type) {
-		case pythonModule:
-			if strings.HasPrefix(x.member, "_") || !pythonIdentifier.MatchString(x.member) {
-				return nil, fail("invalid or private Python member %q", x.member)
-			}
-			return pythonFunction{module: object.name, name: x.member}, nil
-		case javascriptModule:
-			if strings.HasPrefix(x.member, "_") || !javaScriptIdentifier.MatchString(x.member) {
-				return nil, fail("invalid or private JavaScript member %q", x.member)
-			}
-			return javascriptFunction{module: object.name, name: x.member}, nil
-		case map[string]any:
-			member, ok := object[x.member]
-			if !ok {
-				return nil, fail("unknown member %q", x.member)
-			}
-			return member, nil
-		case *userInstance:
-			if member, ok := object.fields[x.member]; ok {
-				return member, nil
-			}
-			method, ok := object.class.method(x.member)
-			if !ok {
-				return nil, fail("%s has no member %q", object.class.name, x.member)
-			}
-			receiver := object
-			return namedCallable(func(args []any, named map[string]any) (any, error) { return method.callNamed(args, named, receiver) }), nil
-		case *bytecodeInstance:
-			return bytecodeMember(r, object, x.member, object.class.functions)
-		default:
-			return nil, fail("this value has no member %q", x.member)
-		}
+		return result, nil
 	case indexExpression:
-		value, err := r.evalExpression(x.value, e)
+		result, err := r.evalIndexExpression(x, e)
 		if err != nil {
-			return nil, err
+			return nil, withSourceLocation(err, r.filename, x.line, x.column)
 		}
-		if !x.isSlice {
-			index, err := r.evalExpression(x.index, e)
-			if err != nil {
-				return nil, err
-			}
-			return indexValue(value, index)
-		}
-		var start, end *any
-		if x.start != nil {
-			part, err := r.evalExpression(x.start, e)
-			if err != nil {
-				return nil, err
-			}
-			start = &part
-		}
-		if x.end != nil {
-			part, err := r.evalExpression(x.end, e)
-			if err != nil {
-				return nil, err
-			}
-			end = &part
-		}
-		stride := 1
-		if x.step != nil {
-			part, err := r.evalExpression(x.step, e)
-			if err != nil {
-				return nil, err
-			}
-			n, err := numberValue(part)
-			if err != nil {
-				return nil, err
-			}
-			stride = int(n)
-		}
-		if stride == 0 {
-			return nil, fail("slice step cannot be zero")
-		}
-		switch value := value.(type) {
-		case []any:
-			indices, err := sliceIndices(len(value), start, end, stride)
-			if err != nil {
-				return nil, err
-			}
-			result := make([]any, 0, len(indices))
-			for _, index := range indices {
-				result = append(result, value[index])
-			}
-			return result, nil
-		case tupleValue:
-			indices, err := sliceIndices(len(value), start, end, stride)
-			if err != nil {
-				return nil, err
-			}
-			result := make(tupleValue, 0, len(indices))
-			for _, index := range indices {
-				result = append(result, value[index])
-			}
-			return result, nil
-		case string:
-			runes := []rune(value)
-			indices, err := sliceIndices(len(runes), start, end, stride)
-			if err != nil {
-				return nil, err
-			}
-			var result strings.Builder
-			for _, index := range indices {
-				result.WriteRune(runes[index])
-			}
-			return result.String(), nil
-		default:
-			return nil, fail("this value cannot be sliced")
-		}
+		return result, nil
 	}
 	return nil, fail("unsupported expression node %T", expr)
+}
+
+
+func (r *runtime) evalMemberExpression(x memberExpression, e *env) (any, error) {
+	value, err := r.evalExpression(x.value, e)
+	if err != nil { return nil, err }
+	switch object := value.(type) {
+	case pythonModule:
+		if strings.HasPrefix(x.member, "_") || !pythonIdentifier.MatchString(x.member) { return nil, fail("invalid or private Python member %q", x.member) }
+		return pythonFunction{module:object.name, name:x.member}, nil
+	case javascriptModule:
+		if strings.HasPrefix(x.member, "_") || !javaScriptIdentifier.MatchString(x.member) { return nil, fail("invalid or private JavaScript member %q", x.member) }
+		return javascriptFunction{module:object.name, name:x.member}, nil
+	case map[string]any:
+		member, ok := object[x.member]
+		if !ok { return nil, fail("unknown member %q", x.member) }
+		return member, nil
+	case *userInstance:
+		if member, ok := object.fields[x.member]; ok { return member, nil }
+		method, ok := object.class.method(x.member)
+		if !ok { return nil, fail("%s has no member %q", object.class.name, x.member) }
+		receiver := object
+		return namedCallable(func(args []any, named map[string]any) (any,error) { return method.callNamed(args, named, receiver) }), nil
+	case *bytecodeInstance:
+		return bytecodeMember(r, object, x.member, object.class.functions)
+	default:
+		return nil, fail("this value has no member %q", x.member)
+	}
+}
+
+func (r *runtime) evalIndexExpression(x indexExpression, e *env) (any,error) {
+	value, err := r.evalExpression(x.value,e)
+	if err != nil { return nil,err }
+	if !x.isSlice {
+		index,err:=r.evalExpression(x.index,e)
+		if err!=nil { return nil,err }
+		return indexValue(value,index)
+	}
+	var start,end *any
+	if x.start!=nil {
+		part,err:=r.evalExpression(x.start,e)
+		if err!=nil { return nil,err }
+		start=&part
+	}
+	if x.end!=nil {
+		part,err:=r.evalExpression(x.end,e)
+		if err!=nil { return nil,err }
+		end=&part
+	}
+	stride:=1
+	if x.step!=nil {
+		part,err:=r.evalExpression(x.step,e)
+		if err!=nil { return nil,err }
+		n,err:=numberValue(part)
+		if err!=nil { return nil,err }
+		stride=int(n)
+	}
+	if stride==0 { return nil,fail("slice step cannot be zero") }
+	switch value:=value.(type) {
+	case []any:
+		indices,err:=sliceIndices(len(value),start,end,stride)
+		if err!=nil { return nil,err }
+		result:=make([]any,0,len(indices))
+		for _,index:=range indices { result=append(result,value[index]) }
+		return result,nil
+	case tupleValue:
+		indices,err:=sliceIndices(len(value),start,end,stride)
+		if err!=nil { return nil,err }
+		result:=make(tupleValue,0,len(indices))
+		for _,index:=range indices { result=append(result,value[index]) }
+		return result,nil
+	case string:
+		runes:=[]rune(value)
+		indices,err:=sliceIndices(len(runes),start,end,stride)
+		if err!=nil { return nil,err }
+		var result strings.Builder
+		for _,index:=range indices { result.WriteRune(runes[index]) }
+		return result.String(),nil
+	default:
+		return nil,fail("this value cannot be sliced")
+	}
 }
 
 func indexValue(value, index any) (any, error) {
