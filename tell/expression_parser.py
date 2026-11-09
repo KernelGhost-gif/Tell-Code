@@ -128,7 +128,7 @@ def lex(source: str) -> list[Token]:
                 i += 1
             word = source[start:i]
             low = word.casefold()
-            kind = {"true": "true", "false": "false", "nothing": "nothing"}.get(low, low if low in {"and", "or", "not", "in"} else "ident")
+            kind = {"true": "true", "false": "false", "nothing": "nothing", "if": "if", "else": "else"}.get(low, low if low in {"and", "or", "not", "in"} else "ident")
             emit(kind, word, start)
             continue
 
@@ -186,6 +186,12 @@ class Parser:
             next_minimum = precedence if operator.kind == "**" else precedence + 1
             right = self.parse_precedence(next_minimum)
             left = Expr("binary", operator.kind, (left, right), start=operator.offset)
+        if minimum <= 1 and self.peek().kind == "if":
+            token = self.take()
+            condition = self.parse_precedence(1)
+            self.require("else", "expected else in conditional expression")
+            alternative = self.parse_precedence(1)
+            left = Expr("conditional", children=(left, condition, alternative), start=token.offset)
         return left
 
     def parse_prefix(self) -> Expr:
