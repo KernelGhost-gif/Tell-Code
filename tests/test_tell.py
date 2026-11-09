@@ -8,7 +8,7 @@ from pathlib import Path
 
 from tell import Interpreter, Parser, TellError
 from tell.__main__ import repl, run_tests
-from tell.interpreter import format_source
+from tell.interpreter import format_source, TellSyntaxError
 
 
 class TellLanguageTests(unittest.TestCase):
