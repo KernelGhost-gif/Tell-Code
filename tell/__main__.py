@@ -149,7 +149,7 @@ def run_tests(
 class TellArgumentParser(argparse.ArgumentParser):
     def error(self, message: str) -> None:
         diagnostic = make_diagnostic(message, "<command-line>", "UsageError")
-        self.exit(exit_code(diagnostic.kind), str(diagnostic) + "\\n")
+        self.exit(exit_code(diagnostic.kind), str(diagnostic) + "\n")
 
 
 def main() -> int:
