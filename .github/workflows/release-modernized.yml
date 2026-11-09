@@ -1,0 +1,175 @@
+name: Tell multi-platform release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            goarch: amd64
+          - arch: arm64
+            goarch: arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate source
+        run: |
+          cd native
+          go test ./...
+          go vet ./...
+          cd ..
+          python -m unittest discover -s tests -v
+      - name: Install RPM tooling
+        run: sudo apt-get update && sudo apt-get install -y rpm
+      - name: Build and package Linux
+        env:
+          GOARCH: ${{ matrix.goarch }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          VERSION="$(printf '%s' "$GITHUB_REF_NAME" | sed 's/^v//')"
+          mkdir -p dist build
+          cd native
+          CGO_ENABLED=0 GOOS=linux GOARCH="$GOARCH" go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "../build/tell-linux-$ARCH" ./cmd/tell
+          cd ..
+          bash scripts/package-linux.sh "$VERSION" "$ARCH" "build/tell-linux-$ARCH" dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tell-linux-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+      - name: Build Windows x64 binary
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME -replace '^v', ''
+          New-Item -ItemType Directory -Force build, dist | Out-Null
+          Push-Location native
+          go test ./...
+          go build -trimpath -ldflags "-s -w -X main.version=$version" -o ../build/tell-windows-amd64.exe ./cmd/tell
+          Pop-Location
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+      - name: Build Windows installer
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME -replace '^v', ''
+          ./scripts/package-windows.ps1 -Version $version -BinaryPath "build/tell-windows-amd64.exe" -OutputDirectory "dist"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tell-windows-amd64
+          path: dist/*
+          if-no-files-found: error
+
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+      - name: Validate Go source
+        working-directory: native
+        run: go test ./... && go vet ./...
+      - name: Import Apple Developer ID certificates
+        env:
+          APP_CERT: ${{ secrets.APPLE_APPLICATION_CERT_P12 }}
+          APP_CERT_PASSWORD: ${{ secrets.APPLE_APPLICATION_CERT_PASSWORD }}
+          INSTALL_CERT: ${{ secrets.APPLE_INSTALLER_CERT_P12 }}
+          INSTALL_CERT_PASSWORD: ${{ secrets.APPLE_INSTALLER_CERT_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+        run: |
+          test -n "$APP_CERT"
+          test -n "$INSTALL_CERT"
+          test -n "$APP_CERT_PASSWORD"
+          test -n "$INSTALL_CERT_PASSWORD"
+          test -n "$KEYCHAIN_PASSWORD"
+          KEYCHAIN="$RUNNER_TEMP/tell-signing.keychain-db"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          printf '%s' "$APP_CERT" | base64 --decode > "$RUNNER_TEMP/app.p12"
+          printf '%s' "$INSTALL_CERT" | base64 --decode > "$RUNNER_TEMP/installer.p12"
+          security import "$RUNNER_TEMP/app.p12" -k "$KEYCHAIN" -P "$APP_CERT_PASSWORD" -T /usr/bin/codesign
+          security import "$RUNNER_TEMP/installer.p12" -k "$KEYCHAIN" -P "$INSTALL_CERT_PASSWORD" -T /usr/bin/productsign
+          security set-key-partition-list -S apple-tool:,apple:,codesign:,productsign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          echo "TELL_CODESIGN_IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" | awk -F '"' '/Developer ID Application/ {print $2; exit}')" >> "$GITHUB_ENV"
+          echo "TELL_INSTALLER_IDENTITY=$(security find-identity -v -p basic "$KEYCHAIN" | awk -F '"' '/Developer ID Installer/ {print $2; exit}')" >> "$GITHUB_ENV"
+      - name: Configure Apple notarization profile
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          test -n "$APPLE_ID"
+          test -n "$APPLE_TEAM_ID"
+          test -n "$APPLE_PASSWORD"
+          xcrun notarytool store-credentials TellNotary --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_PASSWORD"
+          echo "TELL_NOTARY_PROFILE=TellNotary" >> "$GITHUB_ENV"
+      - name: Enforce release signing prerequisites
+        run: |
+          test -n "$TELL_CODESIGN_IDENTITY"
+          test -n "$TELL_INSTALLER_IDENTITY"
+          test -n "$TELL_NOTARY_PROFILE"
+          echo "REQUIRE_MACOS_SIGNING=1" >> "$GITHUB_ENV"
+      - name: Build universal macOS package and Homebrew formula
+        run: |
+          VERSION="$(printf '%s' "$GITHUB_REF_NAME" | sed 's/^v//')"
+          mkdir -p dist
+          bash scripts/package-macos.sh "$VERSION" dist
+          python scripts/generate-homebrew-formula.py --version "$VERSION" --archive "dist/tell_$VERSION""_darwin_universal.tar.gz" --output dist/tell.rb
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tell-macos-universal
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, windows, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: tell-*
+          path: dist
+          merge-multiple: true
+      - name: Generate release checksums
+        run: |
+          cd dist
+          find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%f\n' | sort | while IFS= read -r file; do sha256sum "$file"; done > SHA256SUMS
+          sha256sum --check SHA256SUMS
+      - name: Publish release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* --generate-notes
+          fi
