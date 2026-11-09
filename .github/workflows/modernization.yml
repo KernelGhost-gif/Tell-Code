@@ -94,5 +94,5 @@ jobs:
           REQUIRE_MACOS_SIGNING=0 bash scripts/package-macos.sh 0.0.0 dist
           mkdir -p dist/extracted
           tar -xzf dist/tell_0.0.0_darwin_universal.tar.gz -C dist/extracted
-          lipo -verify_arch x86_64 arm64 dist/extracted/tell
+          lipo dist/extracted/tell -verify_arch x86_64 arm64
           python scripts/generate-homebrew-formula.py --version 0.0.0 --archive dist/tell_0.0.0_darwin_universal.tar.gz --output dist/tell.rb
