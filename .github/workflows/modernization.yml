@@ -78,7 +78,7 @@ jobs:
           if (-not (Test-Path "dist/Tell-Setup-0.0.0-windows-x64.exe")) { throw "Installer output was not created." }
 
   macos-validation:
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
