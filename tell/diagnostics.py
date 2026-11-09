@@ -43,7 +43,10 @@ def make_diagnostic(
 ) -> Diagnostic:
     message = str(error)
     line = column = 1
-    if hasattr(error, "filename") and hasattr(error, "line") and hasattr(error, "column"):
+    explicit_position = (
+        hasattr(error, "filename") and hasattr(error, "line") and hasattr(error, "column")
+    )
+    if explicit_position:
         filename = str(getattr(error, "filename")) or filename
         line = int(getattr(error, "line"))
         column = int(getattr(error, "column"))
@@ -58,16 +61,18 @@ def make_diagnostic(
     else:
         match = _TOKEN_LOCATION.search(message)
         if match:
-            line, column = int(match.group(1)), int(match.group(2))
+            if not explicit_position:
+                line, column = int(match.group(1)), int(match.group(2))
             message = _TOKEN_LOCATION.sub("", message).strip()
             message = re.sub(r"\s+at$", "", message).strip()
         else:
             match = _LINE_LOCATION.search(message)
             if match:
-                line = int(match.group(1))
+                if not explicit_position:
+                    line = int(match.group(1))
                 message = _LINE_LOCATION.sub("", message, count=1).strip()
                 message = re.sub(r"\s+(on|at)$", "", message).strip()
-                if source:
+                if source and not explicit_position:
                     lines = source.splitlines()
                     if 1 <= line <= len(lines):
                         raw = lines[line - 1]
