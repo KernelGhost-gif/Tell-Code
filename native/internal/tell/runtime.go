@@ -57,6 +57,15 @@ type userInstance struct {
 	class  *userClass
 	fields map[string]any
 }
+// callFrame records a live Tell function activation independently of the Go stack.
+type callFrame struct {
+	Function string
+	Caller *env
+	Locals *env
+	CallSiteLine int
+	CallSiteColumn int
+}
+
 type signal struct {
 	kind  string
 	value any
@@ -71,6 +80,9 @@ type runtime struct {
 	output          io.Writer
 	echoResults     bool
 	callDepth       int
+	callFrames      []callFrame
+	callSiteLine    int
+	callSiteColumn  int
 	limits          ExecutionLimits
 	modules         map[string]map[string]any
 	bytecodeModules map[string]BytecodeProgram
