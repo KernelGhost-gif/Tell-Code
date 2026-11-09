@@ -3,7 +3,6 @@ package tell
 import (
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
