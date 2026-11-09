@@ -12,6 +12,16 @@ import (
 
 type Parser interface { Parse() (ast.Expr, error) }
 
+type ParseError struct {
+	Line int
+	Column int
+	Message string
+}
+
+func (e *ParseError) Error() string {
+	return fmt.Sprintf("%s at line %d, column %d", e.Message, e.Line, e.Column)
+}
+
 type parser struct {
 	source string
 	scanner lexer.Scanner
@@ -27,7 +37,7 @@ func (p *parser) peek() lexer.Token {
 }
 func (p *parser) take() lexer.Token { t := p.peek(); p.loaded = false; return t }
 func (p *parser) fail(t lexer.Token, message string) error {
-	return fmt.Errorf("%s at line %d, column %d", message, t.Span.Start.Line, t.Span.Start.Column)
+	return &ParseError{Line:t.Span.Start.Line, Column:t.Span.Start.Column, Message:message}
 }
 
 func precedence(k lexer.Kind) int {
