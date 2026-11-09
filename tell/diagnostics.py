@@ -43,6 +43,10 @@ def make_diagnostic(
 ) -> Diagnostic:
     message = str(error)
     line = column = 1
+    if hasattr(error, "filename") and hasattr(error, "line") and hasattr(error, "column"):
+        filename = str(getattr(error, "filename")) or filename
+        line = int(getattr(error, "line"))
+        column = int(getattr(error, "column"))
 
     match = _LOCATION.match(message)
     if match:
