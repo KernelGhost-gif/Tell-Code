@@ -63,6 +63,7 @@ jobs:
       - name: Test and build Windows runtime
         shell: pwsh
         run: |
+          New-Item -ItemType Directory -Force build | Out-Null
           Push-Location native
           go test ./...
           go vet ./...
@@ -91,6 +92,7 @@ jobs:
           cd ..
           mkdir -p dist
           REQUIRE_MACOS_SIGNING=0 bash scripts/package-macos.sh 0.0.0 dist
-          lipo -verify_arch x86_64 arm64 dist/tell_0.0.0_darwin_universal.tar.gz 2>/dev/null || true
+          mkdir -p dist/extracted
+          tar -xzf dist/tell_0.0.0_darwin_universal.tar.gz -C dist/extracted
+          lipo -verify_arch x86_64 arm64 dist/extracted/tell
           python scripts/generate-homebrew-formula.py --version 0.0.0 --archive dist/tell_0.0.0_darwin_universal.tar.gz --output dist/tell.rb
-          pkgutil --check-signature dist/tell_0.0.0_darwin_universal.pkg || true
