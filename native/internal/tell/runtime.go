@@ -810,7 +810,10 @@ func display(v any) string {
 		if math.IsInf(x, -1) {
 			return "-infinity"
 		}
-		return strconv.FormatFloat(x, 'f', -1, 64)
+		if math.Trunc(x) == x {
+			return strconv.FormatFloat(x, 'f', -1, 64)
+		}
+		return strconv.FormatFloat(x, 'g', -1, 64)
 	case []any:
 		parts := make([]string, len(x))
 		for i, v := range x {
