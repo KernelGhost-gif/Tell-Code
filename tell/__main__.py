@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import TextIO
 
 from . import __version__
-from .interpreter import Interpreter, Parser, TellError, format_source
+from .diagnostics import make_diagnostic, exit_code
+from .interpreter import Interpreter, Parser, TellError, TellSyntaxError, format_source
 
 
 def repl(
@@ -145,8 +146,14 @@ def run_tests(
     return 1 if failed else 0
 
 
+class TellArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        diagnostic = make_diagnostic(message, "<command-line>", "UsageError")
+        self.exit(exit_code(diagnostic.kind), str(diagnostic) + "\\n")
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser(
+    parser = TellArgumentParser(
         prog="tell",
         description="Run, check, test, build, format, and edit Tell programs written as ordinary instructions.",
     )
@@ -227,12 +234,18 @@ def main() -> int:
                 max_loop_iterations=args.max_loop_iterations,
             ).run(source, display_name)
         return 0
-    except OSError as exc:
-        print(f"tell: {exc}", file=sys.stderr)
-        return 2
+    except (OSError, UnicodeError) as exc:
+        diagnostic = make_diagnostic(exc, locals().get("display_name", filename), "IOError")
+        print(diagnostic, file=sys.stderr)
+        return exit_code(diagnostic.kind)
+    except TellSyntaxError as exc:
+        diagnostic = make_diagnostic(exc, filename, "SyntaxError")
+        print(diagnostic, file=sys.stderr)
+        return exit_code(diagnostic.kind)
     except TellError as exc:
-        print(f"tell: {exc}", file=sys.stderr)
-        return 1
+        diagnostic = make_diagnostic(exc, filename, "RuntimeError")
+        print(diagnostic, file=sys.stderr)
+        return exit_code(diagnostic.kind)
 
 
 if __name__ == "__main__":
