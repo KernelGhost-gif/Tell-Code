@@ -14,7 +14,7 @@ The file name is the path supplied to the CLI, normalized only for presentation 
 
 ## Portable scalar values
 
-The portable scalar value set is boolean, nothing, text, and IEEE-754 binary64 number. The value written as nothing is the single null value. There is no implicit conversion from text or boolean to number. Numeric parsing accepts decimal and scientific notation. The runtime must preserve the IEEE-754 result for operations that produce infinity, NaN, or signed zero.
+The portable scalar value set is boolean, nothing, text, and IEEE-754 binary64 number. The value written as nothing is the single null value. Numeric arithmetic uses the existing Tell coercion rule: booleans convert to 1 or 0, and text operands convert only when their trimmed contents are valid decimal/scientific numeric literals. Invalid numeric text raises a runtime type error. Addition concatenates when the left operand is text; otherwise it uses numeric coercion. Numeric parsing accepts decimal and scientific notation. The runtime must preserve the IEEE-754 result for operations that produce infinity, NaN, or signed zero.
 
 Portable number rendering is:
 - Boolean: true or false.
