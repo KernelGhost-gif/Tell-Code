@@ -22,6 +22,11 @@ type binaryExpression struct {
 	operator    string
 	left, right expression
 }
+type conditionalExpression struct {
+	consequent expression
+	condition expression
+	alternative expression
+}
 type listExpression struct{ items []expression }
 type tupleExpression struct{ items []expression }
 type setExpression struct{ items []expression }
@@ -50,6 +55,7 @@ func (literalExpression) isExpression()    {}
 func (nameExpression) isExpression()       {}
 func (unaryExpression) isExpression()      {}
 func (binaryExpression) isExpression()     {}
+func (conditionalExpression) isExpression() {}
 func (listExpression) isExpression()       {}
 func (tupleExpression) isExpression()      {}
 func (setExpression) isExpression()        {}
@@ -120,7 +126,7 @@ func (p *expressionParser) parsePrecedence(min int) (expression, error) {
 		op := p.peek()
 		prec := precedence(op)
 		if prec == 0 || prec < min {
-			return left, nil
+			break
 		}
 		p.take()
 		next := prec + 1
@@ -133,6 +139,23 @@ func (p *expressionParser) parsePrecedence(min int) (expression, error) {
 		}
 		left = binaryExpression{operator: op, left: left, right: right}
 	}
+	if min <= 1 && p.peek() == "if" {
+		p.take()
+		condition, err := p.parsePrecedence(1)
+		if err != nil {
+			return nil, err
+		}
+		if p.peek() != "else" {
+			return nil, p.syntaxError("expected else in conditional expression")
+		}
+		p.take()
+		alternative, err := p.parsePrecedence(1)
+		if err != nil {
+			return nil, err
+		}
+		left = conditionalExpression{consequent:left, condition:condition, alternative:alternative}
+	}
+	return left, nil
 }
 
 func (p *expressionParser) parsePrefix() (expression, error) {
@@ -397,6 +420,15 @@ func (r *runtime) evalExpression(expr expression, e *env) (any, error) {
 			return -n, nil
 		}
 		return n, nil
+	case conditionalExpression:
+		condition, err := r.evalExpression(x.condition, e)
+		if err != nil {
+			return nil, err
+		}
+		if truthy(condition) {
+			return r.evalExpression(x.consequent, e)
+		}
+		return r.evalExpression(x.alternative, e)
 	case binaryExpression:
 		left, err := r.evalExpression(x.left, e)
 		if err != nil {
