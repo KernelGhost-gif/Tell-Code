@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/KernelGhost-gif/Tell-Code/native/internal/diagnostic"
 	"github.com/KernelGhost-gif/Tell-Code/native/internal/tell"
 )
 
@@ -76,26 +77,22 @@ func main() {
 		}
 	}
 	if err := flag.CommandLine.Parse(args); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(2)
+		exitWithDiagnostic(err, "<command-line>", diagnostic.UsageError)
 	}
 	if *showVersion {
 		fmt.Printf("Tell %s (native Go runtime)\n", version)
 		return
 	}
 	if *maxCallDepth < 1 || *maxLoopIterations < 1 {
-		fmt.Fprintln(os.Stderr, "tell: execution limits must be positive integers")
-		os.Exit(2)
+		exitWithDiagnostic(fmt.Errorf("execution limits must be positive integers"), "<command-line>", diagnostic.UsageError)
 	}
 	limits := tell.ExecutionLimits{MaxFunctionCallDepth: *maxCallDepth, MaxLoopIterations: *maxLoopIterations}
 	if projectMode != "" {
 		if projectMode == "new" && flag.NArg() != 1 {
-			fmt.Fprintln(os.Stderr, "tell new expects one project name")
-			os.Exit(2)
+			exitWithDiagnostic(fmt.Errorf("tell new expects one project name"), "<command-line>", diagnostic.UsageError)
 		}
 		if projectMode == "init" && flag.NArg() > 1 {
-			fmt.Fprintln(os.Stderr, "tell init accepts at most one project name")
-			os.Exit(2)
+			exitWithDiagnostic(fmt.Errorf("tell init accepts at most one project name"), "<command-line>", diagnostic.UsageError)
 		}
 		name := ""
 		if flag.NArg() == 1 {
@@ -104,22 +101,19 @@ func main() {
 		if projectMode == "new" {
 			directory, err := createProject(".", name)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "tell new: %v\n", err)
-				os.Exit(1)
+				exitWithDiagnostic(err, "<project>", diagnostic.IOError)
 			}
 			fmt.Printf("Created Tell project %q in %s\n", name, directory)
 		} else {
 			if name == "" {
 				cwd, err := os.Getwd()
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "tell init: %v\n", err)
-					os.Exit(1)
+					exitWithDiagnostic(err, "<project>", diagnostic.IOError)
 				}
 				name = projectNameFromDirectory(cwd)
 			}
 			if err := initializeProject(".", name); err != nil {
-				fmt.Fprintf(os.Stderr, "tell init: %v\n", err)
-				os.Exit(1)
+				exitWithDiagnostic(err, "<project>", diagnostic.IOError)
 			}
 			fmt.Printf("Initialized Tell project %q in the current directory\n", name)
 		}
@@ -131,8 +125,7 @@ func main() {
 	}
 	if testMode {
 		if flag.NArg() > 1 {
-			fmt.Fprintln(os.Stderr, "tell test accepts at most one file or directory")
-			os.Exit(2)
+			exitWithDiagnostic(fmt.Errorf("tell test accepts at most one file or directory"), "<command-line>", diagnostic.UsageError)
 		}
 		target := "."
 		if flag.NArg() == 1 {
@@ -156,8 +149,7 @@ func main() {
 		data, err = os.ReadFile(filename)
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "tell: %v\n", err)
-		os.Exit(2)
+		exitWithDiagnostic(err, filename, diagnostic.IOError)
 	}
 	if formatMode {
 		displayName := filename
@@ -166,8 +158,7 @@ func main() {
 		}
 		formatted, err := tell.Format(string(data), displayName)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "tell: %v\n", err)
-			os.Exit(1)
+			exitWithDiagnostic(err, displayName, diagnostic.SyntaxError)
 		}
 		if *check {
 			if string(data) != formatted {
@@ -184,12 +175,10 @@ func main() {
 		if string(data) != formatted {
 			info, statErr := os.Stat(filename)
 			if statErr != nil {
-				fmt.Fprintf(os.Stderr, "tell: %v\n", statErr)
-				os.Exit(2)
+				exitWithDiagnostic(statErr, filename, diagnostic.IOError)
 			}
 			if err := os.WriteFile(filename, []byte(formatted), info.Mode().Perm()); err != nil {
-				fmt.Fprintf(os.Stderr, "tell: %v\n", err)
-				os.Exit(2)
+				exitWithDiagnostic(err, filename, diagnostic.IOError)
 			}
 		}
 		fmt.Printf("Formatted: %s\n", displayName)
@@ -197,8 +186,7 @@ func main() {
 	}
 	if buildMode {
 		if filename == "-" && *buildOutput == "" {
-			fmt.Fprintln(os.Stderr, "tell: tell build - requires --output")
-			os.Exit(2)
+			exitWithDiagnostic(fmt.Errorf("tell build - requires --output"), "<command-line>", diagnostic.UsageError)
 		}
 		outputPath := *buildOutput
 		if outputPath == "" {
@@ -206,20 +194,17 @@ func main() {
 		}
 		compiled, err := tell.Compile(string(data), filename)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "tell: %v\n", err)
-			os.Exit(1)
+			exitWithDiagnostic(err, filename, diagnostic.SyntaxError)
 		}
 		if err := tell.WriteBytecode(outputPath, compiled); err != nil {
-			fmt.Fprintf(os.Stderr, "tell: %v\n", err)
-			os.Exit(2)
+			exitWithDiagnostic(err, outputPath, diagnostic.IOError)
 		}
 		fmt.Printf("Built: %s\n", outputPath)
 		return
 	}
 	if strings.EqualFold(filepath.Ext(filename), ".tbc") {
 		if err := tell.RunBytecodeWithLimits(data, filename, os.Stdin, os.Stdout, limits); err != nil {
-			fmt.Fprintf(os.Stderr, "tell: %v\n", err)
-			os.Exit(1)
+			exitWithDiagnostic(err, filename, diagnostic.RuntimeError)
 		}
 		return
 	}
@@ -233,8 +218,11 @@ func main() {
 			checkSource = tell.Analyze
 		}
 		if err := checkSource(string(data), displayName); err != nil {
-			fmt.Fprintf(os.Stderr, "tell: %v\n", err)
-			os.Exit(1)
+			kind := diagnostic.SyntaxError
+			if *typeCheck {
+				kind = diagnostic.TypeError
+			}
+			exitWithDiagnostic(err, displayName, kind)
 		}
 		fmt.Printf("Looks good: %s\n", displayName)
 		return
@@ -244,9 +232,12 @@ func main() {
 		runName = "<stdin>"
 	}
 	if err := tell.NewSessionWithLimits(os.Stdin, os.Stdout, limits).Exec(string(data), runName); err != nil {
-		fmt.Fprintf(os.Stderr, "tell: %v\n", err)
-		os.Exit(1)
+		exitWithDiagnostic(err, runName, diagnostic.RuntimeError)
 	}
+}
+
+func exitWithDiagnostic(err error, filename string, kind diagnostic.Kind) {
+	os.Exit(reportDiagnostic(os.Stderr, err, filename, kind))
 }
 
 func runTests(target string, limits tell.ExecutionLimits, output, diagnostics io.Writer) int {
