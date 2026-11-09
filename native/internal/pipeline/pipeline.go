@@ -55,6 +55,8 @@ func Run(ctx context.Context, source, filename string, globals map[string]vm.Val
 	optimized:=optimizer.New().Optimize(expression)
 	chunk,err:=compiler.New().Compile(ctx,optimized)
 	if err!=nil { return Result{},fmt.Errorf("compile Tell expression: %w",err) }
+	chunk,err=optimizer.OptimizeBytecode(chunk)
+	if err!=nil { return Result{},fmt.Errorf("optimize Tell bytecode: %w",err) }
 	value,err:=vm.New().Execute(ctx,chunk,filename,globals)
 	if err!=nil { return Result{},err }
 	return Result{Value:value,OptimizedSourceExpression:optimized},nil
