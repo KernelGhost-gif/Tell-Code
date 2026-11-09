@@ -321,7 +321,7 @@ func TestNamedArgumentValidation(t *testing.T) {
 func TestRuntimeErrorsIncludeSourceColumns(t *testing.T) {
 	source := "If true:\n    Say 1 divided by 0.\nEnd if."
 	_, err := runTest(t, source, "")
-	if err == nil || !strings.Contains(err.Error(), "test.tell:2:5:") {
+	if err == nil || !strings.Contains(err.Error(), "test.tell:2:11:") {
 		t.Fatalf("expected source file, line, and column in error, got %v", err)
 	}
 }
