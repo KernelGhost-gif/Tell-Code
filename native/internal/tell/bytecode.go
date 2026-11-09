@@ -898,7 +898,7 @@ func bytecodeLiteralValue(expr expression) (any, bool) {
 	}
 	switch literal.token.kind {
 	case "number":
-		value, err := strconv.ParseFloat(literal.token.text, 64)
+		value, err := parseFloatPortable(literal.token.text)
 		return value, err == nil
 	case "string":
 		return literal.token.text, true
