@@ -310,7 +310,11 @@ func sliceIndices(length int, start, end *any, step int) ([]int, error) {
 }
 
 func (r *runtime) eval(s string, e *env) (any, error) {
-	expr, err := parseTellExpressionAt(s, 1, 1)
+	return r.evalAt(s, e, 1, 1)
+}
+
+func (r *runtime) evalAt(s string, e *env, line, column int) (any, error) {
+	expr, err := parseTellExpressionAt(s, line, column)
 	if err != nil {
 		return nil, err
 	}
