@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/KernelGhost-gif/Tell-Code/native/internal/bytecode"
+	"github.com/KernelGhost-gif/Tell-Code/native/internal/diagnostic"
 )
 
 type Kind uint8
@@ -24,17 +25,17 @@ type Value struct {
 }
 
 func From(value any) Value {
-	switch v := value.(type) {
+	switch v:=value.(type) {
 	case nil: return Value{kind:Nothing}
-	case string: return Value{kind:Text, text:v}
-	case bool: return Value{kind:Boolean, boolean:v}
-	case int: return Value{kind:Number, number:float64(v)}
-	case int64: return Value{kind:Number, number:float64(v)}
-	case float64: return Value{kind:Number, number:v}
+	case string: return Value{kind:Text,text:v}
+	case bool: return Value{kind:Boolean,boolean:v}
+	case int: return Value{kind:Number,number:float64(v)}
+	case int64: return Value{kind:Number,number:float64(v)}
+	case float64: return Value{kind:Number,number:v}
 	default: return Value{kind:Nothing}
 	}
 }
-func NumberValue(v float64) Value { return Value{kind:Number, number:v} }
+func NumberValue(v float64) Value { return Value{kind:Number,number:v} }
 func (v Value) Kind() Kind { return v.kind }
 func (v Value) Interface() any {
 	switch v.kind {
@@ -54,37 +55,39 @@ func (v Value) String() string {
 }
 
 type VM interface {
-	Execute(context.Context, *bytecode.Chunk, string, map[string]Value) (Value, error)
+	Execute(context.Context,*bytecode.Chunk,string,map[string]Value) (Value,error)
 }
 
 type Engine struct { MaxStack int }
 func New() *Engine { return &Engine{MaxStack:1<<20} }
 
-func (e *Engine) Execute(ctx context.Context, chunk *bytecode.Chunk, filename string, globals map[string]Value) (Value, error) {
-	if chunk == nil || chunk.Version != 1 { return Value{}, fmt.Errorf("invalid or unsupported bytecode chunk") }
-	if e.MaxStack <= 0 { return Value{}, fmt.Errorf("maximum stack must be positive") }
-	stack := make([]Value, 0, 64)
-	push := func(v Value) error {
-		if len(stack) >= e.MaxStack { return fmt.Errorf("stack limit exceeded") }
-		stack = append(stack, v); return nil
+func (e *Engine) Execute(ctx context.Context,chunk *bytecode.Chunk,filename string,globals map[string]Value) (Value,error) {
+	if err:=bytecode.Verify(chunk); err!=nil { return Value{},fmt.Errorf("verify bytecode: %w",err) }
+	if e.MaxStack<=0 { return Value{},fmt.Errorf("maximum stack must be positive") }
+	stack:=make([]Value,0,64)
+	push:=func(v Value) error {
+		if len(stack)>=e.MaxStack { return fmt.Errorf("stack limit exceeded") }
+		stack=append(stack,v)
+		return nil
 	}
-	pop := func() (Value, error) {
-		if len(stack)==0 { return Value{}, fmt.Errorf("bytecode stack underflow") }
-		last:=stack[len(stack)-1]; stack=stack[:len(stack)-1]; return last,nil
+	pop:=func() (Value,error) {
+		if len(stack)==0 { return Value{},fmt.Errorf("bytecode stack underflow") }
+		last:=stack[len(stack)-1]; stack=stack[:len(stack)-1]
+		return last,nil
 	}
-	readIndex := func(ip *int) (uint16,error) {
+	readIndex:=func(ip *int) (uint16,error) {
 		if *ip+2>len(chunk.Code) { return 0,fmt.Errorf("truncated bytecode operand") }
-		index:=uint16(chunk.Code[*ip])<<8|uint16(chunk.Code[*ip+1]); *ip+=2
+		index:=uint16(chunk.Code[*ip])<<8|uint16(chunk.Code[*ip+1])
+		*ip+=2
 		return index,nil
 	}
-
 	for ip:=0; ip<len(chunk.Code); {
 		if err:=ctx.Err(); err!=nil { return Value{},err }
 		offset:=ip
 		op:=bytecode.OpCode(chunk.Code[ip]); ip++
-		line,col:=chunk.LineAt(offset)
+		line,column:=chunk.LineAt(offset)
 		fail:=func(message string) (Value,error) {
-			return Value{},fmt.Errorf("[RuntimeError] File %q, line %d, col %d: %s",filename,line,col,message)
+			return Value{},&diagnostic.Error{Kind:diagnostic.RuntimeError,Filename:filename,Line:line,Column:column,Message:message}
 		}
 		switch op {
 		case bytecode.OpConstant:
@@ -93,21 +96,28 @@ func (e *Engine) Execute(ctx context.Context, chunk *bytecode.Chunk, filename st
 			if err:=push(From(chunk.Constants[index])); err!=nil { return fail(err.Error()) }
 		case bytecode.OpGetGlobal:
 			index,err:=readIndex(&ip); if err!=nil { return fail(err.Error()) }
-			if int(index)>=len(chunk.Constants) { return fail("global name index out of range") }
 			name,ok:=chunk.Constants[index].(string); if !ok { return fail("global name constant is not text") }
 			value,ok:=globals[name]; if !ok { return fail(fmt.Sprintf("undefined name %q",name)) }
 			if err:=push(value); err!=nil { return fail(err.Error()) }
-		case bytecode.OpNegate, bytecode.OpNot:
+		case bytecode.OpJump,bytecode.OpJumpIfFalse:
+			distance,err:=readIndex(&ip); if err!=nil { return fail(err.Error()) }
+			shouldJump:=true
+			if op==bytecode.OpJumpIfFalse {
+				condition,popErr:=pop(); if popErr!=nil { return fail(popErr.Error()) }
+				shouldJump=!truthy(condition)
+			}
+			if shouldJump { ip+=int(distance) }
+		case bytecode.OpNegate,bytecode.OpNot:
 			value,err:=pop(); if err!=nil { return fail(err.Error()) }
 			if op==bytecode.OpNegate {
 				if value.kind!=Number { return fail("unary '-' requires a number") }
-				value.number = -value.number
+				value.number=-value.number
 			} else { value=Value{kind:Boolean,boolean:!truthy(value)} }
 			if err:=push(value); err!=nil { return fail(err.Error()) }
 		case bytecode.OpReturn:
 			if len(stack)==0 { return Value{kind:Nothing},nil }
 			return pop()
-		case bytecode.OpAdd, bytecode.OpSubtract, bytecode.OpMultiply, bytecode.OpDivide, bytecode.OpPower, bytecode.OpEqual:
+		case bytecode.OpAdd,bytecode.OpSubtract,bytecode.OpMultiply,bytecode.OpDivide,bytecode.OpPower,bytecode.OpEqual:
 			right,err:=pop(); if err!=nil { return fail(err.Error()) }
 			left,err:=pop(); if err!=nil { return fail(err.Error()) }
 			var result Value
