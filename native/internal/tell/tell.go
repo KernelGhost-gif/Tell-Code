@@ -3122,7 +3122,7 @@ func lex(s string) ([]token, error) {
 			word := s[start:i]
 			low := strings.ToLower(word)
 			switch low {
-			case "true", "false", "nothing", "and", "or", "not", "in", "notin":
+			case "true", "false", "nothing", "and", "or", "not", "in", "notin", "if", "else":
 				appendToken(low, low, start, i)
 			default:
 				appendToken("ident", word, start, i)
