@@ -10,14 +10,18 @@ New-Item -ItemType Directory -Force -Path $out | Out-Null
 $binary = Join-Path $out "tell-windows-amd64.exe"
 Copy-Item -Force $BinaryPath $binary
 
-$iscc = Get-Command "ISCC.exe" -ErrorAction SilentlyContinue
-if (-not $iscc) {
+$isccCommand = Get-Command "ISCC.exe" -ErrorAction SilentlyContinue
+$isccPath = $null
+if ($isccCommand) {
+    $isccPath = $isccCommand.Source
+}
+if (-not $isccPath) {
     $programFilesX86 = $env:ProgramFiles + " (x86)"
     $candidate = Join-Path $programFilesX86 "Inno Setup 6\ISCC.exe"
-    if (Test-Path $candidate) { $iscc = Get-Item $candidate }
+    if (Test-Path $candidate) { $isccPath = $candidate }
 }
-if (-not $iscc) { throw "Inno Setup 6 compiler (ISCC.exe) is required." }
+if (-not $isccPath) { throw "Inno Setup 6 compiler (ISCC.exe) is required." }
 
 $iss = Join-Path $root "packaging\windows\tell.iss"
-& $iscc.Source "/DAppVersion=$Version" "/DSourceDir=$out" $iss
+& $isccPath "/DAppVersion=$Version" "/DSourceDir=$out" $iss
 if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed with exit code $LASTEXITCODE" }
