@@ -26,6 +26,7 @@ class Expr:
 
 class ExpressionSyntaxError(ValueError):
     def __init__(self, message: str, token: Token):
+        self.token = token
         super().__init__(f"{message} at line {token.line}, column {token.column}")
 
 
