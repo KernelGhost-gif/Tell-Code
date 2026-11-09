@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import ast
 import csv
 import datetime
 import io
@@ -10,7 +9,6 @@ import shutil
 import subprocess
 import json
 import math
-import operator
 import random
 import re
 import statistics
@@ -972,22 +970,6 @@ class Interpreter:
         "csv": TellModule({"parse": _csv_parse, "stringify": _csv_stringify}),
     }
 
-    BINOPS: dict[type, Callable[[Any, Any], Any]] = {
-        ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul,
-        ast.Div: operator.truediv, ast.FloorDiv: operator.floordiv, ast.Mod: operator.mod,
-        ast.Pow: operator.pow, ast.BitAnd: operator.and_, ast.BitOr: operator.or_,
-        ast.BitXor: operator.xor, ast.LShift: operator.lshift, ast.RShift: operator.rshift,
-    }
-    UNARYOPS: dict[type, Callable[[Any], Any]] = {
-        ast.UAdd: operator.pos, ast.USub: operator.neg, ast.Not: operator.not_, ast.Invert: operator.invert,
-    }
-    COMPARES: dict[type, Callable[[Any, Any], bool]] = {
-        ast.Eq: operator.eq, ast.NotEq: operator.ne, ast.Lt: operator.lt,
-        ast.LtE: operator.le, ast.Gt: operator.gt, ast.GtE: operator.ge,
-        ast.In: lambda a, b: a in b, ast.NotIn: lambda a, b: a not in b,
-        ast.Is: operator.is_, ast.IsNot: operator.is_not,
-    }
-
     def __init__(
         self,
         input_fn: Callable[[str], str] = input,
@@ -1205,19 +1187,7 @@ class Interpreter:
         try:
             tree = parse_expression(translated)
         except ExpressionSyntaxError as exc:
-            # Keep previously accepted Python-compatible forms working while
-            # they are added to Tell's shared grammar and native runtime.
-            normalized = self._normalize_expression_words(translated)
-            try:
-                legacy_tree = ast.parse(normalized, mode="eval")
-            except SyntaxError:
-                raise TellError(f"I couldn't understand the expression '{expression}': {exc}.") from exc
-            try:
-                return self._eval(legacy_tree.body, env)
-            except TellError:
-                raise
-            except Exception as legacy_error:
-                raise TellError(f"This expression failed: {legacy_error}") from legacy_error
+            raise TellError(f"I couldn't understand the expression '{expression}': {exc}.") from exc
         try:
             return self._eval_expression(tree, env)
         except TellError:
@@ -1305,6 +1275,10 @@ class Interpreter:
             if operator_name == "**":
                 return math.pow(a, b)
             raise TellError(f"unsupported operator {operator_name!r}")
+        if node.kind == "conditional":
+            consequent, condition, alternative = node.children
+            branch = consequent if self._eval_expression(condition, env) else alternative
+            return self._eval_expression(branch, env)
         if node.kind == "member":
             member = str(node.value)
             if member.startswith("_"):
@@ -1363,87 +1337,6 @@ class Interpreter:
         if number is None:
             raise TellError(f"{display(value)} cannot be used as a number")
         return number
-
-    def _eval(self, node: ast.AST, env: Environment) -> Any:
-        if isinstance(node, ast.Constant):
-            value = node.value
-            if isinstance(value, str):
-                def replace(match: re.Match[str]) -> str:
-                    # Curly-brace interpolation accepts either a variable name
-                    # or a complete Tell expression, e.g. {the length of names}.
-                    try:
-                        return display(self.evaluate(match.group(1).strip(), env))
-                    except Exception:
-                        # Keep literal braces intact (useful for JSON text, etc.).
-                        return match.group(0)
-                value = re.sub(r"\{([^{}]+)\}", replace, value)
-            return value
-        if isinstance(node, ast.Name):
-            return env.get(node.id)
-        if isinstance(node, ast.List):
-            return [self._eval(item, env) for item in node.elts]
-        if isinstance(node, ast.Tuple):
-            return tuple(self._eval(item, env) for item in node.elts)
-        if isinstance(node, ast.Set):
-            return {self._eval(item, env) for item in node.elts}
-        if isinstance(node, ast.Dict):
-            return {self._eval(k, env): self._eval(v, env) for k, v in zip(node.keys, node.values)}
-        if isinstance(node, ast.BinOp) and type(node.op) in self.BINOPS:
-            return self.BINOPS[type(node.op)](self._eval(node.left, env), self._eval(node.right, env))
-        if isinstance(node, ast.UnaryOp) and type(node.op) in self.UNARYOPS:
-            return self.UNARYOPS[type(node.op)](self._eval(node.operand, env))
-        if isinstance(node, ast.BoolOp):
-            if isinstance(node.op, ast.And):
-                for value in node.values:
-                    if not self._eval(value, env):
-                        return False
-                return True
-            for value in node.values:
-                if self._eval(value, env):
-                    return True
-            return False
-        if isinstance(node, ast.Compare):
-            left = self._eval(node.left, env)
-            for op_node, comparator in zip(node.ops, node.comparators):
-                right = self._eval(comparator, env)
-                operation = self.COMPARES.get(type(op_node))
-                if operation is None or not operation(left, right):
-                    return False
-                left = right
-            return True
-        if isinstance(node, ast.IfExp):
-            return self._eval(node.body if self._eval(node.test, env) else node.orelse, env)
-        if isinstance(node, ast.Subscript):
-            return self._eval(node.value, env)[self._eval(node.slice, env)]
-        if isinstance(node, ast.Slice):
-            return slice(
-                self._eval(node.lower, env) if node.lower else None,
-                self._eval(node.upper, env) if node.upper else None,
-                self._eval(node.step, env) if node.step else None,
-            )
-        if isinstance(node, ast.Attribute):
-            if node.attr.startswith("_"):
-                raise TellError("Names beginning with an underscore are private in Tell.")
-            value = self._eval(node.value, env)
-            if isinstance(value, TellInstance):
-                return value.get_member(node.attr)
-            if isinstance(value, TellClass):
-                raise TellError("Tell classes do not expose static members in this version.")
-            if isinstance(value, TellModule):
-                return value.get_member(node.attr)
-            if isinstance(value, BoundTellMethod):
-                raise TellError("Bound methods do not expose runtime internals.")
-            return getattr(value, node.attr)
-        if isinstance(node, ast.Call):
-            function = self._eval(node.func, env)
-            args = [self._eval(arg, env) for arg in node.args]
-            kwargs = {kw.arg: self._eval(kw.value, env) for kw in node.keywords if kw.arg is not None}
-            return function(*args, **kwargs)
-        if isinstance(node, ast.JoinedStr):
-            return "".join(str(self._eval(value, env)) for value in node.values)
-        if isinstance(node, ast.FormattedValue):
-            return str(self._eval(node.value, env))
-        raise TellError(f"That kind of expression is not supported yet: {type(node).__name__}.")
 
     def run(self, source: str, filename: str = "<memory>") -> None:
         self.filename = filename
