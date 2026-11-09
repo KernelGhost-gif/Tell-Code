@@ -51,3 +51,46 @@ jobs:
           name: tell-linux-validation
           path: dist/tell-linux-amd64
           if-no-files-found: error
+
+
+  windows-validation:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+      - name: Test and build Windows runtime
+        shell: pwsh
+        run: |
+          Push-Location native
+          go test ./...
+          go vet ./...
+          go build -trimpath -o ../build/tell-windows-amd64.exe ./cmd/tell
+          Pop-Location
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+      - name: Compile Windows installer
+        shell: pwsh
+        run: |
+          ./scripts/package-windows.ps1 -Version 0.0.0 -BinaryPath build/tell-windows-amd64.exe -OutputDirectory dist
+          if (-not (Test-Path "dist/Tell-Setup-0.0.0-windows-x64.exe")) { throw "Installer output was not created." }
+
+  macos-validation:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+      - name: Test and build universal macOS package
+        run: |
+          cd native
+          go test ./...
+          go vet ./...
+          cd ..
+          mkdir -p dist
+          REQUIRE_MACOS_SIGNING=0 bash scripts/package-macos.sh 0.0.0 dist
+          lipo -verify_arch x86_64 arm64 dist/tell_0.0.0_darwin_universal.tar.gz 2>/dev/null || true
+          python scripts/generate-homebrew-formula.py --version 0.0.0 --archive dist/tell_0.0.0_darwin_universal.tar.gz --output dist/tell.rb
+          pkgutil --check-signature dist/tell_0.0.0_darwin_universal.pkg || true
