@@ -38,7 +38,7 @@ func TestBytecodeOptimizerPreservesReachableConditionalPaths(t *testing.T) {
 	chunk:=bytecode.NewChunk()
 	chunk.Code=[]byte{
 		byte(bytecode.OpConstant),0,0,
-		byte(bytecode.OpJumpIfFalse),0,3,
+		byte(bytecode.OpJumpIfFalse),0,4,
 		byte(bytecode.OpConstant),0,1,
 		byte(bytecode.OpReturn),
 		byte(bytecode.OpConstant),0,2,
