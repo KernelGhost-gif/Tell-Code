@@ -175,6 +175,12 @@ class Analyzer:
             return "any"
         return "any"
 
+    def _infer_at(self, expression: Any, bindings: dict[str, Binding], node: Any) -> str:
+        try:
+            return self._infer(expression, bindings)
+        except SemanticError as exc:
+            raise self.error(node, str(exc)) from exc
+
     def _statements(self, nodes: list[Any], bindings: dict[str, Binding], in_function: bool = False) -> None:
         for node in nodes:
             kind = node.kind
@@ -185,7 +191,7 @@ class Analyzer:
                     continue
                 statement_kind = simple.get("kind")
                 if statement_kind == "let":
-                    expr_type = self._infer(simple.get("expression"), bindings)
+                    expr_type = self._infer_at(simple.get("expression"), bindings, node)
                     names = simple.get("names", [])
                     annotation = simple.get("annotation")
                     if len(names) > 1:
@@ -205,7 +211,7 @@ class Analyzer:
                         elif current:
                             bindings[name] = Binding(expr_type)
                 elif simple.get("expression") is not None:
-                    self._infer(simple["expression"], bindings)
+                    self._infer_at(simple["expression"], bindings, node)
             elif kind == "function":
                 bindings[data["name"]] = Binding("function")
                 local = {name: Binding() for name in data["parameters"]}
@@ -232,7 +238,7 @@ class Analyzer:
                     if data.get(key):
                         try:
                             from .expression_parser import parse
-                            self._infer(parse(data[key]), bindings)
+                            self._infer_at(parse(data[key]), bindings, node)
                         except Exception as exc:
                             if isinstance(exc, SemanticError):
                                 raise self.error(node, str(exc)) from exc
