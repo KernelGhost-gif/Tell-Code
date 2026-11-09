@@ -28,7 +28,7 @@ The scanner returns tokens containing byte offsets and 1-based line/column posit
 - compiler.Compiler: Compile(context.Context, ast.Expr) (*bytecode.Chunk, error)
 - vm.VM: Execute(context.Context, *bytecode.Chunk, filename string, globals map[string]vm.Value) (vm.Value, error)
 
-The pipeline example is implemented in native/internal/pipeline/pipeline.go. It parses, resolves symbols, infers expression types, folds safe constants, compiles, and executes. The current bytecode instruction set is intentionally limited to scalar expression evaluation; it is not yet a replacement for the established statement VM.
+The pipeline example is implemented in native/internal/pipeline/pipeline.go. It parses, resolves symbols, infers expression types, folds safe constants, compiles, optimizes bytecode, and executes. A caller can use pipeline.Run(context.Background(), "2 + 3 * 4", "example.tell", nil) to run the source string through the complete expression vertical slice and inspect Result.Value. The current bytecode instruction set is intentionally limited to scalar expression evaluation; it is not yet a replacement for the established statement VM. The expression pipeline runs AST constant folding and then bytecode jump threading plus reachability-based dead-code elimination. The bytecode pass re-verifies operands and targets, relocates branch offsets, and rebuilds source-line mappings.
 
 ## Runtime migration sequence
 
