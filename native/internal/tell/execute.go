@@ -229,6 +229,8 @@ func (r *runtime) executeSimpleStatement(statement *simpleStatement, e *env) err
 			return r.declare(e, statement.names[0], value, statement.annotation, statement.constant)
 		}
 		return r.assign(e, statement.names[0], value)
+	case "call":
+		return nil
 	case "set":
 		if len(statement.names) > 1 {
 			values, ok := sequenceValues(value)
