@@ -191,8 +191,10 @@ Say maths.sqrt(81).
         source = """
 Let values be [1, 2].
 Set values[1] to 9.
+Set the item at position 0 in values to 7.
 Let mapping be {"name": "old"}.
 Set mapping["name"] to "new".
+Set the key "name" in mapping to "updated".
 Say values.
 Say mapping["name"].
 """
@@ -202,9 +204,9 @@ Say mapping["name"].
             ["set_index", "set_index"],
         )
         output, env = self.run_tell(source)
-        self.assertEqual(output, ["[1, 9]", "new"])
-        self.assertEqual(env.get("values"), [1, 9])
-        self.assertEqual(env.get("mapping"), {"name": "new"})
+        self.assertEqual(output, ["[7, 9]", "updated"])
+        self.assertEqual(env.get("values"), [7, 9])
+        self.assertEqual(env.get("mapping"), {"name": "updated"})
 
     def test_interop_imports_are_typed_nodes(self):
         cases = [
