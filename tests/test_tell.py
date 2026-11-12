@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 from tell import Interpreter, Parser, TellError
+from tell.diagnostics import make_diagnostic
 from tell.__main__ import repl, run_tests
 from tell.interpreter import format_source, TellSyntaxError, TellLocatedError
 
