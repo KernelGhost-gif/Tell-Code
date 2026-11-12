@@ -279,5 +279,10 @@
     "name": "shared numeric coercions for booleans and numeric text",
     "source": "Say true times 2.\nSay false plus 5.\nSay \"6\" times 7.\nSay \"value=\" plus 3.",
     "output": "2\n5\n42\nvalue=3\n"
+  },
+  {
+    "name": "typed collection mutations",
+    "source": "Let items be [1, 2].\nAdd 3 to items.\nRemove 1 from items.\nSay items.\nLet values be {1, 2}.\nAdd 2 to values.\nAdd 3 to values.\nRemove 1 from values.\nSay len(values).\nSay 3 is in values.",
+    "output": "[2, 3]\n2\ntrue\n"
   }
 ]
