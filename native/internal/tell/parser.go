@@ -54,6 +54,15 @@ func ioFailure(err error) error {
 	return &Error{Kind:"IOError", Message:err.Error()}
 }
 
+func ioFailureAt(err error, filename string, expression expression) error {
+	if err == nil { return nil }
+	line, column := expressionPosition(expression)
+	if line > 0 && column > 0 {
+		return withSourceLocation(ioFailure(err), filename, line, column)
+	}
+	return ioFailure(err)
+}
+
 func withSourceLocation(err error, filename string, line, column int) error {
 	if err == nil {
 		return nil
