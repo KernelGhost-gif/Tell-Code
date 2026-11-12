@@ -120,7 +120,7 @@ func (f *userFunction) callNamed(args []any, named map[string]any, receiver *use
 		}
 	}
 	if f.runtime.callDepth >= f.runtime.limits.MaxFunctionCallDepth {
-		return nil, fail("maximum function call depth (%d) exceeded", f.runtime.limits.MaxFunctionCallDepth)
+		return nil, fail("maximum function call depth exceeded")
 	}
 	local := newEnv(f.closure)
 	for name, value := range bindings {
