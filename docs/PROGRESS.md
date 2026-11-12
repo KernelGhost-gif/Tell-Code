@@ -4,7 +4,7 @@ Updated 2026-11-03 against `main`. v0.3.6 adds the optional Tell IDE described b
 
 ## Architecture and verified baseline
 
-- Tell has a Python interpreter and an independent native Go runtime. Each has a hand-written lexer and Pratt expression parser. The parsers now build expression ASTs for common `Let`, `Set`, output, assertion, return, raise, loop-control, and expression statements; both runtimes execute these nodes directly, and the native bytecode compiler consumes the same Go nodes. Block and unmigrated statement parsing remain separate, line-oriented implementations with legacy recognition. Python retains a restricted host-AST compatibility path.
+- Tell has a Python interpreter and an independent native Go runtime. Each has a hand-written lexer and Pratt expression parser. The parsers now build expression ASTs for common `Let`, `Set`, output, assertion, return, raise, loop-control, and expression statements; both runtimes execute these nodes directly, and the native bytecode compiler consumes the same Go nodes. Block and unmigrated statement parsing remain separate, line-oriented implementations with legacy recognition. Python no longer falls back to the host AST; unsupported host-only expressions are rejected by the Tell parser.
 - Go's `tell build` emits verified stack bytecode for a subset. It does not compile all Tell programs or emit native machine code.
 - The latest GitHub release is v0.3.6. Both the native runtime and tagged release GitHub Actions workflows passed.
 - The shared conformance corpus is executed by both runtime suites; set conformance cases were added in this checkpoint.
@@ -35,7 +35,7 @@ Updated 2026-11-03 against `main`. v0.3.6 adds the optional Tell IDE described b
 ## Incomplete and known limitations
 
 - A unified source-spanned AST and shared semantic-analysis pipeline still do not exist; the migrated AST subset is incremental and statement parsing remains line-based.
-- The type system remains dynamic with runtime annotations and a conservative native `--types` check. Generics, unions, enums, aliases, and whole-program static checking are absent.
+- The type system remains dynamic with runtime annotations and conservative `--types` checks in both CLIs. Generics, unions, enums, aliases, and whole-program static checking are absent.
 - Classes provide constructors, fields, instance methods, single inheritance, and overriding. Static methods, properties, interfaces, access controls, abstract classes, traits, and multiple inheritance are absent.
 - Collection comprehensions, lazy iterators/generators, immutable dictionaries/sets, and hash-based set membership are absent. Sets use deterministic insertion order and linear equality checks; tuples are immutable sequences.
 - Local `.tell` imports, caching, export filtering, and cycle detection exist. The manifest is scaffolding only; package resolution and dependency installation are absent.
@@ -63,3 +63,18 @@ The v0.3.6 implementation is committed to `main` and published at https://github
 - Added native interpreter, bytecode, and Python interpreter tests plus a runnable Node.js example. CI and release workflows install Node.js so the bridge is exercised.
 - This is a process-based interoperability layer, not an embedded runtime or sandbox. Python and Node.js must be installed for their respective bridges; state, callbacks, opaque objects, and non-JSON values do not cross the boundary.
 - C/C++, Rust, JVM, .NET, browser/WASM bridges, a general FFI, package manager, and full native compiler pipeline remain future work.
+
+
+## 2026-11-12 modernization branch checkpoint
+
+The following work is on `modernization/0.4-foundation`; it has not been merged to `main` or published as a release.
+
+- Removed the Python `ast.parse` expression fallback. The Python runtime now executes only Tell expression ASTs; conditional expressions are supported in both production Pratt parsers.
+- Both production parsers validate control-flow expressions at parse time and retain parsed ASTs for `If`, `While`, `Repeat`, and `For each`, avoiding repeated runtime parsing.
+- Expression ASTs retain token line/column spans for operators, calls, member access, and indexing. Runtime diagnostics preserve these spans for division-by-zero, null member access, recursion limits, and control-flow conditions.
+- Added stable CLI diagnostics and exit-code adapters: syntax/usage 64, type/name/runtime 70, I/O 74. The Python CLI now exposes the conservative `--types` analyzer, matching the native CLI's static-check entry point for statically knowable types.
+- Split the production Go runtime implementation into parser, runtime, execution, statement, module, and lexer files while retaining the existing same-package API. Added explicit runtime call-frame metadata (function, caller/local lexical environments, and call-site coordinates) with unwind tests.
+- Added `docs/GRAMMAR_V1.ebnf`, specified numeric coercion and IEEE-754 behavior in `docs/CONFORMANCE_SEMANTICS_V1.md`, and expanded numeric and conditional-expression cases in the shared core corpus.
+- Added exact source-span tests for runtime expression errors and condition expressions. Updated the process-level `runtime-v1.json` expectations to the token-level diagnostic positions and normalized portable error messages.
+- CI now runs both the smoke suite and the full process-level runtime-v1 suite against Python and native binaries. The complete latest validation result is tracked in the modernization GitHub Actions run; do not infer release readiness from branch-local success alone.
+- Remaining migration work: move the remaining regex/line-based I/O, module, collection-mutation, object, and standard-library statements into typed statement nodes; expand process-level fixtures beyond the current seven runtime-v1 cases; complete the shared semantic pipeline and broader bytecode lowering. The production Go and Python runtimes still have separate statement/block parsers.
