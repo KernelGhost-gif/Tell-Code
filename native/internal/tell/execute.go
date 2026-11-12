@@ -252,6 +252,26 @@ func (r *runtime) executeSimpleStatement(statement *simpleStatement, e *env) err
 
 
 
+	case "set_index":
+		indexTarget := statement.target.(indexExpression)
+		container, targetErr := r.evalExpression(indexTarget.value, e)
+		if targetErr != nil { return targetErr }
+		index, targetErr := r.evalExpression(indexTarget.index, e)
+		if targetErr != nil { return targetErr }
+		switch collection := container.(type) {
+		case []any:
+			number, numberErr := numberValue(index)
+			if numberErr != nil { return numberErr }
+			position := int(number)
+			if position < 0 { position += len(collection) }
+			if position < 0 || position >= len(collection) { return fail("list index out of range") }
+			collection[position] = value
+		case map[string]any:
+			collection[fmt.Sprint(index)] = value
+		default:
+			return fail("this value does not support indexed assignment")
+		}
+		return nil
 	case "import_python":
 		module, importErr := newPythonModule(statement.source)
 		if importErr != nil { return fail("%v", importErr) }
