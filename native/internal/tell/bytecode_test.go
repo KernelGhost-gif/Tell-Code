@@ -462,6 +462,13 @@ func TestBytecodePreservesRuntimeTypeAndConstantRules(t *testing.T) {
 	}
 }
 
+func TestBytecodeSupportsIndexedListAndDictionaryAssignment(t *testing.T) {
+	source := "Let values be [1, 2].\nSet values[1] to 9.\nLet mapping be {\"name\": \"old\"}.\nSet mapping[\"name\"] to \"new\".\nSay values.\nSay mapping[\"name\"]."
+	if got, want := runCompiled(t, source), "[1, 9]\nnew\n"; got != want {
+		t.Fatalf("compiled indexed assignment output = %q, want %q", got, want)
+	}
+}
+
 func TestBytecodeSupportsListAndSetMutation(t *testing.T) {
 	source := `Let values be [1, 2, 2].
 Add 3 to values.
