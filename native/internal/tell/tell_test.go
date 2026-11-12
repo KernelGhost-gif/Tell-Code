@@ -538,6 +538,29 @@ func TestIndexedAssignmentsUseTypedASTNodesAndExecute(t *testing.T) {
 	}
 }
 
+func TestCallAndRunStatementsUseTypedASTNodesAndExecute(t *testing.T) {
+	source := "To combine with left and right:\n    Say left plus right.\nEnd function.\nCall combine with 2 and 3.\nRun combine with 4 and 1."
+	nodes, err := parse(source, "call-statements.tell")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, index := range []int{1, 2} {
+		if nodes[index].simple == nil || nodes[index].simple.kind != "call" {
+			t.Fatalf("call statement %d was not parsed into typed call node: %#v", index, nodes[index])
+		}
+		if _, ok := nodes[index].simple.expression.(callExpression); !ok {
+			t.Fatalf("call statement expression = %T, want callExpression", nodes[index].simple.expression)
+		}
+	}
+	output, err := runTest(t, source, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := output, "5\n5\n"; got != want {
+		t.Fatalf("Call/Run output = %q, want %q", got, want)
+	}
+}
+
 func TestRememberFieldStatementsUseTypedASTNodesAndExecute(t *testing.T) {
 	nodes, err := parse("Remember value as this.name.", "remember.tell")
 	if err != nil {

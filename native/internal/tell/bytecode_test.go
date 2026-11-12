@@ -462,6 +462,17 @@ func TestBytecodePreservesRuntimeTypeAndConstantRules(t *testing.T) {
 	}
 }
 
+func TestBytecodeCompilesCallAndRunStatements(t *testing.T) {
+	source := `To combine with left and right:
+    Say left plus right.
+End function.
+Call combine with 2 and 3.
+Run combine with 4 and 1.`
+	if got, want := runCompiled(t, source), "5\n5\n"; got != want {
+		t.Fatalf("compiled Call/Run output = %q, want %q", got, want)
+	}
+}
+
 func TestBytecodeCompilesRememberFieldStatements(t *testing.T) {
 	source := `Create a class called Counter:
     When creating a Counter with initial:

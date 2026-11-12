@@ -368,6 +368,35 @@ func parseSimpleStatement(source string, line, column int) *simpleStatement {
 			}
 		}
 	}
+	for _, prefix := range []string{"call ", "run "} {
+		rest, ok := prefixFold(source, prefix)
+		if !ok { continue }
+		name, tail := firstWord(rest)
+		if !identifier(name) { continue }
+		arguments := []callArgument{}
+		valid := true
+		if strings.TrimSpace(tail) != "" {
+			argumentText, hasWith := prefixFold(tail, "with ")
+			if !hasWith || strings.TrimSpace(argumentText) == "" {
+				valid = false
+			} else {
+				for _, argument := range splitAnd(argumentText) {
+					parsed, parsedOK := parseExpression(argument)
+					if !parsedOK { valid = false; break }
+					arguments = append(arguments, callArgument{value:parsed})
+				}
+			}
+		}
+		if valid {
+			nameOffset := strings.Index(source, name)
+			if nameOffset < 0 { nameOffset = len(prefix) }
+			callee := nameExpression{name:name, line:line, column:column+utf8.RuneCountInString(source[:nameOffset])}
+			callOffset := strings.Index(strings.ToLower(source), strings.TrimSpace(prefix))
+			if callOffset < 0 { callOffset = 0 }
+			call := callExpression{callee:callee, args:arguments, line:line, column:column+utf8.RuneCountInString(source[:callOffset])}
+			return &simpleStatement{kind:"call", source:source, expression:call, hasExpression:true}
+		}
+	}
 	if rest, ok := prefixFold(source, "remember "); ok {
 		expressionText, field, separated := splitFoldOnce(rest, " as this.")
 		if separated && identifier(field) {

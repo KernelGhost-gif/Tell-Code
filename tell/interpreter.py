@@ -765,6 +765,35 @@ class Parser:
 
 
 
+        for prefix in ("call ", "run "):
+            rest = _take_prefix(text, prefix)
+            if rest is None:
+                continue
+            name, tail = _first_identifier(rest)
+            if not name or not re.fullmatch(r"(?:[^\W\d]|_)\w*", name):
+                continue
+            arguments = []
+            valid = True
+            if tail:
+                argument_text = _take_prefix(tail, "with ")
+                if not argument_text:
+                    valid = False
+                else:
+                    try:
+                        arguments = [
+                            parse_expression(_translate_expression_text(argument))
+                            for argument in _split_top_level_text(argument_text, " and ")
+                        ]
+                    except ExpressionSyntaxError:
+                        valid = False
+            if valid:
+                callee = TellExpr("name", name)
+                call = TellExpr(
+                    "call", children=(callee, *arguments),
+                    names=(None,) * len(arguments),
+                )
+                return {"kind": "call", "source": text, "expression": call}
+
         remember_rest = _take_prefix(text, "remember ")
         remember_parts = _split_once_casefold(remember_rest, " as this.") if remember_rest is not None else None
         if remember_parts and re.fullmatch(r"(?:[^\W\d]|_)\w*", remember_parts[1]):
@@ -1712,6 +1741,8 @@ class Interpreter:
                 if not isinstance(target, TellInstance):
                     raise TellError("Property assignment requires a Tell instance.")
                 target.fields[simple["target"].value] = value
+            elif simple["kind"] == "call":
+                pass
             elif simple["kind"] == "remember_field":
                 try:
                     instance = env.get("this")

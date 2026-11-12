@@ -397,6 +397,8 @@ func (c *bytecodeCompiler) compileSimpleStatement(statement *simpleStatement) er
 		c.code[instruction].Name = statement.names[0]
 		c.code[instruction].Type = statement.annotation
 		c.code[instruction].Constant = statement.constant
+	case "call":
+		c.emit("POP")
 	case "set":
 		if len(statement.names) > 1 {
 			instruction := c.emit("MULTI_ASSIGN")
