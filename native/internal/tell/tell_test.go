@@ -518,6 +518,26 @@ func TestLocalModuleImportsUseTypedASTNodes(t *testing.T) {
 	}
 }
 
+func TestInteropImportsUseTypedASTNodes(t *testing.T) {
+	cases := []struct{ source, kind, alias string }{
+		{"Use the Python library called statistics as stats.", "import_python", "stats"},
+		{"Use the JavaScript library called node:path as paths.", "import_javascript", "paths"},
+		{"Use the math library as maths.", "import_library", "maths"},
+	}
+	for _, testCase := range cases {
+		nodes, err := parse(testCase.source, "imports.tell")
+		if err != nil {
+			t.Fatalf("parse %q: %v", testCase.source, err)
+		}
+		if len(nodes) != 1 || nodes[0].simple == nil || nodes[0].simple.kind != testCase.kind {
+			t.Fatalf("import %q was not parsed into %s node: %#v", testCase.source, testCase.kind, nodes)
+		}
+		if len(nodes[0].simple.names) != 1 || nodes[0].simple.names[0] != testCase.alias {
+			t.Fatalf("import alias = %#v, want %q", nodes[0].simple.names, testCase.alias)
+		}
+	}
+}
+
 func TestCollectionMutationStatementsUseTypedASTNodes(t *testing.T) {
 	nodes, err := parse("Let items be [1].\nAdd 2 to items.\nRemove 1 from items.", "mutations.tell")
 	if err != nil {
