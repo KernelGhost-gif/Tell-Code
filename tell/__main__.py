@@ -10,7 +10,7 @@ from typing import TextIO
 from . import __version__
 from .diagnostics import make_diagnostic, exit_code
 from .semantic import SemanticError, analyze as analyze_types
-from .interpreter import Interpreter, Parser, TellError, TellSyntaxError, format_source
+from .interpreter import Interpreter, Parser, TellError, TellSyntaxError, TellIOError, format_source
 
 
 def repl(
@@ -241,6 +241,10 @@ def main() -> int:
         return 0
     except (OSError, UnicodeError) as exc:
         diagnostic = make_diagnostic(exc, locals().get("display_name", filename), "IOError")
+        print(diagnostic, file=sys.stderr)
+        return exit_code(diagnostic.kind)
+    except TellIOError as exc:
+        diagnostic = make_diagnostic(exc, filename, "IOError")
         print(diagnostic, file=sys.stderr)
         return exit_code(diagnostic.kind)
     except TellSyntaxError as exc:
