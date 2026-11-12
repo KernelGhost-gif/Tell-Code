@@ -272,11 +272,6 @@ func (r *runtime) executeSimpleStatement(statement *simpleStatement, e *env) err
 		if loadErr != nil { return loadErr }
 		e.set(statement.names[0], module)
 		return nil
-	case "import_module":
-		module, loadErr := r.loadTellModule(fmt.Sprint(value))
-		if loadErr != nil { return loadErr }
-		e.set(statement.names[0], module)
-		return nil
 	case "add":
 		collection, getErr := e.get(statement.names[0])
 		if getErr != nil { return getErr }
