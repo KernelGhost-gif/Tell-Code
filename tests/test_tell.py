@@ -184,6 +184,14 @@ Say maths.sqrt(81).
 
 
 
+
+    def test_local_module_import_is_a_typed_node(self):
+        parsed = Parser('Use the module "math_helpers.tell" as helpers.').parse()
+        simple = parsed[0].data["simple"]
+        self.assertEqual(simple["kind"], "import_module")
+        self.assertEqual(simple["names"], ["helpers"])
+        self.assertEqual(simple["expression"].kind, "literal")
+
     def test_collection_mutations_are_typed_nodes(self):
         parsed = Parser("Add 2 to items.\nRemove 1 from items.").parse()
         self.assertEqual([node.data["simple"]["kind"] for node in parsed], ["add", "remove"])
