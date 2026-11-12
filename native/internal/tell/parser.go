@@ -76,6 +76,7 @@ type simpleStatement struct {
 	expression    expression
 	target        expression
 	hasExpression bool
+	hasTarget     bool
 }
 type parser struct {
 	lines    []string
@@ -354,6 +355,40 @@ func parseSimpleStatement(source string, line, column int) *simpleStatement {
 	}
 	if statement := makeExpression("raise", "raise an error saying "); statement != nil {
 		return statement
+	}
+
+	if rest, ok := prefixFold(source, "ask "); ok {
+		for _, delimiter := range []string{" and save the answer as ", " and put the answer in "} {
+			prompt, name, separated := splitFoldOnce(rest, delimiter)
+			if separated && identifier(name) {
+				if parsed, valid := parseExpression(prompt); valid {
+					return &simpleStatement{kind:"ask", names:[]string{name}, expression:parsed, hasExpression:true}
+				}
+			}
+		}
+	}
+	if rest, ok := prefixFold(source, "read the file "); ok {
+		pathText, name, separated := splitFoldOnce(rest, " into ")
+		if separated && identifier(name) {
+			if parsed, valid := parseExpression(pathText); valid {
+				return &simpleStatement{kind:"read_file", names:[]string{name}, expression:parsed, hasExpression:true}
+			}
+		}
+	}
+	for _, operation := range []struct{ prefix, delimiter, kind string }{
+		{"write ", " to the file ", "write_file"},
+		{"append ", " to the file ", "append_file"},
+	} {
+		if rest, ok := prefixFold(source, operation.prefix); ok {
+			valueText, pathText, separated := splitFoldOnce(rest, operation.delimiter)
+			if separated {
+				valueExpr, validValue := parseExpression(valueText)
+				pathExpr, validPath := parseExpression(pathText)
+				if validValue && validPath {
+					return &simpleStatement{kind:operation.kind, expression:valueExpr, target:pathExpr, hasExpression:true, hasTarget:true}
+				}
+			}
+		}
 	}
 	if rest, ok := prefixFold(source, "tell "); ok {
 		target, methodText, separated := splitFoldOnce(rest, " to ")
