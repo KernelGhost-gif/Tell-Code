@@ -500,6 +500,23 @@ func TestControlFlowExpressionsAreParsedOnceAndKeepSourceSpans(t *testing.T) {
 	}
 }
 
+
+func TestCollectionMutationStatementsUseTypedASTNodes(t *testing.T) {
+	nodes, err := parse("Let items be [1].\nAdd 2 to items.\nRemove 1 from items.", "mutations.tell")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nodes) != 3 {
+		t.Fatalf("got %d statements, want 3", len(nodes))
+	}
+	if nodes[1].simple == nil || nodes[1].simple.kind != "add" {
+		t.Fatalf("Add was not parsed as a typed node: %#v", nodes[1])
+	}
+	if nodes[2].simple == nil || nodes[2].simple.kind != "remove" {
+		t.Fatalf("Remove was not parsed as a typed node: %#v", nodes[2])
+	}
+}
+
 func TestFileAndConsoleStatementsUseTypedASTNodes(t *testing.T) {
 	source := "Ask \"Name? \" and save the answer as name.\nRead the file \"note.txt\" into contents.\nWrite name to the file \"copy.txt\".\nAppend \"!\" to the file \"copy.txt\"."
 	nodes, err := parse(source, "typed-io.tell")
