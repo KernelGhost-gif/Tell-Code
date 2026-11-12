@@ -287,7 +287,7 @@
   },
   {
     "name": "typed indexed assignment",
-    "source": "Let values be [1, 2].\nSet values[1] to 9.\nLet mapping be {\"name\": \"old\"}.\nSet mapping[\"name\"] to \"new\".\nSay values.\nSay mapping[\"name\"].",
-    "output": "[1, 9]\nnew\n"
+    "source": "Let values be [1, 2].\nSet values[1] to 9.\nSet the item at position 0 in values to 7.\nLet mapping be {\"name\": \"old\"}.\nSet mapping[\"name\"] to \"new\".\nSet the key \"name\" in mapping to \"updated\".\nSay values.\nSay mapping[\"name\"].",
+    "output": "[7, 9]\nupdated\n"
   }
 ]
