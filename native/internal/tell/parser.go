@@ -393,6 +393,14 @@ func parseSimpleStatement(source string, line, column int) *simpleStatement {
 			}
 		}
 	}
+	if rest, ok := prefixFold(source, "use the module "); ok {
+		pathText, alias, separated := splitFoldOnce(rest, " as ")
+		if separated && identifier(alias) {
+			if parsed, valid := parseExpression(pathText); valid {
+				return &simpleStatement{kind:"import_module", names:[]string{alias}, expression:parsed, hasExpression:true}
+			}
+		}
+	}
 	if rest, ok := prefixFold(source, "ask "); ok {
 		for _, delimiter := range []string{" and save the answer as ", " and put the answer in "} {
 			prompt, name, separated := splitFoldOnce(rest, delimiter)
