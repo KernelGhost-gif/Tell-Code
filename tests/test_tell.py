@@ -200,8 +200,8 @@ Say mapping["name"].
 """
         parsed = Parser(source).parse()
         self.assertEqual(
-            [parsed[index].data["simple"]["kind"] for index in (1, 3)],
-            ["set_index", "set_index"],
+            [parsed[index].data["simple"]["kind"] for index in (1, 2, 4, 5)],
+            ["set_index", "set_index", "set_index", "set_index"],
         )
         output, env = self.run_tell(source)
         self.assertEqual(output, ["[7, 9]", "updated"])
