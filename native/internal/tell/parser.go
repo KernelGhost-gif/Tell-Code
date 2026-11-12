@@ -368,6 +368,14 @@ func parseSimpleStatement(source string, line, column int) *simpleStatement {
 			}
 		}
 	}
+	if rest, ok := prefixFold(source, "remember "); ok {
+		expressionText, field, separated := splitFoldOnce(rest, " as this.")
+		if separated && identifier(field) {
+			if parsed, valid := parseExpression(expressionText); valid {
+				return &simpleStatement{kind:"remember_field", source:expressionText, names:[]string{field}, expression:parsed, hasExpression:true}
+			}
+		}
+	}
 	makeExpression := func(kind, prefix string) *simpleStatement {
 		expressionText, ok := prefixFold(source, prefix)
 		if !ok || strings.TrimSpace(expressionText) == "" {
