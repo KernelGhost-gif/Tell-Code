@@ -113,8 +113,29 @@ func TestParserBuildsExpressionASTsForCommonStatements(t *testing.T) {
 		t.Fatalf("natural object construction did not produce a parsed statement: %#v, %v", constructed, err)
 	}
 	told, err := parse("Tell box to open with \"wide\".", "ast.tell")
-	if err != nil || told[0].simple == nil || told[0].simple.kind != "expression" {
+	if err != nil || told[0].simple == nil || told[0].simple.kind != "call" {
 		t.Fatalf("Tell method sentence did not produce an expression AST: %#v, %v", told, err)
+	}
+}
+
+func TestTellMethodSentenceDiscardsReturnValue(t *testing.T) {
+	source := `Create a class called Counter:
+    When creating a Counter:
+        Remember 41 as this.value.
+    End constructor.
+    To get_value:
+        Give back this.value.
+    End function.
+End class.
+Let counter be a new Counter.
+Tell counter to get_value.
+Say "done".`
+	var output bytes.Buffer
+	if err := RunWithIO(source, "tell-call.tell", bytes.NewReader(nil), &output); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := output.String(), "done\n"; got != want {
+		t.Fatalf("Tell method sentence output = %q, want %q (method return must not echo)", got, want)
 	}
 }
 
