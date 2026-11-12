@@ -741,6 +741,11 @@ class Parser:
             target = parsed_expression(parts[0])
             if target is not None and target.kind == "member" and expression is not None:
                 return {"kind": "set_member", "source": parts[0], "target": target, "expression": expression, "expression_source": parts[1]}
+            if target is not None and target.kind == "index" and expression is not None:
+                return {
+                    "kind": "set_index", "source": parts[0], "target": target,
+                    "expression": expression, "expression_source": parts[1],
+                }
 
 
 
@@ -1681,6 +1686,21 @@ class Interpreter:
                 if not isinstance(target, TellInstance):
                     raise TellError("Property assignment requires a Tell instance.")
                 target.fields[simple["target"].value] = value
+            elif simple["kind"] == "set_index":
+                target = simple["target"]
+                container = self._eval_expression(target.children[0], env)
+                index = self._eval_expression(target.children[1], env)
+                if isinstance(container, list):
+                    if not isinstance(index, int) or isinstance(index, bool):
+                        raise TellError("list index must be a number")
+                    position = index if index >= 0 else len(container) + index
+                    if position < 0 or position >= len(container):
+                        raise TellError("list index out of range")
+                    container[position] = value
+                elif isinstance(container, dict):
+                    container[display(index)] = value
+                else:
+                    raise TellError("this value does not support indexed assignment")
 
             elif simple["kind"] == "import_module":
                 env.set(simple["names"][0], self._load_module(str(value)))
