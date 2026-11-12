@@ -43,7 +43,11 @@ The logical words and, or, and not are operators. The word in and phrase is in a
     assignment-target   = identifier
                         | identifier, { ",", identifier }
                         | expression, ".", identifier
-                        | expression, "[", expression, "]" ;
+                        | expression, "[", expression, "]"
+                        | "the item at position", expression, "in", identifier
+                        | "item at position", expression, "in", identifier
+                        | "the key", expression, "in", identifier
+                        | "key", expression, "in", identifier ;
     output              = ("Say" | "Show" | "Print"), expression, "." ;
     assertion           = "Check that", expression, "." ;
     return-statement    = ("Give back" | "Return"), [ expression ], "." ;
