@@ -19,10 +19,18 @@ func (r *runtime) execute(nodes []node, e *env) error {
 	}
 	return nil
 }
+
+func (r *runtime) evalControlExpression(n node, e *env) (any, error) {
+	if n.conditionExpr != nil {
+		return r.evalExpression(n.conditionExpr, e)
+	}
+	return r.eval(n.condition, e)
+}
+
 func (r *runtime) execNode(n node, e *env) error {
 	switch n.kind {
 	case "if":
-		v, err := r.evalAt(n.condition, e, n.line, n.column+len("If "))
+		v, err := r.evalControlExpression(n, e)
 		if err != nil {
 			return err
 		}
@@ -33,7 +41,7 @@ func (r *runtime) execNode(n node, e *env) error {
 	case "while":
 		iterations := 0
 		for {
-			v, err := r.evalAt(n.condition, e, n.line, n.column+len("While "))
+			v, err := r.evalControlExpression(n, e)
 			if err != nil {
 				return err
 			}
@@ -57,7 +65,7 @@ func (r *runtime) execNode(n node, e *env) error {
 			}
 		}
 	case "repeat":
-		v, err := r.evalAt(n.condition, e, n.line, n.column+len("Repeat "))
+		v, err := r.evalControlExpression(n, e)
 		if err != nil {
 			return err
 		}
@@ -85,7 +93,7 @@ func (r *runtime) execNode(n node, e *env) error {
 		}
 		return nil
 	case "for":
-		v, err := r.evalAt(n.condition, e, n.line, n.column+len("For each ")+len([]rune(n.name))+len(" in "))
+		v, err := r.evalControlExpression(n, e)
 		if err != nil {
 			return err
 		}
