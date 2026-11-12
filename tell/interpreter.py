@@ -743,6 +743,21 @@ class Parser:
                 return {"kind": "set_member", "source": parts[0], "target": target, "expression": expression, "expression_source": parts[1]}
 
 
+
+        for prefix, delimiter, kind in (
+            ("add ", " to ", "add"),
+            ("remove ", " from ", "remove"),
+        ):
+            rest = _take_prefix(text, prefix)
+            parts = _split_once_casefold(rest, delimiter) if rest is not None else None
+            if parts and re.fullmatch(r"(?:[^\W\d]|_)\w*", parts[1]):
+                expression = parsed_expression(parts[0])
+                if expression is not None:
+                    return {
+                        "kind": kind, "names": [parts[1]], "expression": expression,
+                        "expression_source": parts[0],
+                    }
+
         rest = _take_prefix(text, "ask ")
         if rest is not None:
             for delimiter in (" and save the answer as ", " and put the answer in "):
@@ -1617,6 +1632,28 @@ class Interpreter:
                 if not isinstance(target, TellInstance):
                     raise TellError("Property assignment requires a Tell instance.")
                 target.fields[simple["target"].value] = value
+
+            elif simple["kind"] == "add":
+                collection = env.get(simple["names"][0])
+                if isinstance(collection, list):
+                    collection.append(value)
+                elif isinstance(collection, TellSet):
+                    if value not in collection:
+                        collection.items.append(value)
+                else:
+                    raise TellError(f"'{simple['names'][0]}' does not support adding items.")
+            elif simple["kind"] == "remove":
+                collection = env.get(simple["names"][0])
+                if not isinstance(collection, (list, TellSet)):
+                    raise TellError(f"'{simple['names'][0]}' does not support removing items.")
+                items = collection.items if isinstance(collection, TellSet) else collection
+                for index, item in enumerate(items):
+                    if _tell_equal(item, value):
+                        del items[index]
+                        break
+                else:
+                    raise TellError(f"item {value!r} was not found")
+
             elif simple["kind"] == "ask":
                 try:
                     answer = self.input_fn(display(value))
