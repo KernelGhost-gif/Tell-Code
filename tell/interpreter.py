@@ -33,6 +33,16 @@ class TellSyntaxError(TellError):
         self.column = max(1, column)
 
 
+class TellLocatedError(TellError):
+    """A runtime error attached to the most precise available expression span."""
+
+    def __init__(self, message: str, filename: str, line: int, column: int):
+        super().__init__(message)
+        self.filename = filename
+        self.line = max(1, line)
+        self.column = max(1, column)
+
+
 @dataclass
 class TellSet:
     items: list[Any]
@@ -703,11 +713,11 @@ class Parser:
                     ) and len(set(names)) == len(names)
                     expression = parsed_expression(parts[1])
                     if valid and expression is not None:
-                        return {"kind": "let", "names": names, "constant": constant, "expression": expression}
+                        return {"kind": "let", "names": names, "constant": constant, "expression": expression, "expression_source": parts[1]}
                 elif re.fullmatch(r"(?:[^\W\d]|_)\w*", name):
                     expression = parsed_expression(parts[1])
                     if expression is not None:
-                        return {"kind": "let", "names": [name], "annotation": annotation, "constant": constant, "expression": expression}
+                        return {"kind": "let", "names": [name], "annotation": annotation, "constant": constant, "expression": expression, "expression_source": parts[1]}
 
         rest = _take_prefix(text, "set ")
         parts = _split_once_casefold(rest, " to ") if rest is not None else None
@@ -722,10 +732,10 @@ class Parser:
                 valid = bool(re.fullmatch(r"(?:[^\W\d]|_)\w*", parts[0]))
             expression = parsed_expression(parts[1])
             if valid and expression is not None:
-                return {"kind": "set", "names": names, "expression": expression}
+                return {"kind": "set", "names": names, "expression": expression, "expression_source": parts[1]}
             target = parsed_expression(parts[0])
             if target is not None and target.kind == "member" and expression is not None:
-                return {"kind": "set_member", "source": parts[0], "target": target, "expression": expression}
+                return {"kind": "set_member", "source": parts[0], "target": target, "expression": expression, "expression_source": parts[1]}
 
         rest = _take_prefix(text, "tell ")
         parts = _split_once_casefold(rest, " to ") if rest is not None else None
@@ -1048,6 +1058,8 @@ class Interpreter:
         self._install_builtins(self.global_env)
         self.filename = "<memory>"
         self.current_line = 0
+        self.expression_base_line = 1
+        self.expression_base_column = 1
         self.call_depth = 0
         self.max_call_depth = max_call_depth
         self.max_loop_iterations = max_loop_iterations
@@ -1187,6 +1199,20 @@ class Interpreter:
             raise TellError(f"This expression failed: {exc}") from exc
 
     def _eval_expression(self, node: TellExpr, env: Environment) -> Any:
+        try:
+            return self._eval_expression_inner(node, env)
+        except TellLocatedError:
+            raise
+        except (TellError, ArithmeticError, AttributeError, IndexError, KeyError, TypeError, ValueError) as exc:
+            line = self.expression_base_line + getattr(node, "line", 1) - 1
+            token_line = getattr(node, "line", 1)
+            column = (
+                self.expression_base_column + getattr(node, "column", 1) - 1
+                if token_line == 1 else getattr(node, "column", 1)
+            )
+            raise TellLocatedError(str(exc), self.filename, line, column) from exc
+
+    def _eval_expression_inner(self, node: TellExpr, env: Environment) -> Any:
         if node.kind == "literal":
             if isinstance(node.value, str):
                 def replace(match: re.Match[str]) -> str:
@@ -1287,6 +1313,8 @@ class Interpreter:
             value = self._eval_expression(node.children[0], env)
             if isinstance(value, TellInstance):
                 return value.get_member(member)
+            if value is None:
+                raise TellError("cannot access member on nothing")
             if isinstance(value, TellClass):
                 raise TellError("Tell classes do not expose static members in this version.")
             if isinstance(value, TellModule):
@@ -1300,6 +1328,8 @@ class Interpreter:
             return getattr(value, member)
         if node.kind == "index":
             value = self._eval_expression(node.children[0], env)
+            if value is None:
+                raise TellError("cannot access index on nothing")
             index = self._eval_expression(node.children[1], env)
             if isinstance(value, (list, tuple, str)):
                 index = int(self._as_number(index))
@@ -1308,6 +1338,8 @@ class Interpreter:
             return value[index]
         if node.kind == "slice":
             value = self._eval_expression(node.children[0], env)
+            if value is None:
+                raise TellError("cannot slice nothing")
             bounds = [self._eval_expression(item, env) if item is not None else None for item in node.children[1:]]
             bounds = [int(self._as_number(item)) if item is not None else None for item in bounds]
             if bounds[2] == 0:
@@ -1368,6 +1400,8 @@ class Interpreter:
             try:
                 self.execute_node(node, env)
             except (ReturnSignal, BreakSignal, ContinueSignal):
+                raise
+            except TellLocatedError:
                 raise
             except Exception as exc:
                 if isinstance(exc, TellError):
@@ -1472,7 +1506,19 @@ class Interpreter:
         simple = data.get("simple")
         if simple is not None:
             expression = simple["expression"]
-            value = self._eval_expression(expression, env) if expression is not None else None
+            if expression is not None:
+                expression_source = simple.get("expression_source") or simple.get("source")
+                source_text = data.get("text", "")
+                offset = source_text.find(expression_source) if expression_source else -1
+                previous_base = (self.expression_base_line, self.expression_base_column)
+                self.expression_base_line = node.line
+                self.expression_base_column = node.column + max(0, offset)
+                try:
+                    value = self._eval_expression(expression, env)
+                finally:
+                    self.expression_base_line, self.expression_base_column = previous_base
+            else:
+                value = None
             if simple["kind"] == "let":
                 names = simple["names"]
                 if len(names) > 1:
