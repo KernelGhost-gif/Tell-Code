@@ -62,6 +62,7 @@ type node struct {
 	kind, text               string
 	line, column             int
 	condition, name, base    string
+	conditionExpr            expression
 	params                   []string
 	body, otherwise, handler []node
 	simple                   *simpleStatement
@@ -751,7 +752,8 @@ func parse(source, filename string) ([]node, error) {
 }
 
 func validateNodeExpressions(nodes []node, lines []string, filename string) error {
-	for _, current := range nodes {
+	for index := range nodes {
+		current := &nodes[index]
 		expressionText := ""
 		column := current.column
 		switch current.kind {
@@ -774,14 +776,20 @@ func validateNodeExpressions(nodes []node, lines []string, filename string) erro
 			}
 		}
 		if expressionText != "" {
-			if _, err := parseTellExpressionAt(expressionText, current.line, column); err != nil {
+			parsed, err := parseTellExpressionAt(expressionText, current.line, column)
+			if err != nil {
 				return err
 			}
+			current.conditionExpr = parsed
 		}
-		for _, child := range [][]node{current.body, current.otherwise, current.handler} {
-			if err := validateNodeExpressions(child, lines, filename); err != nil {
-				return err
-			}
+		if err := validateNodeExpressions(current.body, lines, filename); err != nil {
+			return err
+		}
+		if err := validateNodeExpressions(current.otherwise, lines, filename); err != nil {
+			return err
+		}
+		if err := validateNodeExpressions(current.handler, lines, filename); err != nil {
+			return err
 		}
 	}
 	return nil
