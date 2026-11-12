@@ -24,6 +24,8 @@ Tell source
   -> runtime environment and built-ins
 ```
 
+Common assignment nodes now also include indexed collection assignment (`Set values[index] to value.`, `Set the item at position index in values to value.`, and `Set the key key in mapping to value.`), with the same typed node executed by both source interpreters and lowered to a verified `SET_INDEX` bytecode operation for list and dictionary writes. Import statements for local Tell modules, Python modules, JavaScript modules, and built-in libraries are also represented as typed nodes; the compiler reuses its existing embedded-module and interop instructions for those nodes.
+
 The source interpreter path is shown above. The native CLI also has an early compiler path for a limited statement subset:
 
 ```text

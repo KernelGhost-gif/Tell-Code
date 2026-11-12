@@ -501,6 +501,63 @@ func TestControlFlowExpressionsAreParsedOnceAndKeepSourceSpans(t *testing.T) {
 }
 
 
+
+func TestLocalModuleImportsUseTypedASTNodes(t *testing.T) {
+	nodes, err := parse("Use the module \"math_helpers.tell\" as helpers.", "main.tell")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nodes) != 1 || nodes[0].simple == nil || nodes[0].simple.kind != "import_module" {
+		t.Fatalf("local module import was not parsed as a typed node: %#v", nodes)
+	}
+	if len(nodes[0].simple.names) != 1 || nodes[0].simple.names[0] != "helpers" {
+		t.Fatalf("module alias = %#v, want helpers", nodes[0].simple.names)
+	}
+	if _, ok := nodes[0].simple.expression.(literalExpression); !ok {
+		t.Fatalf("module path is not a parsed string literal: %#v", nodes[0].simple.expression)
+	}
+}
+
+func TestIndexedAssignmentsUseTypedASTNodesAndExecute(t *testing.T) {
+	source := "Let values be [1, 2].\nSet values[1] to 9.\nSet the item at position 0 in values to 7.\nLet mapping be {\"name\": \"old\"}.\nSet mapping[\"name\"] to \"new\".\nSet the key \"name\" in mapping to \"updated\".\nSay values.\nSay mapping[\"name\"]."
+	nodes, err := parse(source, "indexed-assignment.tell")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, index := range []int{1, 2, 4, 5} {
+		if nodes[index].simple == nil || nodes[index].simple.kind != "set_index" {
+			t.Fatalf("statement %d was not parsed as set_index: %#v", index, nodes[index])
+		}
+	}
+	output, err := runTest(t, source, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := output, "[7, 9]\nupdated\n"; got != want {
+		t.Fatalf("indexed assignment output = %q, want %q", got, want)
+	}
+}
+
+func TestInteropImportsUseTypedASTNodes(t *testing.T) {
+	cases := []struct{ source, kind, alias string }{
+		{"Use the Python library called statistics as stats.", "import_python", "stats"},
+		{"Use the JavaScript library called node:path as paths.", "import_javascript", "paths"},
+		{"Use the math library as maths.", "import_library", "maths"},
+	}
+	for _, testCase := range cases {
+		nodes, err := parse(testCase.source, "imports.tell")
+		if err != nil {
+			t.Fatalf("parse %q: %v", testCase.source, err)
+		}
+		if len(nodes) != 1 || nodes[0].simple == nil || nodes[0].simple.kind != testCase.kind {
+			t.Fatalf("import %q was not parsed into %s node: %#v", testCase.source, testCase.kind, nodes)
+		}
+		if len(nodes[0].simple.names) != 1 || nodes[0].simple.names[0] != testCase.alias {
+			t.Fatalf("import alias = %#v, want %q", nodes[0].simple.names, testCase.alias)
+		}
+	}
+}
+
 func TestCollectionMutationStatementsUseTypedASTNodes(t *testing.T) {
 	nodes, err := parse("Let items be [1].\nAdd 2 to items.\nRemove 1 from items.", "mutations.tell")
 	if err != nil {

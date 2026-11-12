@@ -727,6 +727,21 @@ class Parser:
         rest = _take_prefix(text, "set ")
         parts = _split_once_casefold(rest, " to ") if rest is not None else None
         if parts:
+            for prefix in ("the item at position ", "item at position ", "the key ", "key "):
+                tail = _take_prefix(parts[0], prefix)
+                pair = _split_once_casefold(tail, " in ") if tail is not None else None
+                if pair and re.fullmatch(r"(?:[^\W\d]|_)\w*", pair[1]):
+                    index_expression = parsed_expression(pair[0])
+                    value_expression = parsed_expression(parts[1])
+                    if index_expression is not None and value_expression is not None:
+                        target = TellExpr(
+                            "index",
+                            children=(TellExpr("name", pair[1]), index_expression),
+                        )
+                        return {
+                            "kind": "set_index", "source": parts[0], "target": target,
+                            "expression": value_expression, "expression_source": parts[1],
+                        }
             if "," in parts[0]:
                 names = [target.strip() for target in parts[0].split(",")]
                 valid = len(names) > 1 and all(
@@ -741,8 +756,62 @@ class Parser:
             target = parsed_expression(parts[0])
             if target is not None and target.kind == "member" and expression is not None:
                 return {"kind": "set_member", "source": parts[0], "target": target, "expression": expression, "expression_source": parts[1]}
+            if target is not None and target.kind == "index" and expression is not None:
+                return {
+                    "kind": "set_index", "source": parts[0], "target": target,
+                    "expression": expression, "expression_source": parts[1],
+                }
 
 
+
+
+        python_rest = _take_prefix(text, "use the python library called ")
+        python_parts = _split_once_casefold(python_rest, " as ") if python_rest is not None else None
+        if python_rest is not None:
+            module_name = python_parts[0].strip() if python_parts else python_rest.strip()
+            alias = python_parts[1].strip() if python_parts else module_name.rsplit(".", 1)[-1]
+            if (
+                re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.]*", module_name)
+                and all(part and not part.startswith("_") for part in module_name.split("."))
+                and re.fullmatch(r"(?:[^\W\d]|_)\w*", alias)
+            ):
+                return {"kind": "import_python", "source": module_name, "names": [alias]}
+
+        javascript_rest = _take_prefix(text, "use the javascript library called ")
+        javascript_parts = _split_once_casefold(javascript_rest, " as ") if javascript_rest is not None else None
+        if javascript_rest is not None:
+            specifier = javascript_parts[0].strip() if javascript_parts else javascript_rest.strip()
+            alias = javascript_parts[1].strip() if javascript_parts else _default_javascript_alias(specifier)
+            if re.fullmatch(r"(?:[^\W\d]|_)\w*", alias):
+                try:
+                    JavaScriptModule(specifier)
+                except TellError:
+                    pass
+                else:
+                    return {"kind": "import_javascript", "source": specifier, "names": [alias]}
+
+        library_rest = _take_prefix(text, "use the ")
+        if library_rest is not None:
+            library_parts = _split_once_casefold(library_rest, " library")
+            if library_parts and library_parts[0].strip():
+                requested = library_parts[0].strip().casefold().replace(" ", "")
+                suffix = library_parts[1].strip()
+                alias = requested
+                if suffix:
+                    alias = _take_prefix(suffix, "as ") or ""
+                canonical = {"mathematics": "math", "dates": "datetime", "dateandtime": "datetime"}.get(requested, requested)
+                if alias and re.fullmatch(r"(?:[^\W\d]|_)\w*", alias) and canonical in Interpreter.SAFE_MODULES:
+                    return {"kind": "import_library", "source": canonical, "names": [alias]}
+
+        rest = _take_prefix(text, "use the module ")
+        parts = _split_once_casefold(rest, " as ") if rest is not None else None
+        if parts and re.fullmatch(r"(?:[^\W\d]|_)\w*", parts[1]):
+            expression = parsed_expression(parts[0])
+            if expression is not None:
+                return {
+                    "kind": "import_module", "names": [parts[1]], "expression": expression,
+                    "expression_source": parts[0],
+                }
 
         for prefix, delimiter, kind in (
             ("add ", " to ", "add"),
@@ -1632,6 +1701,34 @@ class Interpreter:
                 if not isinstance(target, TellInstance):
                     raise TellError("Property assignment requires a Tell instance.")
                 target.fields[simple["target"].value] = value
+            elif simple["kind"] == "set_index":
+                target = simple["target"]
+                container = self._eval_expression(target.children[0], env)
+                index = self._eval_expression(target.children[1], env)
+                if isinstance(container, list):
+                    if not isinstance(index, int) or isinstance(index, bool):
+                        raise TellError("list index must be a number")
+                    position = index if index >= 0 else len(container) + index
+                    if position < 0 or position >= len(container):
+                        raise TellError("list index out of range")
+                    container[position] = value
+                elif isinstance(container, dict):
+                    container[display(index)] = value
+                else:
+                    raise TellError("this value does not support indexed assignment")
+
+            elif simple["kind"] == "import_module":
+                env.set(simple["names"][0], self._load_module(str(value)))
+            elif simple["kind"] == "import_python":
+                try:
+                    module = importlib.import_module(simple["source"])
+                except ImportError as exc:
+                    raise TellError(f"Could not import Python module {simple['source']!r}: {exc}") from exc
+                env.set(simple["names"][0], module)
+            elif simple["kind"] == "import_javascript":
+                env.set(simple["names"][0], JavaScriptModule(simple["source"]))
+            elif simple["kind"] == "import_library":
+                env.set(simple["names"][0], self.SAFE_MODULES[simple["source"]])
 
             elif simple["kind"] == "add":
                 collection = env.get(simple["names"][0])

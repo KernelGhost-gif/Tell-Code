@@ -184,6 +184,49 @@ Say maths.sqrt(81).
 
 
 
+
+
+
+    def test_indexed_assignments_are_typed_nodes_and_execute(self):
+        source = """
+Let values be [1, 2].
+Set values[1] to 9.
+Set the item at position 0 in values to 7.
+Let mapping be {"name": "old"}.
+Set mapping["name"] to "new".
+Set the key "name" in mapping to "updated".
+Say values.
+Say mapping["name"].
+"""
+        parsed = Parser(source).parse()
+        self.assertEqual(
+            [parsed[index].data["simple"]["kind"] for index in (1, 2, 4, 5)],
+            ["set_index", "set_index", "set_index", "set_index"],
+        )
+        output, env = self.run_tell(source)
+        self.assertEqual(output, ["[7, 9]", "updated"])
+        self.assertEqual(env.get("values"), [7, 9])
+        self.assertEqual(env.get("mapping"), {"name": "updated"})
+
+    def test_interop_imports_are_typed_nodes(self):
+        cases = [
+            ('Use the Python library called statistics as stats.', "import_python", "stats"),
+            ('Use the JavaScript library called node:path as paths.', "import_javascript", "paths"),
+            ('Use the math library as maths.', "import_library", "maths"),
+        ]
+        for source, kind, alias in cases:
+            with self.subTest(source=source):
+                simple = Parser(source).parse()[0].data["simple"]
+                self.assertEqual(simple["kind"], kind)
+                self.assertEqual(simple["names"], [alias])
+
+    def test_local_module_import_is_a_typed_node(self):
+        parsed = Parser('Use the module "math_helpers.tell" as helpers.').parse()
+        simple = parsed[0].data["simple"]
+        self.assertEqual(simple["kind"], "import_module")
+        self.assertEqual(simple["names"], ["helpers"])
+        self.assertEqual(simple["expression"].kind, "literal")
+
     def test_collection_mutations_are_typed_nodes(self):
         parsed = Parser("Add 2 to items.\nRemove 1 from items.").parse()
         self.assertEqual([node.data["simple"]["kind"] for node in parsed], ["add", "remove"])

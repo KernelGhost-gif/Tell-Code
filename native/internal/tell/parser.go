@@ -324,6 +324,26 @@ func parseSimpleStatement(source string, line, column int) *simpleStatement {
 	if rest, ok := prefixFold(source, "set "); ok {
 		name, expressionText, separated := splitFoldOnce(rest, " to ")
 		if separated {
+			for _, phrase := range []struct{ prefix, delimiter string }{
+				{"the item at position ", " in "},
+				{"item at position ", " in "},
+				{"the key ", " in "},
+				{"key ", " in "},
+			} {
+				argument, isPhrase := prefixFold(name, phrase.prefix)
+				if !isPhrase { continue }
+				indexText, collectionName, hasIn := splitFoldOnce(argument, phrase.delimiter)
+				if !hasIn || !identifier(collectionName) { continue }
+				parsedIndex, validIndex := parseExpression(indexText)
+				parsedValue, validValue := parseExpression(expressionText)
+				if !validIndex || !validValue { continue }
+				containerOffset := strings.LastIndex(source, collectionName)
+				if containerOffset < 0 { containerOffset = 0 }
+				targetColumn := column + utf8.RuneCountInString(source[:containerOffset])
+				containerExpr := nameExpression{name:collectionName, line:line, column:targetColumn}
+				target := indexExpression{value:containerExpr, index:parsedIndex, line:line, column:targetColumn}
+				return &simpleStatement{kind:"set_index", source:name, target:target, expression:parsedValue, hasExpression:true}
+			}
 			if strings.Contains(name, ",") {
 				if names, valid := parseLoopNames(name); valid && len(names) > 1 {
 					if parsed, validExpression := parseExpression(expressionText); validExpression {
@@ -338,6 +358,11 @@ func parseSimpleStatement(source string, line, column int) *simpleStatement {
 				if _, isMember := parsedTarget.(memberExpression); isMember {
 					if parsedValue, validValue := parseExpression(expressionText); validValue {
 						return &simpleStatement{kind: "set_member", source: name, target: parsedTarget, expression: parsedValue, hasExpression: true}
+					}
+				}
+				if indexTarget, isIndex := parsedTarget.(indexExpression); isIndex && !indexTarget.isSlice {
+					if parsedValue, validValue := parseExpression(expressionText); validValue {
+						return &simpleStatement{kind: "set_index", source: name, target: indexTarget, expression: parsedValue, hasExpression: true}
 					}
 				}
 			}
@@ -389,6 +414,57 @@ func parseSimpleStatement(source string, line, column int) *simpleStatement {
 			if separated && identifier(targetName) {
 				if parsed, valid := parseExpression(valueText); valid {
 					return &simpleStatement{kind:operation.kind, names:[]string{targetName}, expression:parsed, hasExpression:true}
+				}
+			}
+		}
+	}
+	if rest, ok := prefixFold(source, "use the module "); ok {
+		pathText, alias, separated := splitFoldOnce(rest, " as ")
+		if separated && identifier(alias) {
+			if parsed, valid := parseExpression(pathText); valid {
+				return &simpleStatement{kind:"import_module", names:[]string{alias}, expression:parsed, hasExpression:true}
+			}
+		}
+	}
+
+	if rest, ok := prefixFold(source, "use the python library called "); ok {
+		moduleName, alias, hasAlias := splitFoldOnce(rest, " as ")
+		moduleName = strings.TrimSpace(moduleName)
+		if _, err := newPythonModule(moduleName); err == nil {
+			if !hasAlias { alias = moduleName[strings.LastIndex(moduleName, ".")+1:] }
+			if identifier(alias) {
+				return &simpleStatement{kind:"import_python", source:moduleName, names:[]string{alias}}
+			}
+		}
+	}
+	if rest, ok := prefixFold(source, "use the javascript library called "); ok {
+		moduleName, alias, hasAlias := splitFoldOnce(rest, " as ")
+		moduleName = strings.TrimSpace(moduleName)
+		if module, err := newJavaScriptModule(moduleName); err == nil {
+			if !hasAlias { alias = defaultJavaScriptAlias(moduleName) }
+			if identifier(alias) {
+				return &simpleStatement{kind:"import_javascript", source:module.name, names:[]string{alias}}
+			}
+		}
+	}
+	if rest, ok := prefixFold(source, "use the "); ok {
+		if index := strings.Index(strings.ToLower(rest), " library"); index >= 0 {
+			requested := strings.TrimSpace(rest[:index])
+			tail := strings.TrimSpace(rest[index+len(" library"):])
+			alias := strings.ToLower(strings.ReplaceAll(requested, " ", ""))
+			aliasOK := true
+			if tail != "" {
+				alias, aliasOK = prefixFold(tail, "as ")
+				aliasOK = aliasOK && identifier(alias)
+			}
+			library := strings.ToLower(strings.ReplaceAll(requested, " ", ""))
+			switch library {
+			case "mathematics": library = "math"
+			case "dateandtime", "dates": library = "datetime"
+			}
+			if requested != "" && aliasOK && identifier(strings.ReplaceAll(requested, " ", "")) {
+				if _, err := moduleValue(library); err == nil {
+					return &simpleStatement{kind:"import_library", source:library, names:[]string{alias}}
 				}
 			}
 		}
