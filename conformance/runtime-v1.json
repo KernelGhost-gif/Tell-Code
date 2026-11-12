@@ -66,6 +66,14 @@
       "expected_stdout": "",
       "expected_stderr": "[RuntimeError] File \"recursion-limit.tell\", line 2, col 22: maximum function call depth exceeded\n",
       "expected_exit_code": 70
+    },
+    {
+      "name": "missing file I/O diagnostic",
+      "filename": "missing-file.tell",
+      "source_code": "Read the file \"missing.txt\" into contents.\n",
+      "expected_stdout": "",
+      "expected_stderr": "[IOError] File \"missing-file.tell\", line 1, col 15: cannot read file \"missing.txt\"\n",
+      "expected_exit_code": 74
     }
   ]
 }
