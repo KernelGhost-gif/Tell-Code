@@ -1,7 +1,7 @@
 import unittest
 
 from tell.diagnostics import make_diagnostic, exit_code
-from tell.interpreter import Parser, TellSyntaxError, TellError
+from tell.interpreter import Interpreter, Parser, TellSyntaxError, TellError, TellLocatedError
 
 
 class DiagnosticContractTests(unittest.TestCase):
@@ -26,6 +26,41 @@ class DiagnosticContractTests(unittest.TestCase):
         self.assertEqual(diagnostic.column, 16)
         self.assertEqual(diagnostic.kind, "SyntaxError")
         self.assertEqual(exit_code(diagnostic.kind), 64)
+
+
+    def test_runtime_expression_diagnostics_point_to_operator(self):
+        with self.assertRaises(TellLocatedError) as caught:
+            Interpreter().run("Say 10 divided by 0.", "division-zero.tell")
+        diagnostic = make_diagnostic(caught.exception, "fallback.tell", "RuntimeError")
+        self.assertEqual(diagnostic.filename, "division-zero.tell")
+        self.assertEqual(diagnostic.line, 1)
+        self.assertEqual(diagnostic.column, 8)
+        self.assertEqual(diagnostic.message, "division by zero")
+
+    def test_nothing_member_diagnostic_points_to_access(self):
+        with self.assertRaises(TellLocatedError) as caught:
+            Interpreter().run("Let value be nothing.\\nSay value.name.", "null-member.tell")
+        diagnostic = make_diagnostic(caught.exception, "fallback.tell", "RuntimeError")
+        self.assertEqual(diagnostic.filename, "null-member.tell")
+        self.assertEqual(diagnostic.line, 2)
+        self.assertEqual(diagnostic.column, 10)
+        self.assertEqual(diagnostic.message, "cannot access member on nothing")
+
+    def test_recursion_limit_diagnostic_points_to_call_site(self):
+        source = (
+            "To recurse with n:\\n"
+            "    Give back recurse(n plus 1).\\n"
+            "End function.\\n"
+            "Say recurse(0)."
+        )
+        interpreter = Interpreter(max_call_depth=8)
+        with self.assertRaises(TellLocatedError) as caught:
+            interpreter.run(source, "recursion-limit.tell")
+        diagnostic = make_diagnostic(caught.exception, "fallback.tell", "RuntimeError")
+        self.assertEqual(diagnostic.filename, "recursion-limit.tell")
+        self.assertEqual(diagnostic.line, 2)
+        self.assertEqual(diagnostic.column, 22)
+        self.assertEqual(diagnostic.message, "maximum function call depth exceeded")
 
     def test_static_type_and_name_classification(self):
         self.assertEqual(make_diagnostic("type mismatch for age").kind, "TypeError")
