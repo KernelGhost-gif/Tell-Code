@@ -737,6 +737,41 @@ class Parser:
             if target is not None and target.kind == "member" and expression is not None:
                 return {"kind": "set_member", "source": parts[0], "target": target, "expression": expression, "expression_source": parts[1]}
 
+
+        rest = _take_prefix(text, "ask ")
+        if rest is not None:
+            for delimiter in (" and save the answer as ", " and put the answer in "):
+                parts = _split_once_casefold(rest, delimiter)
+                if parts and re.fullmatch(r"(?:[^\\W\\d]|_)\\w*", parts[1]):
+                    expression = parsed_expression(parts[0])
+                    if expression is not None:
+                        return {
+                            "kind": "ask", "names": [parts[1]], "expression": expression,
+                            "expression_source": parts[0],
+                        }
+
+        rest = _take_prefix(text, "read the file ")
+        parts = _split_once_casefold(rest, " into ") if rest is not None else None
+        if parts and re.fullmatch(r"(?:[^\\W\\d]|_)\\w*", parts[1]):
+            expression = parsed_expression(parts[0])
+            if expression is not None:
+                return {
+                    "kind": "read_file", "names": [parts[1]], "expression": expression,
+                    "expression_source": parts[0],
+                }
+
+        for prefix, kind in (("write ", "write_file"), ("append ", "append_file")):
+            rest = _take_prefix(text, prefix)
+            parts = _split_once_casefold(rest, " to the file ") if rest is not None else None
+            if parts:
+                expression = parsed_expression(parts[0])
+                target = parsed_expression(parts[1])
+                if expression is not None and target is not None:
+                    return {
+                        "kind": kind, "expression": expression, "expression_source": parts[0],
+                        "target": target, "target_source": parts[1],
+                    }
+
         rest = _take_prefix(text, "tell ")
         parts = _split_once_casefold(rest, " to ") if rest is not None else None
         if parts and re.fullmatch(r"(?:[^\W\d]|_)\w*", parts[0]):
@@ -1420,6 +1455,24 @@ class Interpreter:
         finally:
             self.expression_base_line, self.expression_base_column = previous_base
 
+    def _evaluate_simple_expression(
+        self, node: Node, env: Environment, simple: dict[str, Any],
+        expression_key: str, source_key: str,
+    ) -> Any:
+        expression = simple.get(expression_key)
+        if expression is None:
+            return None
+        source = simple.get(source_key) or simple.get("source")
+        statement_text = node.data.get("text", "")
+        offset = statement_text.find(source) if source else -1
+        previous_base = (self.expression_base_line, self.expression_base_column)
+        self.expression_base_line = node.line
+        self.expression_base_column = node.column + max(0, offset)
+        try:
+            return self._eval_expression(expression, env)
+        finally:
+            self.expression_base_line, self.expression_base_column = previous_base
+
     def execute_node(self, node: Node, env: Environment) -> None:
         data = node.data
         if node.kind == "if":
@@ -1517,20 +1570,13 @@ class Interpreter:
             return
         simple = data.get("simple")
         if simple is not None:
-            expression = simple["expression"]
-            if expression is not None:
-                expression_source = simple.get("expression_source") or simple.get("source")
-                source_text = data.get("text", "")
-                offset = source_text.find(expression_source) if expression_source else -1
-                previous_base = (self.expression_base_line, self.expression_base_column)
-                self.expression_base_line = node.line
-                self.expression_base_column = node.column + max(0, offset)
-                try:
-                    value = self._eval_expression(expression, env)
-                finally:
-                    self.expression_base_line, self.expression_base_column = previous_base
-            else:
-                value = None
+            value = self._evaluate_simple_expression(
+                node, env, simple, "expression", "expression_source"
+            )
+            target_value = (
+                self._evaluate_simple_expression(node, env, simple, "target", "target_source")
+                if simple["kind"] in {"write_file", "append_file"} else None
+            )
             if simple["kind"] == "let":
                 names = simple["names"]
                 if len(names) > 1:
@@ -1549,6 +1595,17 @@ class Interpreter:
                 if not isinstance(target, TellInstance):
                     raise TellError("Property assignment requires a Tell instance.")
                 target.fields[simple["target"].value] = value
+            elif simple["kind"] == "ask":
+                answer = self.input_fn(display(value))
+                env.set(simple["names"][0], answer)
+                env.set("_last_answer", answer)
+            elif simple["kind"] == "read_file":
+                env.set(simple["names"][0], Path(str(value)).read_text(encoding="utf-8"))
+            elif simple["kind"] == "write_file":
+                Path(str(target_value)).write_text(display(value), encoding="utf-8")
+            elif simple["kind"] == "append_file":
+                with Path(str(target_value)).open("a", encoding="utf-8") as file:
+                    file.write(display(value))
             elif simple["kind"] == "print":
                 self.output_fn(display(value))
             elif simple["kind"] == "expression":
