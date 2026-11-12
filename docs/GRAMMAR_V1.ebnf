@@ -53,7 +53,10 @@ The logical words and, or, and not are operators. The word in and phrase is in a
     return-statement    = ("Give back" | "Return"), [ expression ], "." ;
     raise-statement     = "Raise an error saying", expression, "." ;
     call-statement      = "Tell", identifier, "to", identifier,
-                          [ "with", argument-list ], "." ;
+                          [ "with", argument-list ], "."
+                        | ("Call" | "Run"), identifier,
+                          [ "with", call-arguments ], "." ;
+    call-arguments      = expression, { "and", expression } ;
     import-statement    = "Use the module", string, [ "as", identifier ], "."
                         | "Use the Python library called", identifier, [ "as", identifier ], "."
                         | "Use the JavaScript library called", string, [ "as", identifier ], "."
