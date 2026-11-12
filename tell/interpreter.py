@@ -1462,6 +1462,21 @@ class Interpreter:
         finally:
             self.expression_base_line, self.expression_base_column = previous_base
 
+    def _simple_expression_span(
+        self, node: Node, simple: dict[str, Any], expression_key: str, source_key: str,
+    ) -> tuple[int, int]:
+        expression = simple.get(expression_key)
+        source = simple.get(source_key) or simple.get("source")
+        statement_text = node.data.get("text", "")
+        offset = statement_text.find(source) if source else -1
+        if expression is None:
+            return node.line, node.column
+        expression_line = getattr(expression, "line", 1)
+        expression_column = getattr(expression, "column", 1)
+        line = node.line + expression_line - 1
+        column = node.column + max(0, offset) + expression_column - 1 if expression_line == 1 else expression_column
+        return line, column
+
     def _evaluate_simple_expression(
         self, node: Node, env: Environment, simple: dict[str, Any],
         expression_key: str, source_key: str,
@@ -1603,16 +1618,36 @@ class Interpreter:
                     raise TellError("Property assignment requires a Tell instance.")
                 target.fields[simple["target"].value] = value
             elif simple["kind"] == "ask":
-                answer = self.input_fn(display(value))
+                try:
+                    answer = self.input_fn(display(value))
+                except (OSError, EOFError) as exc:
+                    line, column = self._simple_expression_span(node, simple, "expression", "expression_source")
+                    raise TellIOError("cannot read standard input", self.filename, line, column) from exc
                 env.set(simple["names"][0], answer)
                 env.set("_last_answer", answer)
             elif simple["kind"] == "read_file":
-                env.set(simple["names"][0], Path(str(value)).read_text(encoding="utf-8"))
+                path = str(value)
+                try:
+                    contents = Path(path).read_text(encoding="utf-8")
+                except OSError as exc:
+                    line, column = self._simple_expression_span(node, simple, "expression", "expression_source")
+                    raise TellIOError(f'cannot read file "{path}"', self.filename, line, column) from exc
+                env.set(simple["names"][0], contents)
             elif simple["kind"] == "write_file":
-                Path(str(target_value)).write_text(display(value), encoding="utf-8")
+                path = str(target_value)
+                try:
+                    Path(path).write_text(display(value), encoding="utf-8")
+                except OSError as exc:
+                    line, column = self._simple_expression_span(node, simple, "target", "target_source")
+                    raise TellIOError(f'cannot write file "{path}"', self.filename, line, column) from exc
             elif simple["kind"] == "append_file":
-                with Path(str(target_value)).open("a", encoding="utf-8") as file:
-                    file.write(display(value))
+                path = str(target_value)
+                try:
+                    with Path(path).open("a", encoding="utf-8") as file:
+                        file.write(display(value))
+                except OSError as exc:
+                    line, column = self._simple_expression_span(node, simple, "target", "target_source")
+                    raise TellIOError(f'cannot append to file "{path}"', self.filename, line, column) from exc
             elif simple["kind"] == "print":
                 self.output_fn(display(value))
             elif simple["kind"] == "expression":
