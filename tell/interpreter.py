@@ -919,7 +919,7 @@ class Parser:
                 if method:
                     callee = TellExpr("member", method, (TellExpr("name", parts[0]),))
                     return {
-                        "kind": "expression",
+                        "kind": "call",
                         "source": text,
                         "expression": TellExpr("call", children=(callee, *arguments), names=(None,) * len(arguments)),
                     }

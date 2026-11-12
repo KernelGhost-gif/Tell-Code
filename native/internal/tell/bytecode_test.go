@@ -53,6 +53,23 @@ Say person.name.`
 	}
 }
 
+func TestBytecodeTellMethodSentenceDiscardsReturnValue(t *testing.T) {
+	source := `Create a class called Counter:
+    When creating a Counter:
+        Remember 41 as this.value.
+    End constructor.
+    To get_value:
+        Give back this.value.
+    End function.
+End class.
+Let counter be a new Counter.
+Tell counter to get_value.
+Say "done".`
+	if got, want := runCompiled(t, source), "done\n"; got != want {
+		t.Fatalf("compiled Tell method sentence output = %q, want %q", got, want)
+	}
+}
+
 func TestBytecodeSupportsTupleValues(t *testing.T) {
 	source := `Let first, second be (1, 2).
 Let values be (first, second, 3).

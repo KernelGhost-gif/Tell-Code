@@ -21,6 +21,7 @@ class TellLanguageTests(unittest.TestCase):
         constructed = Parser("Let box be a new Box.").parse()[0]
         self.assertEqual(constructed.data["simple"]["expression"].kind, "call")
         told = Parser('Tell box to open with "wide".').parse()[0]
+        self.assertEqual(told.data["simple"]["kind"], "call")
         self.assertEqual(told.data["simple"]["expression"].kind, "call")
         member_assignment = Parser('Set box.name to "Ada".').parse()[0]
         self.assertEqual(member_assignment.data["simple"]["kind"], "set_member")
@@ -35,6 +36,23 @@ class TellLanguageTests(unittest.TestCase):
         )
         interpreter.run(source, "test.tell")
         return output, interpreter.global_env
+
+    def test_tell_method_sentence_discards_return_value(self):
+        source = """
+Create a class called Counter:
+    When creating a Counter:
+        Remember 41 as this.value.
+    End constructor.
+    To get_value:
+        Give back this.value.
+    End function.
+End class.
+Let counter be a new Counter.
+Tell counter to get_value.
+Say "done".
+"""
+        output, _ = self.run_tell(source)
+        self.assertEqual(output, ["done"])
 
     def test_variables_math_and_interpolation(self):
         output, env = self.run_tell('''
