@@ -62,6 +62,20 @@ class DiagnosticContractTests(unittest.TestCase):
         self.assertEqual(diagnostic.column, 22)
         self.assertEqual(diagnostic.message, "maximum function call depth exceeded")
 
+
+    def test_control_flow_expressions_are_cached_and_source_located(self):
+        source = "If 1 divided by 0:\\n    Say \"unreachable\".\\nEnd if."
+        parsed = Parser(source, "control-flow.tell").parse()
+        expression = parsed[0].data["condition_ast"]
+        self.assertEqual(expression.kind, "binary")
+        self.assertEqual(expression.column, 3)
+        with self.assertRaises(TellLocatedError) as caught:
+            Interpreter().run(source, "control-flow.tell")
+        diagnostic = make_diagnostic(caught.exception, "fallback.tell", "RuntimeError")
+        self.assertEqual(diagnostic.line, 1)
+        self.assertEqual(diagnostic.column, 6)
+        self.assertEqual(diagnostic.message, "division by zero")
+
     def test_static_type_and_name_classification(self):
         self.assertEqual(make_diagnostic("type mismatch for age").kind, "TypeError")
         self.assertEqual(make_diagnostic("I don't know what 'missing' means").kind, "NameError")
