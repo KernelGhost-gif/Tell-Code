@@ -379,6 +379,20 @@ func parseSimpleStatement(source string, line, column int) *simpleStatement {
 		return statement
 	}
 
+
+	for _, operation := range []struct{ prefix, delimiter, kind string }{
+		{"add ", " to ", "add"},
+		{"remove ", " from ", "remove"},
+	} {
+		if rest, ok := prefixFold(source, operation.prefix); ok {
+			valueText, targetName, separated := splitFoldOnce(rest, operation.delimiter)
+			if separated && identifier(targetName) {
+				if parsed, valid := parseExpression(valueText); valid {
+					return &simpleStatement{kind:operation.kind, names:[]string{targetName}, expression:parsed, hasExpression:true}
+				}
+			}
+		}
+	}
 	if rest, ok := prefixFold(source, "ask "); ok {
 		for _, delimiter := range []string{" and save the answer as ", " and put the answer in "} {
 			prompt, name, separated := splitFoldOnce(rest, delimiter)
