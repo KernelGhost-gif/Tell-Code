@@ -3,6 +3,7 @@ package tell
 import (
 	"errors"
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 )
@@ -208,6 +209,13 @@ func (r *runtime) executeSimpleStatement(statement *simpleStatement, e *env) err
 			return err
 		}
 	}
+	var targetValue any
+	if statement.hasTarget {
+		targetValue, err = r.evalExpression(statement.target, e)
+		if err != nil {
+			return err
+		}
+	}
 	switch statement.kind {
 	case "let":
 		if len(statement.names) > 1 {
@@ -241,6 +249,29 @@ func (r *runtime) executeSimpleStatement(statement *simpleStatement, e *env) err
 			return fail("property assignment requires a Tell instance")
 		}
 		instance.fields[memberTarget.member] = value
+
+	case "ask":
+		_, err = fmt.Fprint(r.output, display(value))
+		if err != nil { return err }
+		line, readErr := r.reader.ReadString('\n')
+		if readErr != nil && len(line) == 0 { return readErr }
+		line = strings.TrimRight(line, "\r\n")
+		e.set(statement.names[0], line)
+		e.set("_last_answer", line)
+		return nil
+	case "read_file":
+		data, readErr := os.ReadFile(fmt.Sprint(value))
+		if readErr != nil { return readErr }
+		e.set(statement.names[0], string(data))
+		return nil
+	case "write_file":
+		return os.WriteFile(fmt.Sprint(targetValue), []byte(display(value)), 0644)
+	case "append_file":
+		file, openErr := os.OpenFile(fmt.Sprint(targetValue), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if openErr != nil { return openErr }
+		defer file.Close()
+		_, writeErr := file.WriteString(display(value))
+		return writeErr
 	case "print":
 		_, err = fmt.Fprintln(r.output, display(value))
 		return err
