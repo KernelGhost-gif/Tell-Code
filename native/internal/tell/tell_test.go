@@ -518,6 +518,26 @@ func TestLocalModuleImportsUseTypedASTNodes(t *testing.T) {
 	}
 }
 
+func TestIndexedAssignmentsUseTypedASTNodesAndExecute(t *testing.T) {
+	source := "Let values be [1, 2].\nSet values[1] to 9.\nLet mapping be {\"name\": \"old\"}.\nSet mapping[\"name\"] to \"new\".\nSay values.\nSay mapping[\"name\"]."
+	nodes, err := parse(source, "indexed-assignment.tell")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, index := range []int{1, 3} {
+		if nodes[index].simple == nil || nodes[index].simple.kind != "set_index" {
+			t.Fatalf("statement %d was not parsed as set_index: %#v", index, nodes[index])
+		}
+	}
+	output, err := runTest(t, source, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := output, "[1, 9]\nnew\n"; got != want {
+		t.Fatalf("indexed assignment output = %q, want %q", got, want)
+	}
+}
+
 func TestInteropImportsUseTypedASTNodes(t *testing.T) {
 	cases := []struct{ source, kind, alias string }{
 		{"Use the Python library called statistics as stats.", "import_python", "stats"},
