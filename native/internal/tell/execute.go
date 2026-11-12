@@ -238,6 +238,17 @@ func (r *runtime) executeSimpleStatement(statement *simpleStatement, e *env) err
 			return r.assignMany(e, statement.names, values, false)
 		}
 		return r.assign(e, statement.names[0], value)
+	case "remember_field":
+		instance, getErr := e.get("this")
+		if getErr != nil {
+			return fail("Remember ... as this.field can only be used in a method or constructor")
+		}
+		object, ok := instance.(*userInstance)
+		if !ok {
+			return fail("this is not an instance")
+		}
+		object.fields[statement.names[0]] = value
+		return nil
 	case "set_member":
 		memberTarget := statement.target.(memberExpression)
 		target, targetErr := r.evalExpression(memberTarget.value, e)

@@ -208,6 +208,28 @@ Say mapping["name"].
         self.assertEqual(env.get("values"), [7, 9])
         self.assertEqual(env.get("mapping"), {"name": "updated"})
 
+
+    def test_remember_field_is_a_typed_node_and_updates_instance(self):
+        parsed = Parser("Remember value as this.name.").parse()
+        simple = parsed[0].data["simple"]
+        self.assertEqual(simple["kind"], "remember_field")
+        self.assertEqual(simple["names"], ["name"])
+        source = """
+Create a class called Counter:
+    When creating a Counter with initial:
+        Remember initial as this.value.
+    End constructor.
+    To increment:
+        Remember this.value plus 1 as this.value.
+    End function.
+End class.
+Let counter be a new Counter with 4.
+Tell counter to increment.
+Say counter.value.
+"""
+        output, _ = self.run_tell(source)
+        self.assertEqual(output, ["5"])
+
     def test_interop_imports_are_typed_nodes(self):
         cases = [
             ('Use the Python library called statistics as stats.', "import_python", "stats"),

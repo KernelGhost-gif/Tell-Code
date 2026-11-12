@@ -462,6 +462,23 @@ func TestBytecodePreservesRuntimeTypeAndConstantRules(t *testing.T) {
 	}
 }
 
+func TestBytecodeCompilesRememberFieldStatements(t *testing.T) {
+	source := `Create a class called Counter:
+    When creating a Counter with initial:
+        Remember initial as this.value.
+    End constructor.
+    To increment:
+        Remember this.value plus 1 as this.value.
+    End function.
+End class.
+Let counter be a new Counter with 4.
+Tell counter to increment.
+Say counter.value.`
+	if got, want := runCompiled(t, source), "5\n"; got != want {
+		t.Fatalf("compiled Remember field output = %q, want %q", got, want)
+	}
+}
+
 func TestBytecodeSupportsIndexedListAndDictionaryAssignment(t *testing.T) {
 	source := "Let values be [1, 2].\nSet values[1] to 9.\nSet the item at position 0 in values to 7.\nLet mapping be {\"name\": \"old\"}.\nSet mapping[\"name\"] to \"new\".\nSet the key \"name\" in mapping to \"updated\".\nSay values.\nSay mapping[\"name\"]."
 	if got, want := runCompiled(t, source), "[7, 9]\nupdated\n"; got != want {

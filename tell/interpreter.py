@@ -765,6 +765,17 @@ class Parser:
 
 
 
+        remember_rest = _take_prefix(text, "remember ")
+        remember_parts = _split_once_casefold(remember_rest, " as this.") if remember_rest is not None else None
+        if remember_parts and re.fullmatch(r"(?:[^\W\d]|_)\w*", remember_parts[1]):
+            expression = parsed_expression(remember_parts[0])
+            if expression is not None:
+                return {
+                    "kind": "remember_field", "source": remember_parts[0],
+                    "names": [remember_parts[1]], "expression": expression,
+                    "expression_source": remember_parts[0],
+                }
+
         python_rest = _take_prefix(text, "use the python library called ")
         python_parts = _split_once_casefold(python_rest, " as ") if python_rest is not None else None
         if python_rest is not None:
@@ -1701,6 +1712,14 @@ class Interpreter:
                 if not isinstance(target, TellInstance):
                     raise TellError("Property assignment requires a Tell instance.")
                 target.fields[simple["target"].value] = value
+            elif simple["kind"] == "remember_field":
+                try:
+                    instance = env.get("this")
+                except TellError as exc:
+                    raise TellError("Remember ... as this.field can only be used in a method or constructor.") from exc
+                if not isinstance(instance, TellInstance):
+                    raise TellError("this is not an instance.")
+                instance.fields[simple["names"][0]] = value
             elif simple["kind"] == "set_index":
                 target = simple["target"]
                 container = self._eval_expression(target.children[0], env)

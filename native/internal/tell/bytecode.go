@@ -417,6 +417,14 @@ func (c *bytecodeCompiler) compileSimpleStatement(statement *simpleStatement) er
 			return err
 		}
 		c.emit("SET_INDEX")
+	case "remember_field":
+		if !c.allowRemember {
+			return fmt.Errorf("Remember ... as this.field is only supported in a class method or constructor")
+		}
+		loadThis := c.emit("LOAD")
+		c.code[loadThis].Name = "this"
+		set := c.emit("SET_FIELD")
+		c.code[set].Name = statement.names[0]
 	case "set_member":
 		target := statement.target.(memberExpression)
 		if err := c.compileExpression(target.value); err != nil {
