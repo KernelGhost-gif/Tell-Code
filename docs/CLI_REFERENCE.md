@@ -77,9 +77,9 @@ tell init my-project
 
 ## Options
 
-Both runtimes accept `--version`, `--max-call-depth N`, and `--max-loop-iterations N`. Limits must be positive integers. The native help output lists the supported flags.
+Both runtimes accept `--version`, `--types`, `--max-call-depth N`, and `--max-loop-iterations N`. Limits must be positive integers. The native help output lists the supported flags.
 
-The native command `tell check --types program.tell` also checks primitive type annotations when their initializer or reassigned value has a statically known type. Dynamic expressions remain checked at runtime. `tell build` performs the same conservative checks automatically; the Python CLI does not yet provide this static-analysis pass.
+Both runtimes support `tell check --types program.tell` (or `tell --types program.tell`) for conservative static type and declaration checks. Known primitive and class annotations are checked when initializer or reassigned value types can be inferred; unresolved dynamic expressions remain checked at runtime. `tell build` performs the native conservative checks automatically.
 
 ## Not implemented yet
 
