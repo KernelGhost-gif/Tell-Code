@@ -730,7 +730,7 @@ class Parser:
             for prefix in ("the item at position ", "item at position ", "the key ", "key "):
                 tail = _take_prefix(parts[0], prefix)
                 pair = _split_once_casefold(tail, " in ") if tail is not None else None
-                if pair and re.fullmatch(r"(?:[^\\W\\d]|_)\\w*", pair[1]):
+                if pair and re.fullmatch(r"(?:[^\W\d]|_)\w*", pair[1]):
                     index_expression = parsed_expression(pair[0])
                     value_expression = parsed_expression(parts[1])
                     if index_expression is not None and value_expression is not None:
