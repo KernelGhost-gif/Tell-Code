@@ -53,11 +53,12 @@ def execute(command: list[str], case: dict[str, Any]) -> Result:
     with tempfile.TemporaryDirectory(prefix="tell-conformance-") as temp:
         workdir = Path(temp)
         filename = write_case_files(workdir, case)
-        args = list(command) + [filename]
+        args = list(command)
         for key, flag in (("max_call_depth", "--max-call-depth"),
                           ("max_loop_iterations", "--max-loop-iterations")):
             if key in case:
                 args.extend([flag, str(case[key])])
+        args.append(filename)
         env = os.environ.copy()
         env["PYTHONPATH"] = str(ROOT) + os.pathsep + env.get("PYTHONPATH", "")
         try:
