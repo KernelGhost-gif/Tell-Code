@@ -742,7 +742,7 @@ class Parser:
         if rest is not None:
             for delimiter in (" and save the answer as ", " and put the answer in "):
                 parts = _split_once_casefold(rest, delimiter)
-                if parts and re.fullmatch(r"(?:[^\\W\\d]|_)\\w*", parts[1]):
+                if parts and re.fullmatch(r"(?:[^\W\d]|_)\w*", parts[1]):
                     expression = parsed_expression(parts[0])
                     if expression is not None:
                         return {
@@ -752,7 +752,7 @@ class Parser:
 
         rest = _take_prefix(text, "read the file ")
         parts = _split_once_casefold(rest, " into ") if rest is not None else None
-        if parts and re.fullmatch(r"(?:[^\\W\\d]|_)\\w*", parts[1]):
+        if parts and re.fullmatch(r"(?:[^\W\d]|_)\w*", parts[1]):
             expression = parsed_expression(parts[0])
             if expression is not None:
                 return {
