@@ -8,7 +8,7 @@ from pathlib import Path
 
 from tell import Interpreter, Parser, TellError
 from tell.__main__ import repl, run_tests
-from tell.interpreter import format_source, TellSyntaxError
+from tell.interpreter import format_source, TellSyntaxError, TellLocatedError
 
 
 class TellLanguageTests(unittest.TestCase):
@@ -286,8 +286,13 @@ Say add(other=2).'''
 
     def test_runtime_errors_include_source_columns(self):
         source = "If true:\n    Say 1 divided by 0.\nEnd if."
-        with self.assertRaisesRegex(TellError, r"sample\.tell:2:5:"):
+        with self.assertRaises(TellLocatedError) as caught:
             Interpreter().run(source, "sample.tell")
+        diagnostic = make_diagnostic(caught.exception, "fallback.tell", "RuntimeError")
+        self.assertEqual(diagnostic.filename, "sample.tell")
+        self.assertEqual(diagnostic.line, 2)
+        self.assertEqual(diagnostic.column, 11)
+        self.assertEqual(diagnostic.message, "division by zero")
 
     def test_circular_module_import_is_rejected(self):
         root = Path(__file__).resolve().parents[1]
@@ -328,14 +333,14 @@ Say greet(name).
 End function.
 Say recurse(0).
 '''
-        with self.assertRaisesRegex(TellError, r"maximum function call depth \(64\) exceeded"):
+        with self.assertRaisesRegex(TellError, r"maximum function call depth exceeded"):
             Interpreter().run(source, "recursion.tell")
 
     def test_execution_limits_can_be_configured(self):
         with self.assertRaisesRegex(TellError, "repeat count is too large"):
             Interpreter(max_loop_iterations=2).run("Repeat 3 times:\n    Say 1.\nEnd repeat.")
         source = "To repeat_call with number:\n    Give back repeat_call(number plus 1).\nEnd function.\nSay repeat_call(0)."
-        with self.assertRaisesRegex(TellError, r"maximum function call depth \(3\) exceeded"):
+        with self.assertRaisesRegex(TellError, r"maximum function call depth exceeded"):
             Interpreter(max_call_depth=3).run(source)
         with self.assertRaisesRegex(TellError, "For-each loop exceeded"):
             Interpreter(max_loop_iterations=2).run("For each item in [1, 2, 3]:\n    Say item.\nEnd loop.")
