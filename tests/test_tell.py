@@ -206,7 +206,7 @@ Read the file "note.txt" into contents.
 Say contents.
 """)
                 self.assertEqual(output, ["Hello from Tell!"])
-                self.assertEqual(Path("note.txt").read_text(encoding="utf-8"), "Hello from Tell")
+                self.assertEqual(Path("note.txt").read_text(encoding="utf-8"), "Hello from Tell!")
             finally:
                 os.chdir(original)
 
