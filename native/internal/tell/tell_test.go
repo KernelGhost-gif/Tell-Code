@@ -538,6 +538,37 @@ func TestIndexedAssignmentsUseTypedASTNodesAndExecute(t *testing.T) {
 	}
 }
 
+func TestRememberFieldStatementsUseTypedASTNodesAndExecute(t *testing.T) {
+	nodes, err := parse("Remember value as this.name.", "remember.tell")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nodes) != 1 || nodes[0].simple == nil || nodes[0].simple.kind != "remember_field" {
+		t.Fatalf("Remember was not parsed into a typed node: %#v", nodes)
+	}
+	if nodes[0].simple.names[0] != "name" {
+		t.Fatalf("Remember field = %#v, want name", nodes[0].simple.names)
+	}
+	source := `Create a class called Counter:
+    When creating a Counter with initial:
+        Remember initial as this.value.
+    End constructor.
+    To increment:
+        Remember this.value plus 1 as this.value.
+    End function.
+End class.
+Let counter be a new Counter with 4.
+Tell counter to increment.
+Say counter.value.`
+	output, err := runTest(t, source, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := output, "5\n"; got != want {
+		t.Fatalf("Remember execution output = %q, want %q", got, want)
+	}
+}
+
 func TestInteropImportsUseTypedASTNodes(t *testing.T) {
 	cases := []struct{ source, kind, alias string }{
 		{"Use the Python library called statistics as stats.", "import_python", "stats"},
