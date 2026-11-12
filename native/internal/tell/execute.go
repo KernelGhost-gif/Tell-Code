@@ -260,18 +260,22 @@ func (r *runtime) executeSimpleStatement(statement *simpleStatement, e *env) err
 		e.set("_last_answer", line)
 		return nil
 	case "read_file":
-		data, readErr := os.ReadFile(fmt.Sprint(value))
-		if readErr != nil { return ioFailure(readErr) }
+		path := fmt.Sprint(value)
+		data, readErr := os.ReadFile(path)
+		if readErr != nil { return ioFailureAt(fmt.Errorf("cannot read file %q", path), r.filename, statement.expression) }
 		e.set(statement.names[0], string(data))
 		return nil
 	case "write_file":
-		return ioFailure(os.WriteFile(fmt.Sprint(targetValue), []byte(display(value)), 0644))
+		path := fmt.Sprint(targetValue)
+		return ioFailureAt(fmt.Errorf("cannot write file %q", path), r.filename, statement.target)
 	case "append_file":
-		file, openErr := os.OpenFile(fmt.Sprint(targetValue), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		if openErr != nil { return ioFailure(openErr) }
+		path := fmt.Sprint(targetValue)
+		file, openErr := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if openErr != nil { return ioFailureAt(fmt.Errorf("cannot append to file %q", path), r.filename, statement.target) }
 		defer file.Close()
 		_, writeErr := file.WriteString(display(value))
-		return ioFailure(writeErr)
+		if writeErr != nil { return ioFailureAt(fmt.Errorf("cannot append to file %q", path), r.filename, statement.target) }
+		return nil
 	case "print":
 		_, err = fmt.Fprintln(r.output, display(value))
 		return err
