@@ -480,3 +480,22 @@ func TestNothingMemberDiagnosticPointsAtAccess(t *testing.T) {
 		t.Fatalf("expected member access source coordinate, got %v", err)
 	}
 }
+
+func TestControlFlowExpressionsAreParsedOnceAndKeepSourceSpans(t *testing.T) {
+	source := "If 1 divided by 0:\n    Say \"unreachable\".\nEnd if."
+	nodes, err := parse(source, "control-flow.tell")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nodes) != 1 || nodes[0].conditionExpr == nil {
+		t.Fatalf("control-flow expression was not cached: %#v", nodes)
+	}
+	binary, ok := nodes[0].conditionExpr.(binaryExpression)
+	if !ok || binary.column != 6 {
+		t.Fatalf("condition AST operator span = %#v, want column 6", nodes[0].conditionExpr)
+	}
+	_, err = runTest(t, source, "")
+	if err == nil || !strings.Contains(err.Error(), "test.tell:1:6: division by zero") {
+		t.Fatalf("expected condition operator source location, got %v", err)
+	}
+}
