@@ -1,14 +1,71 @@
 {
   "schema_version": 1,
   "diagnostic_format": "[ErrorType] File \"<filename>\", line X, col Y: <Exact Message>",
-  "exit_codes": {"syntax_error": 64, "type_error": 70, "name_error": 70, "runtime_error": 70, "io_error": 74, "usage_error": 64},
+  "exit_codes": {
+    "syntax_error": 64,
+    "type_error": 70,
+    "name_error": 70,
+    "runtime_error": 70,
+    "io_error": 74,
+    "usage_error": 64
+  },
   "tests": [
-    {"name":"portable arithmetic","filename":"arithmetic.tell","source_code":"Say 2 plus 3 times 4.\n","expected_stdout":"14\n","expected_stderr":"","expected_exit_code":0},
-    {"name":"lexical closure capture","filename":"closure.tell","source_code":"To make_adder with offset:\n    To add with value:\n        Give back value plus offset.\n    End function.\n    Give back add.\nEnd function.\nLet add_three be make_adder(3).\nSay add_three(4).\n","expected_stdout":"7\n","expected_stderr":"","expected_exit_code":0},
-    {"name":"floating point underflow","filename":"underflow.tell","source_code":"Say 1e-308 times 1e-308.\n","expected_stdout":"0\n","expected_stderr":"","expected_exit_code":0},
-    {"name":"floating point overflow","filename":"overflow.tell","source_code":"Say 1e308 times 1e308.\n","expected_stdout":"infinity\n","expected_stderr":"","expected_exit_code":0},
-    {"name":"division by zero diagnostic","filename":"division-zero.tell","source_code":"Say 10 divided by 0.\n","expected_stdout":"","expected_stderr":"[RuntimeError] File \"division-zero.tell\", line 1, col 5: division by zero\n","expected_exit_code":70},
-    {"name":"unbound null member diagnostic","filename":"null-member.tell","source_code":"Let value be nothing.\nSay value.name.\n","expected_stdout":"","expected_stderr":"[RuntimeError] File \"null-member.tell\", line 2, col 5: cannot access member on nothing\n","expected_exit_code":70},
-    {"name":"recursion depth diagnostic","filename":"recursion-limit.tell","max_call_depth":8,"source_code":"To recurse with n:\n    Give back recurse(n plus 1).\nEnd function.\nSay recurse(0).\n","expected_stdout":"","expected_stderr":"[RuntimeError] File \"recursion-limit.tell\", line 2, col 16: maximum function call depth exceeded\n","expected_exit_code":70}
+    {
+      "name": "portable arithmetic",
+      "filename": "arithmetic.tell",
+      "source_code": "Say 2 plus 3 times 4.\n",
+      "expected_stdout": "14\n",
+      "expected_stderr": "",
+      "expected_exit_code": 0
+    },
+    {
+      "name": "lexical closure capture",
+      "filename": "closure.tell",
+      "source_code": "To make_adder with offset:\n    To add with value:\n        Give back value plus offset.\n    End function.\n    Give back add.\nEnd function.\nLet add_three be make_adder(3).\nSay add_three(4).\n",
+      "expected_stdout": "7\n",
+      "expected_stderr": "",
+      "expected_exit_code": 0
+    },
+    {
+      "name": "floating point underflow",
+      "filename": "underflow.tell",
+      "source_code": "Say 1e-308 times 1e-308.\n",
+      "expected_stdout": "0\n",
+      "expected_stderr": "",
+      "expected_exit_code": 0
+    },
+    {
+      "name": "floating point overflow",
+      "filename": "overflow.tell",
+      "source_code": "Say 1e308 times 1e308.\n",
+      "expected_stdout": "infinity\n",
+      "expected_stderr": "",
+      "expected_exit_code": 0
+    },
+    {
+      "name": "division by zero diagnostic",
+      "filename": "division-zero.tell",
+      "source_code": "Say 10 divided by 0.\n",
+      "expected_stdout": "",
+      "expected_stderr": "[RuntimeError] File \"division-zero.tell\", line 1, col 8: division by zero\n",
+      "expected_exit_code": 70
+    },
+    {
+      "name": "unbound null member diagnostic",
+      "filename": "null-member.tell",
+      "source_code": "Let value be nothing.\nSay value.name.\n",
+      "expected_stdout": "",
+      "expected_stderr": "[RuntimeError] File \"null-member.tell\", line 2, col 10: cannot access member on nothing\n",
+      "expected_exit_code": 70
+    },
+    {
+      "name": "recursion depth diagnostic",
+      "filename": "recursion-limit.tell",
+      "max_call_depth": 8,
+      "source_code": "To recurse with n:\n    Give back recurse(n plus 1).\nEnd function.\nSay recurse(0).\n",
+      "expected_stdout": "",
+      "expected_stderr": "[RuntimeError] File \"recursion-limit.tell\", line 2, col 22: maximum function call depth exceeded\n",
+      "expected_exit_code": 70
+    }
   ]
 }
