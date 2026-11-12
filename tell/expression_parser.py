@@ -22,6 +22,8 @@ class Expr:
     children: tuple["Expr", ...] = ()
     names: tuple[str | None, ...] = ()
     start: int = 0
+    line: int = 1
+    column: int = 1
 
 
 class ExpressionSyntaxError(ValueError):
@@ -186,13 +188,13 @@ class Parser:
             operator = self.take()
             next_minimum = precedence if operator.kind == "**" else precedence + 1
             right = self.parse_precedence(next_minimum)
-            left = Expr("binary", operator.kind, (left, right), start=operator.offset)
+            left = Expr("binary", operator.kind, (left, right), start=operator.offset, line=operator.line, column=operator.column)
         if minimum <= 1 and self.peek().kind == "if":
             token = self.take()
             condition = self.parse_precedence(1)
             self.require("else", "expected else in conditional expression")
             alternative = self.parse_precedence(1)
-            left = Expr("conditional", children=(left, condition, alternative), start=token.offset)
+            left = Expr("conditional", children=(left, condition, alternative), start=token.offset, line=token.line, column=token.column)
         return left
 
     def parse_prefix(self) -> Expr:
@@ -210,11 +212,11 @@ class Parser:
                 value = None
             else:
                 value = token.text
-            node = Expr("literal", value, start=token.offset)
+            node = Expr("literal", value, start=token.offset, line=token.line, column=token.column)
         elif token.kind in {"+", "-", "not"}:
-            node = Expr("unary", token.kind, (self.parse_precedence(7),), start=token.offset)
+            node = Expr("unary", token.kind, (self.parse_precedence(7),), start=token.offset, line=token.line, column=token.column)
         elif token.kind == "ident":
-            node = Expr("name", token.text, start=token.offset)
+            node = Expr("name", token.text, start=token.offset, line=token.line, column=token.column)
         elif token.kind == "(":
             if self.peek().kind == ")":
                 self.take()
@@ -283,7 +285,7 @@ class Parser:
             if token.kind == ".":
                 self.take()
                 member = self.require("ident", "expected a member name after .")
-                value = Expr("member", member.text, (value,), start=token.offset)
+                value = Expr("member", member.text, (value,), start=token.offset, line=token.line, column=token.column)
             elif token.kind == "(":
                 self.take()
                 args: list[Expr] = []
@@ -308,7 +310,7 @@ class Parser:
                         if self.peek().kind == ")":
                             break
                 self.require(")", "expected ) after arguments")
-                value = Expr("call", children=(value, *args), names=tuple(names), start=token.offset)
+                value = Expr("call", children=(value, *args), names=tuple(names), start=token.offset, line=token.line, column=token.column)
             elif token.kind == "[":
                 self.take()
                 first = None if self.peek().kind in {":", "]"} else self.parse_precedence(1)
@@ -320,12 +322,12 @@ class Parser:
                         self.take()
                         third = None if self.peek().kind == "]" else self.parse_precedence(1)
                     self.require("]", "expected ] after slice")
-                    value = Expr("slice", children=(value, first, second, third), start=token.offset)
+                    value = Expr("slice", children=(value, first, second, third), start=token.offset, line=token.line, column=token.column)
                 else:
                     if first is None:
                         raise ExpressionSyntaxError("expected an index or slice", self.peek())
                     self.require("]", "expected ] after index")
-                    value = Expr("index", children=(value, first), start=token.offset)
+                    value = Expr("index", children=(value, first), start=token.offset, line=token.line, column=token.column)
             else:
                 return value
 
