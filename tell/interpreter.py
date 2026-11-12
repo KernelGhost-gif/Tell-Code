@@ -727,6 +727,21 @@ class Parser:
         rest = _take_prefix(text, "set ")
         parts = _split_once_casefold(rest, " to ") if rest is not None else None
         if parts:
+            for prefix in ("the item at position ", "item at position ", "the key ", "key "):
+                tail = _take_prefix(parts[0], prefix)
+                pair = _split_once_casefold(tail, " in ") if tail is not None else None
+                if pair and re.fullmatch(r"(?:[^\\W\\d]|_)\\w*", pair[1]):
+                    index_expression = parsed_expression(pair[0])
+                    value_expression = parsed_expression(parts[1])
+                    if index_expression is not None and value_expression is not None:
+                        target = TellExpr(
+                            "index",
+                            children=(TellExpr("name", pair[1]), index_expression),
+                        )
+                        return {
+                            "kind": "set_index", "source": parts[0], "target": target,
+                            "expression": value_expression, "expression_source": parts[1],
+                        }
             if "," in parts[0]:
                 names = [target.strip() for target in parts[0].split(",")]
                 valid = len(names) > 1 and all(
