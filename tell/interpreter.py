@@ -650,9 +650,9 @@ class Parser:
         line = self.lines[line_no - 1]
         return len(line) - len(line.lstrip(" \t")) + 1
 
-    def _validate_expression(self, expression: str, line_no: int, column: int, expression_offset: int = 0) -> None:
+    def _validate_expression(self, expression: str, line_no: int, column: int, expression_offset: int = 0) -> TellExpr:
         try:
-            parse_expression(_translate_expression_text(expression))
+            return parse_expression(_translate_expression_text(expression))
         except ExpressionSyntaxError as exc:
             token = exc.token
             error_line = line_no + token.line - 1
@@ -831,9 +831,13 @@ class Parser:
             column = self._source_column(line)
             raise TellSyntaxError(str(exc), self.filename, line, column) from exc
 
-    def _parse_if_block(self, condition: str, line_no: int) -> Node:
+    def _parse_if_block(self, condition: str, line_no: int, prefix_length: int = len("If ")) -> Node:
+        condition = condition.strip()
+        condition_ast = self._validate_expression(
+            condition, line_no, self._source_column(line_no), prefix_length
+        )
         body, stop = self.parse_block({"otherwise:", "otherwise-if", "end if."})
-        node = Node("if", {"condition": condition.strip(), "body": body, "otherwise": []}, line_no, self._source_column(line_no))
+        node = Node("if", {"condition": condition, "condition_ast": condition_ast, "body": body, "otherwise": []}, line_no, self._source_column(line_no))
         if stop == "end if.":
             return node
 
@@ -850,7 +854,7 @@ class Parser:
             nested_condition = _take_prefix(nested_header, "otherwise if ")
 
         if nested_condition:
-            node.data["otherwise"] = [self._parse_if_block(nested_condition, self.index)]
+            node.data["otherwise"] = [self._parse_if_block(nested_condition, self.index, len("Otherwise if "))]
             return node
         raise TellError(f"If block on line {line_no} needs 'End if.'.")
 
@@ -920,28 +924,27 @@ class Parser:
             condition = _take_prefix(header, "if ") if header is not None else None
             if condition:
                 condition = re.sub(r",\s*then$", "", condition, flags=re.I).strip()
-                self._validate_expression(condition, line_no, self._source_column(line_no), len("If "))
                 nodes.append(self._parse_if_block(condition, line_no))
                 continue
 
             condition = _take_prefix(header, "while ") if header is not None else None
             if condition:
-                self._validate_expression(condition, line_no, self._source_column(line_no), len("While "))
+                condition_ast = self._validate_expression(condition, line_no, self._source_column(line_no), len("While "))
                 body, stop = self.parse_block({"end while."})
                 if stop != "end while.":
                     raise TellError(f"While block on line {line_no} needs 'End while.'.")
-                nodes.append(Node("while", {"condition": condition, "body": body}, line_no, self._source_column(line_no)))
+                nodes.append(Node("while", {"condition": condition, "condition_ast": condition_ast, "body": body}, line_no, self._source_column(line_no)))
                 continue
 
             repeat_rest = _take_prefix(header, "repeat ") if header is not None else None
             repeat_end = repeat_rest.casefold().rfind(" times") if repeat_rest is not None else -1
             if repeat_end > 0:
                 count_expression = repeat_rest[:repeat_end].strip()
-                self._validate_expression(count_expression, line_no, self._source_column(line_no), len("Repeat "))
+                count_ast = self._validate_expression(count_expression, line_no, self._source_column(line_no), len("Repeat "))
                 body, stop = self.parse_block({"end repeat."})
                 if stop != "end repeat.":
                     raise TellError(f"Repeat block on line {line_no} needs 'End repeat.'.")
-                nodes.append(Node("repeat", {"count": repeat_rest[:repeat_end].strip(), "body": body}, line_no, self._source_column(line_no)))
+                nodes.append(Node("repeat", {"count": repeat_rest[:repeat_end].strip(), "count_ast": count_ast, "body": body}, line_no, self._source_column(line_no)))
                 continue
 
             for_rest = _take_prefix(header, "for each ") if header is not None else None
@@ -952,11 +955,11 @@ class Parser:
             ) and len(set(loop_names)) == len(loop_names)
             if for_parts and valid_loop_names and for_parts[1]:
                 item_offset = line.casefold().find(for_parts[1].casefold())
-                self._validate_expression(for_parts[1], line_no, self._source_column(line_no), max(0, item_offset))
+                items_ast = self._validate_expression(for_parts[1], line_no, self._source_column(line_no), max(0, item_offset))
                 body, stop = self.parse_block({"end loop."})
                 if stop != "end loop.":
                     raise TellError(f"For-each block on line {line_no} needs 'End loop.'.")
-                nodes.append(Node("for", {"names": loop_names, "items": for_parts[1], "body": body}, line_no, self._source_column(line_no)))
+                nodes.append(Node("for", {"names": loop_names, "items": for_parts[1], "items_ast": items_ast, "body": body}, line_no, self._source_column(line_no)))
                 continue
 
             function_header = _parse_function_header(header or "")
@@ -1408,15 +1411,24 @@ class Interpreter:
                     raise TellError(f"{self.filename}:{node.line}:{node.column}: {exc}") from exc
                 raise TellError(f"{self.filename}:{node.line}:{node.column}: {exc}") from exc
 
+    def _evaluate_node_expression(self, node: Node, expression: TellExpr, env: Environment, offset: int) -> Any:
+        previous_base = (self.expression_base_line, self.expression_base_column)
+        self.expression_base_line = node.line
+        self.expression_base_column = node.column + offset
+        try:
+            return self._eval_expression(expression, env)
+        finally:
+            self.expression_base_line, self.expression_base_column = previous_base
+
     def execute_node(self, node: Node, env: Environment) -> None:
         data = node.data
         if node.kind == "if":
-            branch = data["body"] if self.evaluate(data["condition"], env) else data["otherwise"]
+            branch = data["body"] if self._evaluate_node_expression(node, data["condition_ast"], env, len("If ")) else data["otherwise"]
             self.execute(branch, env)
             return
         if node.kind == "while":
             iterations = 0
-            while self.evaluate(data["condition"], env):
+            while self._evaluate_node_expression(node, data["condition_ast"], env, len("While ")):
                 iterations += 1
                 if iterations > self.max_loop_iterations:
                     raise TellError(f"This loop exceeded the configured limit of {self.max_loop_iterations} iterations.")
@@ -1428,7 +1440,7 @@ class Interpreter:
                     break
             return
         if node.kind == "repeat":
-            count = int(self.evaluate(data["count"], env))
+            count = int(self._evaluate_node_expression(node, data["count_ast"], env, len("Repeat ")))
             if count < 0:
                 raise TellError("A repeat count cannot be negative.")
             if count > self.max_loop_iterations:
@@ -1443,7 +1455,7 @@ class Interpreter:
                     break
             return
         if node.kind == "for":
-            items = self.evaluate(data["items"], env)
+            items = self._evaluate_node_expression(node, data["items_ast"], env, len("For each ") + len(", ".join(data["names"])) + len(" in "))
             for index, item in enumerate(items, start=1):
                 if index > self.max_loop_iterations:
                     raise TellError(f"For-each loop exceeded the configured limit of {self.max_loop_iterations} iterations.")
