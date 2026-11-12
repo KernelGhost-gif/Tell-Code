@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/KernelGhost-gif/Tell-Code/native/internal/diagnostic"
+	"github.com/KernelGhost-gif/Tell-Code/native/internal/tell"
 )
 
 var (
@@ -29,6 +30,11 @@ func diagnosticFor(err error, filename string, defaultKind diagnostic.Kind) *dia
 
 	message := err.Error()
 	line, column := 1, 1
+	var runtimeError *tell.Error
+	explicitKind := ""
+	if errors.As(err, &runtimeError) {
+		explicitKind = runtimeError.Kind
+	}
 	if match := runtimeLocation.FindStringSubmatch(message); match != nil {
 		if match[1] != "" {
 			filename = match[1]
@@ -50,6 +56,9 @@ func diagnosticFor(err error, filename string, defaultKind diagnostic.Kind) *dia
 	}
 
 	kind := defaultKind
+	if explicitKind == "IOError" {
+		kind = diagnostic.IOError
+	}
 	folded := strings.ToLower(message)
 	if strings.Contains(folded, "type mismatch") ||
 		strings.Contains(folded, "type annotation") ||
