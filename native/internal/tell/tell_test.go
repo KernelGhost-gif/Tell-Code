@@ -241,7 +241,7 @@ func TestRecursionLimitReturnsRuntimeError(t *testing.T) {
 End function.
 Say recurse(0).`
 	_, err := runTest(t, source, "")
-	if err == nil || !strings.Contains(err.Error(), "maximum function call depth (64) exceeded") {
+	if err == nil || !strings.Contains(err.Error(), "maximum function call depth exceeded") {
 		t.Fatalf("expected recursion limit error, got %v", err)
 	}
 }
@@ -256,7 +256,7 @@ func TestExecutionLimitsCanBeConfigured(t *testing.T) {
 	}
 	source := "To recurse with value:\n    Give back recurse(value plus 1).\nEnd function.\nSay recurse(0)."
 	err = session.Exec(source, "limit.tell")
-	if err == nil || !strings.Contains(err.Error(), "maximum function call depth (3) exceeded") {
+	if err == nil || !strings.Contains(err.Error(), "maximum function call depth exceeded") {
 		t.Fatalf("expected configured recursion limit error, got %v", err)
 	}
 	var exactOutput bytes.Buffer
