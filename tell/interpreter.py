@@ -744,6 +744,45 @@ class Parser:
 
 
 
+
+        python_rest = _take_prefix(text, "use the python library called ")
+        python_parts = _split_once_casefold(python_rest, " as ") if python_rest is not None else None
+        if python_rest is not None:
+            module_name = python_parts[0].strip() if python_parts else python_rest.strip()
+            alias = python_parts[1].strip() if python_parts else module_name.rsplit(".", 1)[-1]
+            if (
+                re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.]*", module_name)
+                and all(part and not part.startswith("_") for part in module_name.split("."))
+                and re.fullmatch(r"(?:[^\W\d]|_)\w*", alias)
+            ):
+                return {"kind": "import_python", "source": module_name, "names": [alias]}
+
+        javascript_rest = _take_prefix(text, "use the javascript library called ")
+        javascript_parts = _split_once_casefold(javascript_rest, " as ") if javascript_rest is not None else None
+        if javascript_rest is not None:
+            specifier = javascript_parts[0].strip() if javascript_parts else javascript_rest.strip()
+            alias = javascript_parts[1].strip() if javascript_parts else _default_javascript_alias(specifier)
+            if re.fullmatch(r"(?:[^\W\d]|_)\w*", alias):
+                try:
+                    JavaScriptModule(specifier)
+                except TellError:
+                    pass
+                else:
+                    return {"kind": "import_javascript", "source": specifier, "names": [alias]}
+
+        library_rest = _take_prefix(text, "use the ")
+        if library_rest is not None:
+            library_parts = _split_once_casefold(library_rest, " library")
+            if library_parts and library_parts[0].strip():
+                requested = library_parts[0].strip().casefold().replace(" ", "")
+                suffix = library_parts[1].strip()
+                alias = requested
+                if suffix:
+                    alias = _take_prefix(suffix, "as ") or ""
+                canonical = {"mathematics": "math", "dates": "datetime", "dateandtime": "datetime"}.get(requested, requested)
+                if alias and re.fullmatch(r"(?:[^\W\d]|_)\w*", alias) and canonical in Interpreter.SAFE_MODULES:
+                    return {"kind": "import_library", "source": canonical, "names": [alias]}
+
         rest = _take_prefix(text, "use the module ")
         parts = _split_once_casefold(rest, " as ") if rest is not None else None
         if parts and re.fullmatch(r"(?:[^\W\d]|_)\w*", parts[1]):
@@ -1645,6 +1684,17 @@ class Interpreter:
 
             elif simple["kind"] == "import_module":
                 env.set(simple["names"][0], self._load_module(str(value)))
+            elif simple["kind"] == "import_python":
+                try:
+                    module = importlib.import_module(simple["source"])
+                except ImportError as exc:
+                    raise TellError(f"Could not import Python module {simple['source']!r}: {exc}") from exc
+                env.set(simple["names"][0], module)
+            elif simple["kind"] == "import_javascript":
+                env.set(simple["names"][0], JavaScriptModule(simple["source"]))
+            elif simple["kind"] == "import_library":
+                env.set(simple["names"][0], self.SAFE_MODULES[simple["source"]])
+
             elif simple["kind"] == "add":
                 collection = env.get(simple["names"][0])
                 if isinstance(collection, list):
