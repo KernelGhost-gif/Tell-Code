@@ -42,6 +42,11 @@ class TellLocatedError(TellError):
         self.line = max(1, line)
         self.column = max(1, column)
 
+class TellIOError(TellLocatedError):
+    """A file or stream failure with an I/O process status."""
+
+    kind = "IOError"
+
 
 @dataclass
 class TellSet:
@@ -1441,6 +1446,8 @@ class Interpreter:
                 raise
             except TellLocatedError:
                 raise
+            except OSError as exc:
+                raise TellIOError(str(exc), self.filename, node.line, node.column) from exc
             except Exception as exc:
                 if isinstance(exc, TellError):
                     raise TellError(f"{self.filename}:{node.line}:{node.column}: {exc}") from exc
