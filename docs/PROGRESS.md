@@ -66,6 +66,7 @@ The v0.3.6 implementation is committed to `main` and published at https://github
 
 
 ## 2026-11-12 modernization branch checkpoint
+- Continued on `modernization/0.4-remember-ast`: `Remember expression as this.field.` is parsed and executed as a typed statement in Python and Go, compiled through `SET_FIELD`, and covered by constructor/method source tests, bytecode tests, and the shared cross-runtime corpus.
 
 The following work is on `modernization/0.4-foundation`; it has not been merged to `main` or published as a release.
 
