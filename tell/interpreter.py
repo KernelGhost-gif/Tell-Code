@@ -744,6 +744,16 @@ class Parser:
 
 
 
+        rest = _take_prefix(text, "use the module ")
+        parts = _split_once_casefold(rest, " as ") if rest is not None else None
+        if parts and re.fullmatch(r"(?:[^\W\d]|_)\w*", parts[1]):
+            expression = parsed_expression(parts[0])
+            if expression is not None:
+                return {
+                    "kind": "import_module", "names": [parts[1]], "expression": expression,
+                    "expression_source": parts[0],
+                }
+
         for prefix, delimiter, kind in (
             ("add ", " to ", "add"),
             ("remove ", " from ", "remove"),
@@ -1633,6 +1643,8 @@ class Interpreter:
                     raise TellError("Property assignment requires a Tell instance.")
                 target.fields[simple["target"].value] = value
 
+            elif simple["kind"] == "import_module":
+                env.set(simple["names"][0], self._load_module(str(value)))
             elif simple["kind"] == "add":
                 collection = env.get(simple["names"][0])
                 if isinstance(collection, list):
