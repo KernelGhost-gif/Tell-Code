@@ -499,3 +499,28 @@ func TestControlFlowExpressionsAreParsedOnceAndKeepSourceSpans(t *testing.T) {
 		t.Fatalf("expected condition operator source location, got %v", err)
 	}
 }
+
+func TestFileAndConsoleStatementsUseTypedASTNodes(t *testing.T) {
+	source := "Ask \"Name? \" and save the answer as name.\nRead the file \"note.txt\" into contents.\nWrite name to the file \"copy.txt\".\nAppend \"!\" to the file \"copy.txt\"."
+	nodes, err := parse(source, "typed-io.tell")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"ask", "read_file", "write_file", "append_file"}
+	if len(nodes) != len(want) {
+		t.Fatalf("got %d I/O statement nodes, want %d", len(nodes), len(want))
+	}
+	for index, kind := range want {
+		if nodes[index].simple == nil || nodes[index].simple.kind != kind {
+			t.Fatalf("node %d = %#v, want typed kind %q", index, nodes[index], kind)
+		}
+	}
+
+	var output bytes.Buffer
+	if err := RunWithIO("Ask \"Name? \" and save the answer as name.\nSay name.", "ask.tell", strings.NewReader("Ada\n"), &output); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := output.String(), "Name? Ada\n"; got != want {
+		t.Fatalf("Ask output = %q, want %q", got, want)
+	}
+}
