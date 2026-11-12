@@ -24,6 +24,7 @@ func DefaultExecutionLimits() ExecutionLimits {
 }
 
 type Error struct {
+	Kind string
 	Message string
 	Filename string
 	Line int
@@ -47,15 +48,27 @@ func fail(format string, args ...any) error {
 
 // withSourceLocation attaches the first meaningful source span to an error.
 // Nested expression errors keep their more precise location.
+
+func ioFailure(err error) error {
+	if err == nil { return nil }
+	return &Error{Kind:"IOError", Message:err.Error()}
+}
+
 func withSourceLocation(err error, filename string, line, column int) error {
 	if err == nil {
 		return nil
 	}
 	var located *Error
-	if errors.As(err, &located) && located.Filename != "" && located.Line > 0 {
-		return err
+	kind := ""
+	message := err.Error()
+	if errors.As(err, &located) {
+		kind = located.Kind
+		message = located.Message
+		if located.Filename != "" && located.Line > 0 {
+			return err
+		}
 	}
-	return &Error{Message: err.Error(), Filename: filename, Line: line, Column: column}
+	return &Error{Kind:kind, Message:message, Filename:filename, Line:line, Column:column}
 }
 
 type node struct {
