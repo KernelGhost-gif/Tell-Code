@@ -264,5 +264,25 @@
     "name": "constructor supports default arguments",
     "source": "Create a class called Counter:\n    When creating a Counter with initial defaulting to 5:\n        Remember initial as this.value.\n    End constructor.\nEnd class.\nLet counter be a new Counter.\nSay counter.value.",
     "output": "5\n"
+  },
+  {
+    "name": "conditional expressions have right-associative shared semantics",
+    "source": "Say \"yes\" if true else \"no\".\nSay \"fallback\" if false else \"chosen\" if true else \"missed\".",
+    "output": "yes\nchosen\n"
+  },
+  {
+    "name": "IEEE-754 overflow underflow exponentiation and signed zero",
+    "source": "Say 1e309.\nSay 1e-400.\nSay 1e308 times 1e308.\nSay 1e-308 times 1e-308.\nSay 1e308 to the power of 2.\nSay 0 to the power of -1.\nSay -0.0.",
+    "output": "infinity\n0\ninfinity\n0\ninfinity\ninfinity\n0\n"
+  },
+  {
+    "name": "shared numeric coercions for booleans and numeric text",
+    "source": "Say true times 2.\nSay false plus 5.\nSay \"6\" times 7.\nSay \"value=\" plus 3.",
+    "output": "2\n5\n42\nvalue=3\n"
+  },
+  {
+    "name": "typed collection mutations",
+    "source": "Let items be [1, 2].\nAdd 3 to items.\nRemove 1 from items.\nSay items.\nLet values be {1, 2}.\nAdd 2 to values.\nAdd 3 to values.\nRemove 1 from values.\nSay len(values).\nSay 3 is in values.",
+    "output": "[2, 3]\n2\ntrue\n"
   }
 ]

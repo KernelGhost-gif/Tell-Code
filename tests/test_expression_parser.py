@@ -40,5 +40,18 @@ class ExpressionParserTests(unittest.TestCase):
             parse("1 plus )")
 
 
+    def test_conditional_expression_ast(self):
+        tree = parse('"yes" if 2 is greater than 1 else "no"')
+        self.assertEqual(tree.kind, "conditional")
+        self.assertEqual(tree.children[0].value, "yes")
+        self.assertEqual(tree.children[1].kind, "binary")
+        self.assertEqual(tree.children[2].value, "no")
+
+    def test_conditional_expression_is_right_associative(self):
+        tree = parse('"a" if false else "b" if true else "c"')
+        self.assertEqual(tree.kind, "conditional")
+        self.assertEqual(tree.children[2].kind, "conditional")
+
+
 if __name__ == "__main__":
     unittest.main()

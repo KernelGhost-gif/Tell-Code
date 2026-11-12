@@ -1,55 +1,16 @@
-name: Publish native release
+name: Legacy native release (disabled)
 
 on:
-  push:
-    tags:
-      - 'v*'
-  create:
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  notice:
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'create' && github.event.ref_type == 'branch' && startsWith(github.event.ref, 'release-v'))
     steps:
-      - name: Check out source
-        uses: actions/checkout@v4
-      - name: Install Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.23.x'
-      - name: Install Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Run Python tests
-        run: python -m unittest discover -s tests -v
-      - name: Run native tests
-        working-directory: native
-        run: go test ./...
-      - name: Vet native code
-        working-directory: native
-        run: go vet ./...
-      - name: Build release binaries and checksums
-        run: ./scripts/build-all.sh
-      - name: Run Tell source examples as tests
-        run: ./releases/tell-linux-amd64 test examples
-      - name: Publish GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Explain replacement release workflow
         run: |
-          TAG="${GITHUB_REF_NAME#release-}"
-          gh release create "$TAG" \
-            releases/tell-* \
-            releases/SHA256SUMS \
-            releases/README.txt \
-            releases/SBOM.spdx.json \
-            releases/THIRD_PARTY_NOTICES.txt \
-            --target "$GITHUB_SHA" \
-            --generate-notes
+          echo "This release workflow is disabled."
+          echo "Use .github/workflows/release-modernized.yml by pushing a v* tag."

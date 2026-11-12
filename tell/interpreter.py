@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import ast
 import csv
 import datetime
 import io
@@ -10,7 +9,6 @@ import shutil
 import subprocess
 import json
 import math
-import operator
 import random
 import re
 import statistics
@@ -23,6 +21,31 @@ from .expression_parser import Expr as TellExpr, ExpressionSyntaxError, parse as
 
 class TellError(Exception):
     """An error in a Tell program."""
+
+
+class TellSyntaxError(TellError):
+    """A source syntax error with a stable source coordinate."""
+
+    def __init__(self, message: str, filename: str, line: int, column: int):
+        super().__init__(message)
+        self.filename = filename
+        self.line = max(1, line)
+        self.column = max(1, column)
+
+
+class TellLocatedError(TellError):
+    """A runtime error attached to the most precise available expression span."""
+
+    def __init__(self, message: str, filename: str, line: int, column: int):
+        super().__init__(message)
+        self.filename = filename
+        self.line = max(1, line)
+        self.column = max(1, column)
+
+class TellIOError(TellLocatedError):
+    """A file or stream failure with an I/O process status."""
+
+    kind = "IOError"
 
 
 @dataclass
@@ -215,7 +238,7 @@ class UserFunction:
         local = Environment(values, self.closure)
         if self.interpreter.call_depth >= self.interpreter.max_call_depth:
             raise TellError(
-                f"maximum function call depth ({self.interpreter.max_call_depth}) exceeded"
+                "maximum function call depth exceeded"
             )
         self.interpreter.call_depth += 1
         try:
@@ -632,6 +655,42 @@ class Parser:
         line = self.lines[line_no - 1]
         return len(line) - len(line.lstrip(" \t")) + 1
 
+    def _validate_expression(self, expression: str, line_no: int, column: int, expression_offset: int = 0) -> TellExpr:
+        try:
+            return parse_expression(_translate_expression_text(expression))
+        except ExpressionSyntaxError as exc:
+            token = exc.token
+            error_line = line_no + token.line - 1
+            error_column = column + expression_offset + token.column - 1 if token.line == 1 else token.column
+            raise TellSyntaxError(str(exc), self.filename, error_line, error_column) from exc
+
+    def _validate_statement_expression(self, text: str, line_no: int, column: int) -> None:
+        candidate: str | None = None
+        offset = 0
+        lowered = text.casefold()
+        if lowered.startswith("let "):
+            rest = _take_prefix(text, "let ") or ""
+            rest = _take_prefix(rest, "constant ") or rest
+            parts = _split_once_casefold(rest, " be ")
+            if parts:
+                candidate = parts[1]
+                offset = text.find(candidate) if candidate else 0
+        elif lowered.startswith("set "):
+            rest = _take_prefix(text, "set ") or ""
+            parts = _split_once_casefold(rest, " to ")
+            if parts:
+                candidate = parts[1]
+                offset = text.find(candidate) if candidate else 0
+        else:
+            for prefix in ("say ", "show ", "print ", "check that ", "give back ", "return ", "raise an error saying "):
+                candidate_part = _take_prefix(text, prefix)
+                if candidate_part is not None and candidate_part:
+                    candidate = candidate_part
+                    offset = len(text) - len(text.lstrip()) + len(prefix)
+                    break
+        if candidate:
+            self._validate_expression(candidate, line_no, column, offset)
+
     @staticmethod
     def _parse_simple_statement(text: str) -> dict[str, Any] | None:
         def parsed_expression(expression: str) -> TellExpr | None:
@@ -659,11 +718,11 @@ class Parser:
                     ) and len(set(names)) == len(names)
                     expression = parsed_expression(parts[1])
                     if valid and expression is not None:
-                        return {"kind": "let", "names": names, "constant": constant, "expression": expression}
+                        return {"kind": "let", "names": names, "constant": constant, "expression": expression, "expression_source": parts[1]}
                 elif re.fullmatch(r"(?:[^\W\d]|_)\w*", name):
                     expression = parsed_expression(parts[1])
                     if expression is not None:
-                        return {"kind": "let", "names": [name], "annotation": annotation, "constant": constant, "expression": expression}
+                        return {"kind": "let", "names": [name], "annotation": annotation, "constant": constant, "expression": expression, "expression_source": parts[1]}
 
         rest = _take_prefix(text, "set ")
         parts = _split_once_casefold(rest, " to ") if rest is not None else None
@@ -678,10 +737,60 @@ class Parser:
                 valid = bool(re.fullmatch(r"(?:[^\W\d]|_)\w*", parts[0]))
             expression = parsed_expression(parts[1])
             if valid and expression is not None:
-                return {"kind": "set", "names": names, "expression": expression}
+                return {"kind": "set", "names": names, "expression": expression, "expression_source": parts[1]}
             target = parsed_expression(parts[0])
             if target is not None and target.kind == "member" and expression is not None:
-                return {"kind": "set_member", "source": parts[0], "target": target, "expression": expression}
+                return {"kind": "set_member", "source": parts[0], "target": target, "expression": expression, "expression_source": parts[1]}
+
+
+
+        for prefix, delimiter, kind in (
+            ("add ", " to ", "add"),
+            ("remove ", " from ", "remove"),
+        ):
+            rest = _take_prefix(text, prefix)
+            parts = _split_once_casefold(rest, delimiter) if rest is not None else None
+            if parts and re.fullmatch(r"(?:[^\W\d]|_)\w*", parts[1]):
+                expression = parsed_expression(parts[0])
+                if expression is not None:
+                    return {
+                        "kind": kind, "names": [parts[1]], "expression": expression,
+                        "expression_source": parts[0],
+                    }
+
+        rest = _take_prefix(text, "ask ")
+        if rest is not None:
+            for delimiter in (" and save the answer as ", " and put the answer in "):
+                parts = _split_once_casefold(rest, delimiter)
+                if parts and re.fullmatch(r"(?:[^\W\d]|_)\w*", parts[1]):
+                    expression = parsed_expression(parts[0])
+                    if expression is not None:
+                        return {
+                            "kind": "ask", "names": [parts[1]], "expression": expression,
+                            "expression_source": parts[0],
+                        }
+
+        rest = _take_prefix(text, "read the file ")
+        parts = _split_once_casefold(rest, " into ") if rest is not None else None
+        if parts and re.fullmatch(r"(?:[^\W\d]|_)\w*", parts[1]):
+            expression = parsed_expression(parts[0])
+            if expression is not None:
+                return {
+                    "kind": "read_file", "names": [parts[1]], "expression": expression,
+                    "expression_source": parts[0],
+                }
+
+        for prefix, kind in (("write ", "write_file"), ("append ", "append_file")):
+            rest = _take_prefix(text, prefix)
+            parts = _split_once_casefold(rest, " to the file ") if rest is not None else None
+            if parts:
+                expression = parsed_expression(parts[0])
+                target = parsed_expression(parts[1])
+                if expression is not None and target is not None:
+                    return {
+                        "kind": kind, "expression": expression, "expression_source": parts[0],
+                        "target": target, "target_source": parts[1],
+                    }
 
         rest = _take_prefix(text, "tell ")
         parts = _split_once_casefold(rest, " to ") if rest is not None else None
@@ -764,14 +873,26 @@ class Parser:
         return line
 
     def parse(self) -> list[Node]:
-        nodes, stop = self.parse_block(set())
-        if stop is not None:
-            raise TellError(f"Unexpected '{stop}' on line {self.index}.")
-        return nodes
+        try:
+            nodes, stop = self.parse_block(set())
+            if stop is not None:
+                raise TellError(f"Unexpected '{stop}' on line {self.index}.")
+            return nodes
+        except TellSyntaxError:
+            raise
+        except TellError as exc:
+            match = re.search(r"\\bline\\s+(\\d+)\\b", str(exc), re.IGNORECASE)
+            line = int(match.group(1)) if match else max(1, min(self.index, len(self.lines) or 1))
+            column = self._source_column(line)
+            raise TellSyntaxError(str(exc), self.filename, line, column) from exc
 
-    def _parse_if_block(self, condition: str, line_no: int) -> Node:
+    def _parse_if_block(self, condition: str, line_no: int, prefix_length: int = len("If ")) -> Node:
+        condition = condition.strip()
+        condition_ast = self._validate_expression(
+            condition, line_no, self._source_column(line_no), prefix_length
+        )
         body, stop = self.parse_block({"otherwise:", "otherwise-if", "end if."})
-        node = Node("if", {"condition": condition.strip(), "body": body, "otherwise": []}, line_no, self._source_column(line_no))
+        node = Node("if", {"condition": condition, "condition_ast": condition_ast, "body": body, "otherwise": []}, line_no, self._source_column(line_no))
         if stop == "end if.":
             return node
 
@@ -788,7 +909,7 @@ class Parser:
             nested_condition = _take_prefix(nested_header, "otherwise if ")
 
         if nested_condition:
-            node.data["otherwise"] = [self._parse_if_block(nested_condition, self.index)]
+            node.data["otherwise"] = [self._parse_if_block(nested_condition, self.index, len("Otherwise if "))]
             return node
         raise TellError(f"If block on line {line_no} needs 'End if.'.")
 
@@ -863,19 +984,22 @@ class Parser:
 
             condition = _take_prefix(header, "while ") if header is not None else None
             if condition:
+                condition_ast = self._validate_expression(condition, line_no, self._source_column(line_no), len("While "))
                 body, stop = self.parse_block({"end while."})
                 if stop != "end while.":
                     raise TellError(f"While block on line {line_no} needs 'End while.'.")
-                nodes.append(Node("while", {"condition": condition, "body": body}, line_no, self._source_column(line_no)))
+                nodes.append(Node("while", {"condition": condition, "condition_ast": condition_ast, "body": body}, line_no, self._source_column(line_no)))
                 continue
 
             repeat_rest = _take_prefix(header, "repeat ") if header is not None else None
             repeat_end = repeat_rest.casefold().rfind(" times") if repeat_rest is not None else -1
             if repeat_end > 0:
+                count_expression = repeat_rest[:repeat_end].strip()
+                count_ast = self._validate_expression(count_expression, line_no, self._source_column(line_no), len("Repeat "))
                 body, stop = self.parse_block({"end repeat."})
                 if stop != "end repeat.":
                     raise TellError(f"Repeat block on line {line_no} needs 'End repeat.'.")
-                nodes.append(Node("repeat", {"count": repeat_rest[:repeat_end].strip(), "body": body}, line_no, self._source_column(line_no)))
+                nodes.append(Node("repeat", {"count": repeat_rest[:repeat_end].strip(), "count_ast": count_ast, "body": body}, line_no, self._source_column(line_no)))
                 continue
 
             for_rest = _take_prefix(header, "for each ") if header is not None else None
@@ -885,10 +1009,12 @@ class Parser:
                 re.fullmatch(r"(?:[^\W\d]|_)\w*", name) for name in loop_names
             ) and len(set(loop_names)) == len(loop_names)
             if for_parts and valid_loop_names and for_parts[1]:
+                item_offset = line.casefold().find(for_parts[1].casefold())
+                items_ast = self._validate_expression(for_parts[1], line_no, self._source_column(line_no), max(0, item_offset))
                 body, stop = self.parse_block({"end loop."})
                 if stop != "end loop.":
                     raise TellError(f"For-each block on line {line_no} needs 'End loop.'.")
-                nodes.append(Node("for", {"names": loop_names, "items": for_parts[1], "body": body}, line_no, self._source_column(line_no)))
+                nodes.append(Node("for", {"names": loop_names, "items": for_parts[1], "items_ast": items_ast, "body": body}, line_no, self._source_column(line_no)))
                 continue
 
             function_header = _parse_function_header(header or "")
@@ -912,6 +1038,8 @@ class Parser:
 
             statement_text = self._remove_sentence_end(line)
             simple = self._parse_simple_statement(statement_text)
+            if simple is None:
+                self._validate_statement_expression(statement_text, line_no, self._source_column(line_no))
             nodes.append(Node("statement", {"text": statement_text, "simple": simple}, line_no, self._source_column(line_no)))
 
         return nodes, None
@@ -972,22 +1100,6 @@ class Interpreter:
         "csv": TellModule({"parse": _csv_parse, "stringify": _csv_stringify}),
     }
 
-    BINOPS: dict[type, Callable[[Any, Any], Any]] = {
-        ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul,
-        ast.Div: operator.truediv, ast.FloorDiv: operator.floordiv, ast.Mod: operator.mod,
-        ast.Pow: operator.pow, ast.BitAnd: operator.and_, ast.BitOr: operator.or_,
-        ast.BitXor: operator.xor, ast.LShift: operator.lshift, ast.RShift: operator.rshift,
-    }
-    UNARYOPS: dict[type, Callable[[Any], Any]] = {
-        ast.UAdd: operator.pos, ast.USub: operator.neg, ast.Not: operator.not_, ast.Invert: operator.invert,
-    }
-    COMPARES: dict[type, Callable[[Any, Any], bool]] = {
-        ast.Eq: operator.eq, ast.NotEq: operator.ne, ast.Lt: operator.lt,
-        ast.LtE: operator.le, ast.Gt: operator.gt, ast.GtE: operator.ge,
-        ast.In: lambda a, b: a in b, ast.NotIn: lambda a, b: a not in b,
-        ast.Is: operator.is_, ast.IsNot: operator.is_not,
-    }
-
     def __init__(
         self,
         input_fn: Callable[[str], str] = input,
@@ -1004,6 +1116,8 @@ class Interpreter:
         self._install_builtins(self.global_env)
         self.filename = "<memory>"
         self.current_line = 0
+        self.expression_base_line = 1
+        self.expression_base_column = 1
         self.call_depth = 0
         self.max_call_depth = max_call_depth
         self.max_loop_iterations = max_loop_iterations
@@ -1129,95 +1243,12 @@ class Interpreter:
     def translate_expression(self, expression: str) -> str:
         return _translate_expression_text(expression)
 
-    @staticmethod
-    def _normalize_expression_words(text: str) -> str:
-        """Translate Tell operator phrases without rewriting quoted text."""
-        phrases = [
-            ("the current repetition number", "_repeat_index"),
-            ("the current item", "_current_item"),
-            ("the answer", "_last_answer"),
-            ("is greater than or equal to", " >= "),
-            ("is less than or equal to", " <= "),
-            ("is not equal to", " != "), ("isn't equal to", " != "),
-            ("is greater than", " > "), ("is more than", " > "),
-            ("is less than", " < "), ("is below", " < "),
-            ("is at least", " >= "), ("is at most", " <= "),
-            ("is not in", " not in "), ("is equal to", " == "),
-            ("isn't", " != "), ("is not", " != "),
-            ("to the power of", " ** "), ("multiplied by", " * "),
-            ("divided by", " / "), ("modulo", " % "),
-            ("plus", " + "), ("minus", " - "), ("times", " * "),
-            ("is in", " in "), ("is", " == "),
-        ]
-        out: list[str] = []
-        index = 0
-        quote: str | None = None
-        escaped = False
-        while index < len(text):
-            char = text[index]
-            if quote is not None:
-                out.append(char)
-                if escaped:
-                    escaped = False
-                elif char == "\\":
-                    escaped = True
-                elif char == quote:
-                    quote = None
-                index += 1
-                continue
-            if char in "'\"":
-                quote = char
-                out.append(char)
-                index += 1
-                continue
-
-            matched = False
-            for phrase, replacement in phrases:
-                end = index + len(phrase)
-                if text[index:end].casefold() != phrase:
-                    continue
-                before = text[index - 1] if index else " "
-                after = text[end] if end < len(text) else " "
-                if (before.isalnum() or before == "_") or (after.isalnum() or after == "_"):
-                    continue
-                out.append(replacement)
-                index = end
-                matched = True
-                break
-            if matched:
-                continue
-
-            if char.isalpha() or char == "_":
-                end = index + 1
-                while end < len(text) and (text[end].isalnum() or text[end] == "_"):
-                    end += 1
-                word = text[index:end]
-                canonical = {"true": "True", "false": "False", "nothing": "None"}.get(word.casefold(), word)
-                out.append(canonical)
-                index = end
-                continue
-            out.append(char)
-            index += 1
-        return "".join(out)
-
     def evaluate(self, expression: str, env: Environment) -> Any:
         translated = self.translate_expression(expression)
         try:
             tree = parse_expression(translated)
         except ExpressionSyntaxError as exc:
-            # Keep previously accepted Python-compatible forms working while
-            # they are added to Tell's shared grammar and native runtime.
-            normalized = self._normalize_expression_words(translated)
-            try:
-                legacy_tree = ast.parse(normalized, mode="eval")
-            except SyntaxError:
-                raise TellError(f"I couldn't understand the expression '{expression}': {exc}.") from exc
-            try:
-                return self._eval(legacy_tree.body, env)
-            except TellError:
-                raise
-            except Exception as legacy_error:
-                raise TellError(f"This expression failed: {legacy_error}") from legacy_error
+            raise TellError(f"I couldn't understand the expression '{expression}': {exc}.") from exc
         try:
             return self._eval_expression(tree, env)
         except TellError:
@@ -1226,6 +1257,20 @@ class Interpreter:
             raise TellError(f"This expression failed: {exc}") from exc
 
     def _eval_expression(self, node: TellExpr, env: Environment) -> Any:
+        try:
+            return self._eval_expression_inner(node, env)
+        except TellLocatedError:
+            raise
+        except (TellError, ArithmeticError, AttributeError, IndexError, KeyError, TypeError, ValueError) as exc:
+            line = self.expression_base_line + getattr(node, "line", 1) - 1
+            token_line = getattr(node, "line", 1)
+            column = (
+                self.expression_base_column + getattr(node, "column", 1) - 1
+                if token_line == 1 else getattr(node, "column", 1)
+            )
+            raise TellLocatedError(str(exc), self.filename, line, column) from exc
+
+    def _eval_expression_inner(self, node: TellExpr, env: Environment) -> Any:
         if node.kind == "literal":
             if isinstance(node.value, str):
                 def replace(match: re.Match[str]) -> str:
@@ -1271,7 +1316,13 @@ class Interpreter:
                 left_number = self._try_number(left)
                 right_number = self._try_number(right)
                 left, right = (left_number, right_number) if left_number is not None and right_number is not None else (display(left), display(right))
-                return {"<": operator.lt, ">": operator.gt, "<=": operator.le, ">=": operator.ge}[operator_name](left, right)
+                if operator_name == "<":
+                    return left < right
+                if operator_name == ">":
+                    return left > right
+                if operator_name == "<=":
+                    return left <= right
+                return left >= right
             if operator_name in {"in", "notin"}:
                 if isinstance(right, dict):
                     contains = display(left) in right
@@ -1299,12 +1350,20 @@ class Interpreter:
             if operator_name == "/":
                 return a / b
             if operator_name == "//":
-                return math.floor(a / b)
+                quotient = a / b
+                return quotient if not math.isfinite(quotient) else math.floor(quotient)
             if operator_name == "%":
-                return math.fmod(a, b)
+                try:
+                    return math.fmod(a, b)
+                except ValueError:
+                    return math.nan
             if operator_name == "**":
-                return math.pow(a, b)
+                return self._ieee_power(a, b)
             raise TellError(f"unsupported operator {operator_name!r}")
+        if node.kind == "conditional":
+            consequent, condition, alternative = node.children
+            branch = consequent if self._eval_expression(condition, env) else alternative
+            return self._eval_expression(branch, env)
         if node.kind == "member":
             member = str(node.value)
             if member.startswith("_"):
@@ -1312,6 +1371,8 @@ class Interpreter:
             value = self._eval_expression(node.children[0], env)
             if isinstance(value, TellInstance):
                 return value.get_member(member)
+            if value is None:
+                raise TellError("cannot access member on nothing")
             if isinstance(value, TellClass):
                 raise TellError("Tell classes do not expose static members in this version.")
             if isinstance(value, TellModule):
@@ -1325,6 +1386,8 @@ class Interpreter:
             return getattr(value, member)
         if node.kind == "index":
             value = self._eval_expression(node.children[0], env)
+            if value is None:
+                raise TellError("cannot access index on nothing")
             index = self._eval_expression(node.children[1], env)
             if isinstance(value, (list, tuple, str)):
                 index = int(self._as_number(index))
@@ -1333,6 +1396,8 @@ class Interpreter:
             return value[index]
         if node.kind == "slice":
             value = self._eval_expression(node.children[0], env)
+            if value is None:
+                raise TellError("cannot slice nothing")
             bounds = [self._eval_expression(item, env) if item is not None else None for item in node.children[1:]]
             bounds = [int(self._as_number(item)) if item is not None else None for item in bounds]
             if bounds[2] == 0:
@@ -1349,6 +1414,19 @@ class Interpreter:
         raise TellError(f"That kind of expression is not supported yet: {node.kind}.")
 
     @staticmethod
+    def _ieee_power(base: float, exponent: float) -> float:
+        negative_base = math.copysign(1.0, base) < 0
+        odd_integer_exponent = math.isfinite(exponent) and exponent.is_integer() and int(exponent) % 2 != 0
+        if base == 0 and exponent < 0:
+            return -math.inf if negative_base and odd_integer_exponent else math.inf
+        try:
+            return math.pow(base, exponent)
+        except OverflowError:
+            return -math.inf if negative_base and odd_integer_exponent else math.inf
+        except (ValueError, ZeroDivisionError):
+            return math.nan
+
+    @staticmethod
     def _try_number(value: Any) -> float | None:
         try:
             if isinstance(value, bool):
@@ -1363,87 +1441,6 @@ class Interpreter:
         if number is None:
             raise TellError(f"{display(value)} cannot be used as a number")
         return number
-
-    def _eval(self, node: ast.AST, env: Environment) -> Any:
-        if isinstance(node, ast.Constant):
-            value = node.value
-            if isinstance(value, str):
-                def replace(match: re.Match[str]) -> str:
-                    # Curly-brace interpolation accepts either a variable name
-                    # or a complete Tell expression, e.g. {the length of names}.
-                    try:
-                        return display(self.evaluate(match.group(1).strip(), env))
-                    except Exception:
-                        # Keep literal braces intact (useful for JSON text, etc.).
-                        return match.group(0)
-                value = re.sub(r"\{([^{}]+)\}", replace, value)
-            return value
-        if isinstance(node, ast.Name):
-            return env.get(node.id)
-        if isinstance(node, ast.List):
-            return [self._eval(item, env) for item in node.elts]
-        if isinstance(node, ast.Tuple):
-            return tuple(self._eval(item, env) for item in node.elts)
-        if isinstance(node, ast.Set):
-            return {self._eval(item, env) for item in node.elts}
-        if isinstance(node, ast.Dict):
-            return {self._eval(k, env): self._eval(v, env) for k, v in zip(node.keys, node.values)}
-        if isinstance(node, ast.BinOp) and type(node.op) in self.BINOPS:
-            return self.BINOPS[type(node.op)](self._eval(node.left, env), self._eval(node.right, env))
-        if isinstance(node, ast.UnaryOp) and type(node.op) in self.UNARYOPS:
-            return self.UNARYOPS[type(node.op)](self._eval(node.operand, env))
-        if isinstance(node, ast.BoolOp):
-            if isinstance(node.op, ast.And):
-                for value in node.values:
-                    if not self._eval(value, env):
-                        return False
-                return True
-            for value in node.values:
-                if self._eval(value, env):
-                    return True
-            return False
-        if isinstance(node, ast.Compare):
-            left = self._eval(node.left, env)
-            for op_node, comparator in zip(node.ops, node.comparators):
-                right = self._eval(comparator, env)
-                operation = self.COMPARES.get(type(op_node))
-                if operation is None or not operation(left, right):
-                    return False
-                left = right
-            return True
-        if isinstance(node, ast.IfExp):
-            return self._eval(node.body if self._eval(node.test, env) else node.orelse, env)
-        if isinstance(node, ast.Subscript):
-            return self._eval(node.value, env)[self._eval(node.slice, env)]
-        if isinstance(node, ast.Slice):
-            return slice(
-                self._eval(node.lower, env) if node.lower else None,
-                self._eval(node.upper, env) if node.upper else None,
-                self._eval(node.step, env) if node.step else None,
-            )
-        if isinstance(node, ast.Attribute):
-            if node.attr.startswith("_"):
-                raise TellError("Names beginning with an underscore are private in Tell.")
-            value = self._eval(node.value, env)
-            if isinstance(value, TellInstance):
-                return value.get_member(node.attr)
-            if isinstance(value, TellClass):
-                raise TellError("Tell classes do not expose static members in this version.")
-            if isinstance(value, TellModule):
-                return value.get_member(node.attr)
-            if isinstance(value, BoundTellMethod):
-                raise TellError("Bound methods do not expose runtime internals.")
-            return getattr(value, node.attr)
-        if isinstance(node, ast.Call):
-            function = self._eval(node.func, env)
-            args = [self._eval(arg, env) for arg in node.args]
-            kwargs = {kw.arg: self._eval(kw.value, env) for kw in node.keywords if kw.arg is not None}
-            return function(*args, **kwargs)
-        if isinstance(node, ast.JoinedStr):
-            return "".join(str(self._eval(value, env)) for value in node.values)
-        if isinstance(node, ast.FormattedValue):
-            return str(self._eval(node.value, env))
-        raise TellError(f"That kind of expression is not supported yet: {type(node).__name__}.")
 
     def run(self, source: str, filename: str = "<memory>") -> None:
         self.filename = filename
@@ -1462,20 +1459,66 @@ class Interpreter:
                 self.execute_node(node, env)
             except (ReturnSignal, BreakSignal, ContinueSignal):
                 raise
+            except TellLocatedError:
+                raise
+            except OSError as exc:
+                raise TellIOError(str(exc), self.filename, node.line, node.column) from exc
             except Exception as exc:
                 if isinstance(exc, TellError):
                     raise TellError(f"{self.filename}:{node.line}:{node.column}: {exc}") from exc
                 raise TellError(f"{self.filename}:{node.line}:{node.column}: {exc}") from exc
 
+    def _evaluate_node_expression(self, node: Node, expression: TellExpr, env: Environment, offset: int) -> Any:
+        previous_base = (self.expression_base_line, self.expression_base_column)
+        self.expression_base_line = node.line
+        self.expression_base_column = node.column + offset
+        try:
+            return self._eval_expression(expression, env)
+        finally:
+            self.expression_base_line, self.expression_base_column = previous_base
+
+    def _simple_expression_span(
+        self, node: Node, simple: dict[str, Any], expression_key: str, source_key: str,
+    ) -> tuple[int, int]:
+        expression = simple.get(expression_key)
+        source = simple.get(source_key) or simple.get("source")
+        statement_text = node.data.get("text", "")
+        offset = statement_text.find(source) if source else -1
+        if expression is None:
+            return node.line, node.column
+        expression_line = getattr(expression, "line", 1)
+        expression_column = getattr(expression, "column", 1)
+        line = node.line + expression_line - 1
+        column = node.column + max(0, offset) + expression_column - 1 if expression_line == 1 else expression_column
+        return line, column
+
+    def _evaluate_simple_expression(
+        self, node: Node, env: Environment, simple: dict[str, Any],
+        expression_key: str, source_key: str,
+    ) -> Any:
+        expression = simple.get(expression_key)
+        if expression is None:
+            return None
+        source = simple.get(source_key) or simple.get("source")
+        statement_text = node.data.get("text", "")
+        offset = statement_text.find(source) if source else -1
+        previous_base = (self.expression_base_line, self.expression_base_column)
+        self.expression_base_line = node.line
+        self.expression_base_column = node.column + max(0, offset)
+        try:
+            return self._eval_expression(expression, env)
+        finally:
+            self.expression_base_line, self.expression_base_column = previous_base
+
     def execute_node(self, node: Node, env: Environment) -> None:
         data = node.data
         if node.kind == "if":
-            branch = data["body"] if self.evaluate(data["condition"], env) else data["otherwise"]
+            branch = data["body"] if self._evaluate_node_expression(node, data["condition_ast"], env, len("If ")) else data["otherwise"]
             self.execute(branch, env)
             return
         if node.kind == "while":
             iterations = 0
-            while self.evaluate(data["condition"], env):
+            while self._evaluate_node_expression(node, data["condition_ast"], env, len("While ")):
                 iterations += 1
                 if iterations > self.max_loop_iterations:
                     raise TellError(f"This loop exceeded the configured limit of {self.max_loop_iterations} iterations.")
@@ -1487,7 +1530,7 @@ class Interpreter:
                     break
             return
         if node.kind == "repeat":
-            count = int(self.evaluate(data["count"], env))
+            count = int(self._evaluate_node_expression(node, data["count_ast"], env, len("Repeat ")))
             if count < 0:
                 raise TellError("A repeat count cannot be negative.")
             if count > self.max_loop_iterations:
@@ -1502,7 +1545,7 @@ class Interpreter:
                     break
             return
         if node.kind == "for":
-            items = self.evaluate(data["items"], env)
+            items = self._evaluate_node_expression(node, data["items_ast"], env, len("For each ") + len(", ".join(data["names"])) + len(" in "))
             for index, item in enumerate(items, start=1):
                 if index > self.max_loop_iterations:
                     raise TellError(f"For-each loop exceeded the configured limit of {self.max_loop_iterations} iterations.")
@@ -1564,8 +1607,13 @@ class Interpreter:
             return
         simple = data.get("simple")
         if simple is not None:
-            expression = simple["expression"]
-            value = self._eval_expression(expression, env) if expression is not None else None
+            value = self._evaluate_simple_expression(
+                node, env, simple, "expression", "expression_source"
+            )
+            target_value = (
+                self._evaluate_simple_expression(node, env, simple, "target", "target_source")
+                if simple["kind"] in {"write_file", "append_file"} else None
+            )
             if simple["kind"] == "let":
                 names = simple["names"]
                 if len(names) > 1:
@@ -1584,6 +1632,59 @@ class Interpreter:
                 if not isinstance(target, TellInstance):
                     raise TellError("Property assignment requires a Tell instance.")
                 target.fields[simple["target"].value] = value
+
+            elif simple["kind"] == "add":
+                collection = env.get(simple["names"][0])
+                if isinstance(collection, list):
+                    collection.append(value)
+                elif isinstance(collection, TellSet):
+                    if value not in collection:
+                        collection.items.append(value)
+                else:
+                    raise TellError(f"'{simple['names'][0]}' does not support adding items.")
+            elif simple["kind"] == "remove":
+                collection = env.get(simple["names"][0])
+                if not isinstance(collection, (list, TellSet)):
+                    raise TellError(f"'{simple['names'][0]}' does not support removing items.")
+                items = collection.items if isinstance(collection, TellSet) else collection
+                for index, item in enumerate(items):
+                    if _tell_equal(item, value):
+                        del items[index]
+                        break
+                else:
+                    raise TellError(f"item {value!r} was not found")
+
+            elif simple["kind"] == "ask":
+                try:
+                    answer = self.input_fn(display(value))
+                except (OSError, EOFError) as exc:
+                    line, column = self._simple_expression_span(node, simple, "expression", "expression_source")
+                    raise TellIOError("cannot read standard input", self.filename, line, column) from exc
+                env.set(simple["names"][0], answer)
+                env.set("_last_answer", answer)
+            elif simple["kind"] == "read_file":
+                path = str(value)
+                try:
+                    contents = Path(path).read_text(encoding="utf-8")
+                except OSError as exc:
+                    line, column = self._simple_expression_span(node, simple, "expression", "expression_source")
+                    raise TellIOError(f'cannot read file "{path}"', self.filename, line, column) from exc
+                env.set(simple["names"][0], contents)
+            elif simple["kind"] == "write_file":
+                path = str(target_value)
+                try:
+                    Path(path).write_text(display(value), encoding="utf-8")
+                except OSError as exc:
+                    line, column = self._simple_expression_span(node, simple, "target", "target_source")
+                    raise TellIOError(f'cannot write file "{path}"', self.filename, line, column) from exc
+            elif simple["kind"] == "append_file":
+                path = str(target_value)
+                try:
+                    with Path(path).open("a", encoding="utf-8") as file:
+                        file.write(display(value))
+                except OSError as exc:
+                    line, column = self._simple_expression_span(node, simple, "target", "target_source")
+                    raise TellIOError(f'cannot append to file "{path}"', self.filename, line, column) from exc
             elif simple["kind"] == "print":
                 self.output_fn(display(value))
             elif simple["kind"] == "expression":

@@ -1,0 +1,103 @@
+name: Runtime modernization CI
+
+on:
+  push:
+    branches:
+      - "modernization/**"
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: tell-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  linux-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run Go tests and vet
+        working-directory: native
+        run: |
+          go test ./...
+          go vet ./...
+      - name: Run Python tests
+        run: |
+          python -m compileall -q tell tests scripts
+          python -m unittest discover -s tests -v
+      - name: Build native runner and run portable cross-runtime smoke tests
+        run: |
+          mkdir -p dist
+          cd native
+          go build -trimpath -o ../dist/tell-linux-amd64 ./cmd/tell
+          cd ..
+          python scripts/conformance.py --runtime both --fixtures conformance/smoke-v1.json --native-bin dist/tell-linux-amd64
+          python scripts/conformance.py --runtime both --fixtures conformance/runtime-v1.json --native-bin dist/tell-linux-amd64
+      - name: Validate Linux archive, Debian and RPM packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm
+          bash scripts/package-linux.sh 0.0.0 amd64 dist/tell-linux-amd64 dist
+          dpkg-deb --info dist/tell_0.0.0_linux_amd64.deb
+          rpm -qpi dist/tell_0.0.0_linux_x86_64.rpm
+          tar -tzf dist/tell_0.0.0_linux_amd64.tar.gz
+      - name: Upload native test binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: tell-linux-validation
+          path: dist/tell-linux-amd64
+          if-no-files-found: error
+
+
+  windows-validation:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+      - name: Test and build Windows runtime
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force build | Out-Null
+          Push-Location native
+          go test ./...
+          go vet ./...
+          go build -trimpath -o ../build/tell-windows-amd64.exe ./cmd/tell
+          Pop-Location
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+      - name: Compile Windows installer
+        shell: pwsh
+        run: |
+          ./scripts/package-windows.ps1 -Version 0.0.0 -BinaryPath build/tell-windows-amd64.exe -OutputDirectory dist
+          if (-not (Test-Path "dist/Tell-Setup-0.0.0-windows-x64.exe")) { throw "Installer output was not created." }
+
+  macos-validation:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+      - name: Test and build universal macOS package
+        run: |
+          cd native
+          go test ./...
+          go vet ./...
+          cd ..
+          mkdir -p dist
+          REQUIRE_MACOS_SIGNING=0 bash scripts/package-macos.sh 0.0.0 dist
+          mkdir -p dist/extracted
+          tar -xzf dist/tell_0.0.0_darwin_universal.tar.gz -C dist/extracted
+          lipo dist/extracted/tell -verify_arch x86_64 arm64
+          python scripts/generate-homebrew-formula.py --version 0.0.0 --archive dist/tell_0.0.0_darwin_universal.tar.gz --output dist/tell.rb

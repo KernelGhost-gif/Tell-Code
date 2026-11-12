@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/KernelGhost-gif/Tell-Code/blob/main/conformance/schema-v1.schema.json",
+  "title": "Tell Runtime Conformance Suite",
+  "type": "object",
+  "required": ["schema_version", "tests"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": 1},
+    "diagnostic_format": {"type": "string"},
+    "exit_codes": {
+      "type": "object",
+      "properties": {
+        "syntax_error": {"const": 64},
+        "type_error": {"const": 70},
+        "name_error": {"const": 70},
+        "runtime_error": {"const": 70},
+        "io_error": {"const": 74},
+        "usage_error": {"const": 64}
+      },
+      "additionalProperties": false
+    },
+    "tests": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "source_code", "expected_stdout", "expected_stderr", "expected_exit_code"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "filename": {"type": "string", "minLength": 1},
+          "source_code": {"type": "string"},
+          "files": {
+            "type": "object",
+            "additionalProperties": {"type": "string"}
+          },
+          "stdin": {"type": "string"},
+          "expected_stdout": {"type": "string"},
+          "expected_stderr": {"type": "string"},
+          "expected_exit_code": {"type": "integer", "minimum": 0, "maximum": 255},
+          "max_call_depth": {"type": "integer", "minimum": 1},
+          "max_loop_iterations": {"type": "integer", "minimum": 1},
+          "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 600}
+        }
+      }
+    }
+  }
+}

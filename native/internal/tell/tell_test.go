@@ -241,7 +241,7 @@ func TestRecursionLimitReturnsRuntimeError(t *testing.T) {
 End function.
 Say recurse(0).`
 	_, err := runTest(t, source, "")
-	if err == nil || !strings.Contains(err.Error(), "maximum function call depth (64) exceeded") {
+	if err == nil || !strings.Contains(err.Error(), "maximum function call depth exceeded") {
 		t.Fatalf("expected recursion limit error, got %v", err)
 	}
 }
@@ -256,7 +256,7 @@ func TestExecutionLimitsCanBeConfigured(t *testing.T) {
 	}
 	source := "To recurse with value:\n    Give back recurse(value plus 1).\nEnd function.\nSay recurse(0)."
 	err = session.Exec(source, "limit.tell")
-	if err == nil || !strings.Contains(err.Error(), "maximum function call depth (3) exceeded") {
+	if err == nil || !strings.Contains(err.Error(), "maximum function call depth exceeded") {
 		t.Fatalf("expected configured recursion limit error, got %v", err)
 	}
 	var exactOutput bytes.Buffer
@@ -321,7 +321,7 @@ func TestNamedArgumentValidation(t *testing.T) {
 func TestRuntimeErrorsIncludeSourceColumns(t *testing.T) {
 	source := "If true:\n    Say 1 divided by 0.\nEnd if."
 	_, err := runTest(t, source, "")
-	if err == nil || !strings.Contains(err.Error(), "test.tell:2:5:") {
+	if err == nil || !strings.Contains(err.Error(), "test.tell:2:11:") {
 		t.Fatalf("expected source file, line, and column in error, got %v", err)
 	}
 }
@@ -457,5 +457,87 @@ Say contents.`, "")
 func TestParserRejectsUnclosedBlock(t *testing.T) {
 	if err := Check("If true:\n    Say 1.\n", "bad.tell"); err == nil {
 		t.Fatal("expected parser error")
+	}
+}
+
+func TestDivisionDiagnosticPointsAtOperator(t *testing.T) {
+	_, err := runTest(t, "Say 1 divided by 0.", "")
+	if err == nil {
+		t.Fatal("expected division-by-zero error")
+	}
+	if !strings.Contains(err.Error(), "test.tell:1:7: division by zero") {
+		t.Fatalf("expected operator source coordinate, got %v", err)
+	}
+}
+
+func TestNothingMemberDiagnosticPointsAtAccess(t *testing.T) {
+	source := "Let value be nothing.\nSay value.name."
+	_, err := runTest(t, source, "")
+	if err == nil {
+		t.Fatal("expected null member access error")
+	}
+	if !strings.Contains(err.Error(), "test.tell:2:10:") {
+		t.Fatalf("expected member access source coordinate, got %v", err)
+	}
+}
+
+func TestControlFlowExpressionsAreParsedOnceAndKeepSourceSpans(t *testing.T) {
+	source := "If 1 divided by 0:\n    Say \"unreachable\".\nEnd if."
+	nodes, err := parse(source, "control-flow.tell")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nodes) != 1 || nodes[0].conditionExpr == nil {
+		t.Fatalf("control-flow expression was not cached: %#v", nodes)
+	}
+	binary, ok := nodes[0].conditionExpr.(binaryExpression)
+	if !ok || binary.column != 6 {
+		t.Fatalf("condition AST operator span = %#v, want column 6", nodes[0].conditionExpr)
+	}
+	_, err = runTest(t, source, "")
+	if err == nil || !strings.Contains(err.Error(), "test.tell:1:6: division by zero") {
+		t.Fatalf("expected condition operator source location, got %v", err)
+	}
+}
+
+
+func TestCollectionMutationStatementsUseTypedASTNodes(t *testing.T) {
+	nodes, err := parse("Let items be [1].\nAdd 2 to items.\nRemove 1 from items.", "mutations.tell")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nodes) != 3 {
+		t.Fatalf("got %d statements, want 3", len(nodes))
+	}
+	if nodes[1].simple == nil || nodes[1].simple.kind != "add" {
+		t.Fatalf("Add was not parsed as a typed node: %#v", nodes[1])
+	}
+	if nodes[2].simple == nil || nodes[2].simple.kind != "remove" {
+		t.Fatalf("Remove was not parsed as a typed node: %#v", nodes[2])
+	}
+}
+
+func TestFileAndConsoleStatementsUseTypedASTNodes(t *testing.T) {
+	source := "Ask \"Name? \" and save the answer as name.\nRead the file \"note.txt\" into contents.\nWrite name to the file \"copy.txt\".\nAppend \"!\" to the file \"copy.txt\"."
+	nodes, err := parse(source, "typed-io.tell")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"ask", "read_file", "write_file", "append_file"}
+	if len(nodes) != len(want) {
+		t.Fatalf("got %d I/O statement nodes, want %d", len(nodes), len(want))
+	}
+	for index, kind := range want {
+		if nodes[index].simple == nil || nodes[index].simple.kind != kind {
+			t.Fatalf("node %d = %#v, want typed kind %q", index, nodes[index], kind)
+		}
+	}
+
+	var output bytes.Buffer
+	if err := RunWithIO("Ask \"Name? \" and save the answer as name.\nSay name.", "ask.tell", strings.NewReader("Ada\n"), &output); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := output.String(), "Name? Ada\n"; got != want {
+		t.Fatalf("Ask output = %q, want %q", got, want)
 	}
 }

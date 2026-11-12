@@ -7,8 +7,9 @@ import unittest
 from pathlib import Path
 
 from tell import Interpreter, Parser, TellError
+from tell.diagnostics import make_diagnostic
 from tell.__main__ import repl, run_tests
-from tell.interpreter import format_source
+from tell.interpreter import format_source, TellSyntaxError, TellLocatedError
 
 
 class TellLanguageTests(unittest.TestCase):
@@ -85,12 +86,16 @@ Say answer.
         self.assertEqual(output, ["42"])
         self.assertEqual(env.get("answer"), 42)
 
-    def test_legacy_python_expression_forms_remain_available(self):
+    def test_tell_expression_forms_use_only_the_tell_ast(self):
         output = []
         Interpreter(output_fn=output.append).run(
             'Say (1, 2).\nSay {1, 2}.\nSay "yes" if true else "no".'
         )
         self.assertEqual(output, ["(1, 2)", "{1, 2}", "yes"])
+
+    def test_python_only_comprehensions_do_not_fall_back_to_host_ast(self):
+        with self.assertRaises(TellSyntaxError):
+            Parser("Say [item for item in [1, 2]].", "no-host-ast.tell").parse()
 
     def test_python_module_interop_uses_imported_modules_and_named_arguments(self):
         output, _ = self.run_tell('''
@@ -177,6 +182,31 @@ Say maths.sqrt(81).
 """)
         self.assertEqual(output, ["120", "9"])
 
+
+
+    def test_collection_mutations_are_typed_nodes(self):
+        parsed = Parser("Add 2 to items.\nRemove 1 from items.").parse()
+        self.assertEqual([node.data["simple"]["kind"] for node in parsed], ["add", "remove"])
+        output, env = self.run_tell("""
+Let items be [1, 2].
+Add 3 to items.
+Remove 1 from items.
+Say items.
+""")
+        self.assertEqual(output, ["[2, 3]"])
+        self.assertEqual(env.get("items"), [2, 3])
+
+    def test_ask_statement_is_a_typed_node_and_preserves_prompt(self):
+        parsed = Parser('Ask "Name? " and save the answer as name.').parse()
+        simple = parsed[0].data["simple"]
+        self.assertEqual(simple["kind"], "ask")
+        output, env = self.run_tell('''
+Ask "Name? " and save the answer as name.
+Say name.
+''', ["Ada"])
+        self.assertEqual(output, ["Name? ", "Ada"])
+        self.assertEqual(env.get("name"), "Ada")
+
     def test_file_read_and_write(self):
         original = Path.cwd()
         with tempfile.TemporaryDirectory() as folder:
@@ -184,11 +214,12 @@ Say maths.sqrt(81).
             try:
                 output, _ = self.run_tell("""
 Write "Hello from Tell" to the file "note.txt".
+Append "!" to the file "note.txt".
 Read the file "note.txt" into contents.
 Say contents.
 """)
-                self.assertEqual(output, ["Hello from Tell"])
-                self.assertEqual(Path("note.txt").read_text(encoding="utf-8"), "Hello from Tell")
+                self.assertEqual(output, ["Hello from Tell!"])
+                self.assertEqual(Path("note.txt").read_text(encoding="utf-8"), "Hello from Tell!")
             finally:
                 os.chdir(original)
 
@@ -269,8 +300,13 @@ Say add(other=2).'''
 
     def test_runtime_errors_include_source_columns(self):
         source = "If true:\n    Say 1 divided by 0.\nEnd if."
-        with self.assertRaisesRegex(TellError, r"sample\.tell:2:5:"):
+        with self.assertRaises(TellLocatedError) as caught:
             Interpreter().run(source, "sample.tell")
+        diagnostic = make_diagnostic(caught.exception, "fallback.tell", "RuntimeError")
+        self.assertEqual(diagnostic.filename, "sample.tell")
+        self.assertEqual(diagnostic.line, 2)
+        self.assertEqual(diagnostic.column, 11)
+        self.assertEqual(diagnostic.message, "division by zero")
 
     def test_circular_module_import_is_rejected(self):
         root = Path(__file__).resolve().parents[1]
@@ -311,14 +347,14 @@ Say greet(name).
 End function.
 Say recurse(0).
 '''
-        with self.assertRaisesRegex(TellError, r"maximum function call depth \(64\) exceeded"):
+        with self.assertRaisesRegex(TellError, r"maximum function call depth exceeded"):
             Interpreter().run(source, "recursion.tell")
 
     def test_execution_limits_can_be_configured(self):
         with self.assertRaisesRegex(TellError, "repeat count is too large"):
             Interpreter(max_loop_iterations=2).run("Repeat 3 times:\n    Say 1.\nEnd repeat.")
         source = "To repeat_call with number:\n    Give back repeat_call(number plus 1).\nEnd function.\nSay repeat_call(0)."
-        with self.assertRaisesRegex(TellError, r"maximum function call depth \(3\) exceeded"):
+        with self.assertRaisesRegex(TellError, r"maximum function call depth exceeded"):
             Interpreter(max_call_depth=3).run(source)
         with self.assertRaisesRegex(TellError, "For-each loop exceeded"):
             Interpreter(max_loop_iterations=2).run("For each item in [1, 2, 3]:\n    Say item.\nEnd loop.")

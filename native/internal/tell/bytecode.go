@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 )
 
@@ -386,6 +385,13 @@ func (c *bytecodeCompiler) compileSimpleStatement(statement *simpleStatement) er
 		}
 		instruction := c.emit("SET_MEMBER")
 		c.code[instruction].Name = target.member
+	case "add", "remove":
+		op := "ADD_ITEM"
+		if statement.kind == "remove" {
+			op = "REMOVE_ITEM"
+		}
+		instruction := c.emit(op)
+		c.code[instruction].Name = statement.names[0]
 	case "print":
 		c.emit("PRINT")
 	case "expression":
@@ -898,7 +904,7 @@ func bytecodeLiteralValue(expr expression) (any, bool) {
 	}
 	switch literal.token.kind {
 	case "number":
-		value, err := strconv.ParseFloat(literal.token.text, 64)
+		value, err := parseFloatPortable(literal.token.text)
 		return value, err == nil
 	case "string":
 		return literal.token.text, true
@@ -920,7 +926,7 @@ func (c *bytecodeCompiler) compileExpression(expr expression) error {
 		instructionValue := value.token
 		switch instructionValue.kind {
 		case "number":
-			parsed, err := strconv.ParseFloat(instructionValue.text, 64)
+			parsed, err := parseFloatPortable(instructionValue.text)
 			if err != nil {
 				return err
 			}
