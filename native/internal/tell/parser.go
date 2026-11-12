@@ -401,6 +401,49 @@ func parseSimpleStatement(source string, line, column int) *simpleStatement {
 			}
 		}
 	}
+
+	if rest, ok := prefixFold(source, "use the python library called "); ok {
+		moduleName, alias, hasAlias := splitFoldOnce(rest, " as ")
+		moduleName = strings.TrimSpace(moduleName)
+		if _, err := newPythonModule(moduleName); err == nil {
+			if !hasAlias { alias = moduleName[strings.LastIndex(moduleName, ".")+1:] }
+			if identifier(alias) {
+				return &simpleStatement{kind:"import_python", source:moduleName, names:[]string{alias}}
+			}
+		}
+	}
+	if rest, ok := prefixFold(source, "use the javascript library called "); ok {
+		moduleName, alias, hasAlias := splitFoldOnce(rest, " as ")
+		moduleName = strings.TrimSpace(moduleName)
+		if module, err := newJavaScriptModule(moduleName); err == nil {
+			if !hasAlias { alias = defaultJavaScriptAlias(moduleName) }
+			if identifier(alias) {
+				return &simpleStatement{kind:"import_javascript", source:module.name, names:[]string{alias}}
+			}
+		}
+	}
+	if rest, ok := prefixFold(source, "use the "); ok {
+		if index := strings.Index(strings.ToLower(rest), " library"); index >= 0 {
+			requested := strings.TrimSpace(rest[:index])
+			tail := strings.TrimSpace(rest[index+len(" library"):])
+			alias := strings.ToLower(strings.ReplaceAll(requested, " ", ""))
+			aliasOK := true
+			if tail != "" {
+				alias, aliasOK = prefixFold(tail, "as ")
+				aliasOK = aliasOK && identifier(alias)
+			}
+			library := strings.ToLower(strings.ReplaceAll(requested, " ", ""))
+			switch library {
+			case "mathematics": library = "math"
+			case "dateandtime", "dates": library = "datetime"
+			}
+			if requested != "" && aliasOK && identifier(strings.ReplaceAll(requested, " ", "")) {
+				if _, err := moduleValue(library); err == nil {
+					return &simpleStatement{kind:"import_library", source:library, names:[]string{alias}}
+				}
+			}
+		}
+	}
 	if rest, ok := prefixFold(source, "ask "); ok {
 		for _, delimiter := range []string{" and save the answer as ", " and put the answer in "} {
 			prompt, name, separated := splitFoldOnce(rest, delimiter)
