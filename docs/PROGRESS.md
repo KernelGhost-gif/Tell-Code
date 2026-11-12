@@ -66,6 +66,7 @@ The v0.3.6 implementation is committed to `main` and published at https://github
 
 
 ## 2026-11-12 modernization branch checkpoint
+- Continued on `modernization/0.4-process-conformance`: expanded the fresh-process `runtime-v1.json` suite beyond numeric/error edges to cover stdin prompts, file write/append/read, relative local-module imports, list mutation and indexed assignment, `Call`/`Run`/natural-language `Tell` calls, and built-in library imports. Each checks exact stdout, stderr, and exit status in both production CLIs.
 - Continued on `modernization/0.4-call-run-ast`: `Call` and `Run` function statements are now represented as typed call-expression nodes in both interpreters; bytecode lowers them to CALL followed by POP so results are discarded like the statement runtime. Added source/bytecode tests and a shared conformance case.
 - Continued on `modernization/0.4-remember-ast`: `Remember expression as this.field.` is parsed and executed as a typed statement in Python and Go, compiled through `SET_FIELD`, and covered by constructor/method source tests, bytecode tests, and the shared cross-runtime corpus.
 
