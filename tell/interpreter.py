@@ -233,7 +233,7 @@ class UserFunction:
         local = Environment(values, self.closure)
         if self.interpreter.call_depth >= self.interpreter.max_call_depth:
             raise TellError(
-                f"maximum function call depth ({self.interpreter.max_call_depth}) exceeded"
+                "maximum function call depth exceeded"
             )
         self.interpreter.call_depth += 1
         try:
