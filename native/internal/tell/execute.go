@@ -254,7 +254,7 @@ func (r *runtime) executeSimpleStatement(statement *simpleStatement, e *env) err
 		_, err = fmt.Fprint(r.output, display(value))
 		if err != nil { return err }
 		line, readErr := r.reader.ReadString('\n')
-		if readErr != nil && len(line) == 0 { return ioFailure(readErr) }
+		if readErr != nil && len(line) == 0 { return ioFailureAt(fmt.Errorf("cannot read standard input"), r.filename, statement.expression) }
 		line = strings.TrimRight(line, "\r\n")
 		e.set(statement.names[0], line)
 		e.set("_last_answer", line)
@@ -267,7 +267,10 @@ func (r *runtime) executeSimpleStatement(statement *simpleStatement, e *env) err
 		return nil
 	case "write_file":
 		path := fmt.Sprint(targetValue)
-		return ioFailureAt(fmt.Errorf("cannot write file %q", path), r.filename, statement.target)
+		if writeErr := os.WriteFile(path, []byte(display(value)), 0644); writeErr != nil {
+			return ioFailureAt(fmt.Errorf("cannot write file %q", path), r.filename, statement.target)
+		}
+		return nil
 	case "append_file":
 		path := fmt.Sprint(targetValue)
 		file, openErr := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
