@@ -250,6 +250,41 @@ func (r *runtime) executeSimpleStatement(statement *simpleStatement, e *env) err
 		}
 		instance.fields[memberTarget.member] = value
 
+
+	case "add":
+		collection, getErr := e.get(statement.names[0])
+		if getErr != nil { return getErr }
+		switch items := collection.(type) {
+		case []any:
+			e.set(statement.names[0], append(items, value))
+		case setValue:
+			if !setContains(items, value) { e.set(statement.names[0], append(items, value)) }
+		default:
+			return fail("%q does not support adding items", statement.names[0])
+		}
+		return nil
+	case "remove":
+		collection, getErr := e.get(statement.names[0])
+		if getErr != nil { return getErr }
+		switch items := collection.(type) {
+		case []any:
+			for index, item := range items {
+				if valuesEqual(item, value) {
+					e.set(statement.names[0], append(items[:index], items[index+1:]...))
+					return nil
+				}
+			}
+		case setValue:
+			for index, item := range items {
+				if valuesEqual(item, value) {
+					e.set(statement.names[0], append(items[:index], items[index+1:]...))
+					return nil
+				}
+			}
+		default:
+			return fail("%q does not support removing items", statement.names[0])
+		}
+		return fail("item %q was not found", display(value))
 	case "ask":
 		_, err = fmt.Fprint(r.output, display(value))
 		if err != nil { return err }
