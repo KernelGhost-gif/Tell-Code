@@ -385,6 +385,12 @@ func (c *bytecodeCompiler) compileSimpleStatement(statement *simpleStatement) er
 		}
 		instruction := c.emit("SET_MEMBER")
 		c.code[instruction].Name = target.member
+	case "add", "remove":
+		instruction := c.emit("ADD_ITEM")
+		if statement.kind == "remove" {
+			instruction = c.emit("REMOVE_ITEM")
+		}
+		c.code[instruction].Name = statement.names[0]
 	case "print":
 		c.emit("PRINT")
 	case "expression":
