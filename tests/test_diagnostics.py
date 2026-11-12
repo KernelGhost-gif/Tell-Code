@@ -68,7 +68,7 @@ class DiagnosticContractTests(unittest.TestCase):
         parsed = Parser(source, "control-flow.tell").parse()
         expression = parsed[0].data["condition_ast"]
         self.assertEqual(expression.kind, "binary")
-        self.assertEqual(expression.column, 6)
+        self.assertEqual(expression.column, 3)
         with self.assertRaises(TellLocatedError) as caught:
             Interpreter().run(source, "control-flow.tell")
         diagnostic = make_diagnostic(caught.exception, "fallback.tell", "RuntimeError")
