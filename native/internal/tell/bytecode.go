@@ -356,6 +356,24 @@ func (c *bytecodeCompiler) compileSimpleStatement(statement *simpleStatement) er
 		}
 	}
 	switch statement.kind {
+
+	case "import_python":
+		module, err := newPythonModule(statement.source)
+		if err != nil { return err }
+		instruction := c.emit("USE_PYTHON")
+		c.code[instruction].Name = statement.names[0]
+		c.code[instruction].Value = module.name
+	case "import_javascript":
+		module, err := newJavaScriptModule(statement.source)
+		if err != nil { return err }
+		instruction := c.emit("USE_JAVASCRIPT")
+		c.code[instruction].Name = statement.names[0]
+		c.code[instruction].Value = module.name
+	case "import_library":
+		if _, err := moduleValue(statement.source); err != nil { return err }
+		instruction := c.emit("USE_LIBRARY")
+		c.code[instruction].Name = statement.names[0]
+		c.code[instruction].Value = statement.source
 	case "import_module":
 		literal, ok := statement.expression.(literalExpression)
 		if !ok || literal.token.kind != "string" {
