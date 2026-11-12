@@ -186,6 +186,26 @@ Say maths.sqrt(81).
 
 
 
+
+    def test_indexed_assignments_are_typed_nodes_and_execute(self):
+        source = """
+Let values be [1, 2].
+Set values[1] to 9.
+Let mapping be {"name": "old"}.
+Set mapping["name"] to "new".
+Say values.
+Say mapping["name"].
+"""
+        parsed = Parser(source).parse()
+        self.assertEqual(
+            [parsed[index].data["simple"]["kind"] for index in (1, 3)],
+            ["set_index", "set_index"],
+        )
+        output, env = self.run_tell(source)
+        self.assertEqual(output, ["[1, 9]", "new"])
+        self.assertEqual(env.get("values"), [1, 9])
+        self.assertEqual(env.get("mapping"), {"name": "new"})
+
     def test_interop_imports_are_typed_nodes(self):
         cases = [
             ('Use the Python library called statistics as stats.', "import_python", "stats"),
