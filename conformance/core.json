@@ -284,5 +284,10 @@
     "name": "typed collection mutations",
     "source": "Let items be [1, 2].\nAdd 3 to items.\nRemove 1 from items.\nSay items.\nLet values be {1, 2}.\nAdd 2 to values.\nAdd 3 to values.\nRemove 1 from values.\nSay len(values).\nSay 3 is in values.",
     "output": "[2, 3]\n2\ntrue\n"
+  },
+  {
+    "name": "typed indexed assignment",
+    "source": "Let values be [1, 2].\nSet values[1] to 9.\nLet mapping be {\"name\": \"old\"}.\nSet mapping[\"name\"] to \"new\".\nSay values.\nSay mapping[\"name\"].",
+    "output": "[1, 9]\nnew\n"
   }
 ]
