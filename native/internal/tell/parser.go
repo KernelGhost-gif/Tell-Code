@@ -563,7 +563,7 @@ func parseSimpleStatement(source string, line, column int) *simpleStatement {
 				}
 				if valid {
 					callee := memberExpression{value: nameExpression{name: target}, member: method}
-					return &simpleStatement{kind: "expression", source: source, expression: callExpression{callee: callee, args: arguments}, hasExpression: true}
+					return &simpleStatement{kind: "call", source: source, expression: callExpression{callee: callee, args: arguments}, hasExpression: true}
 				}
 			}
 		}
