@@ -37,6 +37,7 @@ jobs:
           go build -trimpath -o ../dist/tell-linux-amd64 ./cmd/tell
           cd ..
           python scripts/conformance.py --runtime both --fixtures conformance/smoke-v1.json --native-bin dist/tell-linux-amd64
+          python scripts/conformance.py --runtime both --fixtures conformance/runtime-v1.json --native-bin dist/tell-linux-amd64
       - name: Validate Linux archive, Debian and RPM packages
         run: |
           sudo apt-get update
