@@ -324,6 +324,26 @@ func parseSimpleStatement(source string, line, column int) *simpleStatement {
 	if rest, ok := prefixFold(source, "set "); ok {
 		name, expressionText, separated := splitFoldOnce(rest, " to ")
 		if separated {
+			for _, phrase := range []struct{ prefix, delimiter string }{
+				{"the item at position ", " in "},
+				{"item at position ", " in "},
+				{"the key ", " in "},
+				{"key ", " in "},
+			} {
+				argument, isPhrase := prefixFold(name, phrase.prefix)
+				if !isPhrase { continue }
+				indexText, collectionName, hasIn := splitFoldOnce(argument, phrase.delimiter)
+				if !hasIn || !identifier(collectionName) { continue }
+				parsedIndex, validIndex := parseExpression(indexText)
+				parsedValue, validValue := parseExpression(expressionText)
+				if !validIndex || !validValue { continue }
+				containerOffset := strings.LastIndex(source, collectionName)
+				if containerOffset < 0 { containerOffset = 0 }
+				targetColumn := column + utf8.RuneCountInString(source[:containerOffset])
+				containerExpr := nameExpression{name:collectionName, line:line, column:targetColumn}
+				target := indexExpression{value:containerExpr, index:parsedIndex, line:line, column:targetColumn}
+				return &simpleStatement{kind:"set_index", source:name, target:target, expression:parsedValue, hasExpression:true}
+			}
 			if strings.Contains(name, ",") {
 				if names, valid := parseLoopNames(name); valid && len(names) > 1 {
 					if parsed, validExpression := parseExpression(expressionText); validExpression {
