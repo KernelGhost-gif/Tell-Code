@@ -39,7 +39,7 @@ class DiagnosticContractTests(unittest.TestCase):
 
     def test_nothing_member_diagnostic_points_to_access(self):
         with self.assertRaises(TellLocatedError) as caught:
-            Interpreter().run("Let value be nothing.\\nSay value.name.", "null-member.tell")
+            Interpreter().run("Let value be nothing.\nSay value.name.", "null-member.tell")
         diagnostic = make_diagnostic(caught.exception, "fallback.tell", "RuntimeError")
         self.assertEqual(diagnostic.filename, "null-member.tell")
         self.assertEqual(diagnostic.line, 2)
@@ -48,9 +48,9 @@ class DiagnosticContractTests(unittest.TestCase):
 
     def test_recursion_limit_diagnostic_points_to_call_site(self):
         source = (
-            "To recurse with n:\\n"
-            "    Give back recurse(n plus 1).\\n"
-            "End function.\\n"
+            "To recurse with n:\n"
+            "    Give back recurse(n plus 1).\n"
+            "End function.\n"
             "Say recurse(0)."
         )
         interpreter = Interpreter(max_call_depth=8)
@@ -64,11 +64,11 @@ class DiagnosticContractTests(unittest.TestCase):
 
 
     def test_control_flow_expressions_are_cached_and_source_located(self):
-        source = "If 1 divided by 0:\\n    Say \"unreachable\".\\nEnd if."
+        source = "If 1 divided by 0:\n    Say \"unreachable\".\nEnd if."
         parsed = Parser(source, "control-flow.tell").parse()
         expression = parsed[0].data["condition_ast"]
         self.assertEqual(expression.kind, "binary")
-        self.assertEqual(expression.column, 3)
+        self.assertEqual(expression.column, 6)
         with self.assertRaises(TellLocatedError) as caught:
             Interpreter().run(source, "control-flow.tell")
         diagnostic = make_diagnostic(caught.exception, "fallback.tell", "RuntimeError")
