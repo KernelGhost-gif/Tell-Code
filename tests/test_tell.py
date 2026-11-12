@@ -209,6 +209,21 @@ Say mapping["name"].
         self.assertEqual(env.get("mapping"), {"name": "updated"})
 
 
+
+    def test_call_and_run_statements_are_typed_nodes(self):
+        source = """
+To combine with left and right:
+    Say left plus right.
+End function.
+Call combine with 2 and 3.
+Run combine with 4 and 1.
+"""
+        parsed = Parser(source).parse()
+        self.assertEqual([parsed[index].data["simple"]["kind"] for index in (1, 2)], ["call", "call"])
+        self.assertEqual(parsed[1].data["simple"]["expression"].kind, "call")
+        output, _ = self.run_tell(source)
+        self.assertEqual(output, ["5", "5"])
+
     def test_remember_field_is_a_typed_node_and_updates_instance(self):
         parsed = Parser("Remember value as this.name.").parse()
         simple = parsed[0].data["simple"]
