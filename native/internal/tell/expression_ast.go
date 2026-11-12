@@ -393,6 +393,37 @@ func (p *expressionParser) parsePostfix(value expression) (expression, error) {
 	}
 }
 
+
+func expressionPosition(expr expression) (int, int) {
+	switch value := expr.(type) {
+	case literalExpression:
+		return value.token.line, value.token.column
+	case nameExpression:
+		return value.line, value.column
+	case unaryExpression:
+		return value.line, value.column
+	case binaryExpression:
+		return expressionPosition(value.left)
+	case conditionalExpression:
+		return expressionPosition(value.consequent)
+	case memberExpression:
+		return expressionPosition(value.value)
+	case callExpression:
+		return expressionPosition(value.callee)
+	case indexExpression:
+		return expressionPosition(value.value)
+	case listExpression:
+		if len(value.items) > 0 { return expressionPosition(value.items[0]) }
+	case tupleExpression:
+		if len(value.items) > 0 { return expressionPosition(value.items[0]) }
+	case setExpression:
+		if len(value.items) > 0 { return expressionPosition(value.items[0]) }
+	case dictionaryExpression:
+		if len(value.keys) > 0 { return expressionPosition(value.keys[0]) }
+	}
+	return 0, 0
+}
+
 func (r *runtime) evalExpression(expr expression, e *env) (any, error) {
 	switch x := expr.(type) {
 	case literalExpression:
