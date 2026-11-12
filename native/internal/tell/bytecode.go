@@ -350,7 +350,7 @@ func (c *bytecodeCompiler) popLoop() bytecodeLoop {
 }
 
 func (c *bytecodeCompiler) compileSimpleStatement(statement *simpleStatement) error {
-	if statement.hasExpression && statement.kind != "set_member" && statement.kind != "import_module" {
+	if statement.hasExpression && statement.kind != "set_member" && statement.kind != "set_index" && statement.kind != "import_module" {
 		if err := c.compileExpression(foldBytecodeExpression(statement.expression)); err != nil {
 			return err
 		}
@@ -405,6 +405,18 @@ func (c *bytecodeCompiler) compileSimpleStatement(statement *simpleStatement) er
 		}
 		instruction := c.emit("ASSIGN")
 		c.code[instruction].Name = statement.names[0]
+	case "set_index":
+		target := statement.target.(indexExpression)
+		if err := c.compileExpression(target.value); err != nil {
+			return err
+		}
+		if err := c.compileExpression(target.index); err != nil {
+			return err
+		}
+		if err := c.compileExpression(foldBytecodeExpression(statement.expression)); err != nil {
+			return err
+		}
+		c.emit("SET_INDEX")
 	case "set_member":
 		target := statement.target.(memberExpression)
 		if err := c.compileExpression(target.value); err != nil {
@@ -1332,6 +1344,8 @@ func verifyBytecodeStack(instructions []BytecodeInstruction) error {
 			need, delta = 1, -1
 		case "SET_FIELD", "SET_MEMBER":
 			need, delta = 2, -2
+		case "SET_INDEX":
+			need, delta = 3, -3
 		case "BOOL", "UNARY", "MEMBER":
 			need = 1
 		case "DUP":
@@ -1592,6 +1606,25 @@ func executeBytecodeCode(r *runtime, instructions []BytecodeInstruction, functio
 					err = fail("this is not a Tell instance")
 				} else {
 					instance.fields[instruction.Name] = value
+				}
+			}
+		case "SET_INDEX":
+			var value, index, target any
+			value, err = pop()
+			if err == nil { index, err = pop() }
+			if err == nil { target, err = pop() }
+			if err == nil {
+				switch collection := target.(type) {
+				case []any:
+					number, numberErr := numberValue(index)
+					if numberErr != nil { err = numberErr; break }
+					position := int(number)
+					if position < 0 { position += len(collection) }
+					if position < 0 || position >= len(collection) { err = fail("list index out of range") } else { collection[position] = value }
+				case map[string]any:
+					collection[fmt.Sprint(index)] = value
+				default:
+					err = fail("this value does not support indexed assignment")
 				}
 			}
 		case "SET_MEMBER":
