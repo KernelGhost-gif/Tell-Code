@@ -294,5 +294,10 @@
     "name": "typed Remember field statements",
     "source": "Create a class called Counter:\n    When creating a Counter with initial:\n        Remember initial as this.value.\n    End constructor.\n    To increment:\n        Remember this.value plus 1 as this.value.\n    End function.\nEnd class.\nLet counter be a new Counter with 4.\nTell counter to increment.\nSay counter.value.",
     "output": "5\n"
+  },
+  {
+    "name": "typed Call and Run statements",
+    "source": "To combine with left and right:\n    Say left plus right.\nEnd function.\nCall combine with 2 and 3.\nRun combine with 4 and 1.",
+    "output": "5\n5\n"
   }
 ]
