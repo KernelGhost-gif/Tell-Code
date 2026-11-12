@@ -501,6 +501,23 @@ func TestControlFlowExpressionsAreParsedOnceAndKeepSourceSpans(t *testing.T) {
 }
 
 
+
+func TestLocalModuleImportsUseTypedASTNodes(t *testing.T) {
+	nodes, err := parse("Use the module \"math_helpers.tell\" as helpers.", "main.tell")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nodes) != 1 || nodes[0].simple == nil || nodes[0].simple.kind != "import_module" {
+		t.Fatalf("local module import was not parsed as a typed node: %#v", nodes)
+	}
+	if len(nodes[0].simple.names) != 1 || nodes[0].simple.names[0] != "helpers" {
+		t.Fatalf("module alias = %#v, want helpers", nodes[0].simple.names)
+	}
+	if _, ok := nodes[0].simple.expression.(literalExpression); !ok {
+		t.Fatalf("module path is not a parsed string literal: %#v", nodes[0].simple.expression)
+	}
+}
+
 func TestCollectionMutationStatementsUseTypedASTNodes(t *testing.T) {
 	nodes, err := parse("Let items be [1].\nAdd 2 to items.\nRemove 1 from items.", "mutations.tell")
 	if err != nil {
