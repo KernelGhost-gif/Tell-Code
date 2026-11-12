@@ -181,6 +181,18 @@ Say maths.sqrt(81).
 """)
         self.assertEqual(output, ["120", "9"])
 
+
+    def test_ask_statement_is_a_typed_node_and_preserves_prompt(self):
+        parsed = Parser('Ask "Name? " and save the answer as name.').parse()
+        simple = parsed[0].data["simple"]
+        self.assertEqual(simple["kind"], "ask")
+        output, env = self.run_tell('''
+Ask "Name? " and save the answer as name.
+Say name.
+''', ["Ada"])
+        self.assertEqual(output, ["Name? ", "Ada"])
+        self.assertEqual(env.get("name"), "Ada")
+
     def test_file_read_and_write(self):
         original = Path.cwd()
         with tempfile.TemporaryDirectory() as folder:
@@ -188,10 +200,11 @@ Say maths.sqrt(81).
             try:
                 output, _ = self.run_tell("""
 Write "Hello from Tell" to the file "note.txt".
+Append "!" to the file "note.txt".
 Read the file "note.txt" into contents.
 Say contents.
 """)
-                self.assertEqual(output, ["Hello from Tell"])
+                self.assertEqual(output, ["Hello from Tell!"])
                 self.assertEqual(Path("note.txt").read_text(encoding="utf-8"), "Hello from Tell")
             finally:
                 os.chdir(original)
