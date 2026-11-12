@@ -185,7 +185,7 @@ Say maths.sqrt(81).
 
 
     def test_collection_mutations_are_typed_nodes(self):
-        parsed = Parser("Add 2 to items.\\nRemove 1 from items.").parse()
+        parsed = Parser("Add 2 to items.\nRemove 1 from items.").parse()
         self.assertEqual([node.data["simple"]["kind"] for node in parsed], ["add", "remove"])
         output, env = self.run_tell("""
 Let items be [1, 2].
