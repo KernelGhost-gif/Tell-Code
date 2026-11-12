@@ -574,6 +574,8 @@ func (r *runtime) evalMemberExpression(x memberExpression, e *env) (any, error) 
 		return namedCallable(func(args []any, named map[string]any) (any,error) { return method.callNamed(args, named, receiver) }), nil
 	case *bytecodeInstance:
 		return bytecodeMember(r, object, x.member, object.class.functions)
+	case nil:
+		return nil, fail("cannot access member on nothing")
 	default:
 		return nil, fail("this value has no member %q", x.member)
 	}
