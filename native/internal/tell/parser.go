@@ -340,6 +340,11 @@ func parseSimpleStatement(source string, line, column int) *simpleStatement {
 						return &simpleStatement{kind: "set_member", source: name, target: parsedTarget, expression: parsedValue, hasExpression: true}
 					}
 				}
+				if indexTarget, isIndex := parsedTarget.(indexExpression); isIndex && !indexTarget.isSlice {
+					if parsedValue, validValue := parseExpression(expressionText); validValue {
+						return &simpleStatement{kind: "set_index", source: name, target: indexTarget, expression: parsedValue, hasExpression: true}
+					}
+				}
 			}
 		}
 	}
