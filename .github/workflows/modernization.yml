@@ -30,6 +30,11 @@ jobs:
         run: |
           go test ./...
           go vet ./...
+      - name: Fuzz production Tell parsers
+        working-directory: native
+        run: |
+          go test -run=^$ -fuzz=FuzzTellSourceParserNoPanic -fuzztime=10s -parallel=2 ./internal/tell
+          go test -run=^$ -fuzz=FuzzTellExpressionParserNoPanic -fuzztime=10s -parallel=2 ./internal/tell
       - name: Run Python tests
         run: |
           python -m compileall -q tell tests scripts
