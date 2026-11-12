@@ -185,6 +185,19 @@ Say maths.sqrt(81).
 
 
 
+
+    def test_interop_imports_are_typed_nodes(self):
+        cases = [
+            ('Use the Python library called statistics as stats.', "import_python", "stats"),
+            ('Use the JavaScript library called node:path as paths.', "import_javascript", "paths"),
+            ('Use the math library as maths.', "import_library", "maths"),
+        ]
+        for source, kind, alias in cases:
+            with self.subTest(source=source):
+                simple = Parser(source).parse()[0].data["simple"]
+                self.assertEqual(simple["kind"], kind)
+                self.assertEqual(simple["names"], [alias])
+
     def test_local_module_import_is_a_typed_node(self):
         parsed = Parser('Use the module "math_helpers.tell" as helpers.').parse()
         simple = parsed[0].data["simple"]
