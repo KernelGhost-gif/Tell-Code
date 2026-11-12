@@ -183,6 +183,19 @@ Say maths.sqrt(81).
         self.assertEqual(output, ["120", "9"])
 
 
+
+    def test_collection_mutations_are_typed_nodes(self):
+        parsed = Parser("Add 2 to items.\\nRemove 1 from items.").parse()
+        self.assertEqual([node.data["simple"]["kind"] for node in parsed], ["add", "remove"])
+        output, env = self.run_tell("""
+Let items be [1, 2].
+Add 3 to items.
+Remove 1 from items.
+Say items.
+""")
+        self.assertEqual(output, ["[2, 3]"])
+        self.assertEqual(env.get("items"), [2, 3])
+
     def test_ask_statement_is_a_typed_node_and_preserves_prompt(self):
         parsed = Parser('Ask "Name? " and save the answer as name.').parse()
         simple = parsed[0].data["simple"]
