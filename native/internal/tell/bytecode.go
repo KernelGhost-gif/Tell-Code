@@ -350,12 +350,24 @@ func (c *bytecodeCompiler) popLoop() bytecodeLoop {
 }
 
 func (c *bytecodeCompiler) compileSimpleStatement(statement *simpleStatement) error {
-	if statement.hasExpression && statement.kind != "set_member" {
+	if statement.hasExpression && statement.kind != "set_member" && statement.kind != "import_module" {
 		if err := c.compileExpression(foldBytecodeExpression(statement.expression)); err != nil {
 			return err
 		}
 	}
 	switch statement.kind {
+	case "import_module":
+		literal, ok := statement.expression.(literalExpression)
+		if !ok || literal.token.kind != "string" {
+			return fail("compiled Tell module path must be a quoted string")
+		}
+		modulePath, err := c.compileModule(literal.token.text)
+		if err != nil {
+			return err
+		}
+		instruction := c.emit("IMPORT_MODULE")
+		c.code[instruction].Name = statement.names[0]
+		c.code[instruction].Value = modulePath
 	case "let":
 		if len(statement.names) > 1 {
 			instruction := c.emit("MULTI_DECLARE")
