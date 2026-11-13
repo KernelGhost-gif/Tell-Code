@@ -150,6 +150,14 @@
       "expected_stdout": "",
       "expected_stderr": "[SyntaxError] File \"syntax-error.tell\", line 1, col 12: expected a value, found \")\"\n",
       "expected_exit_code": 64
+    },
+    {
+      "name": "CRLF source has stable LF process output",
+      "filename": "crlf-source.tell",
+      "source_code": "Say \"hello\".\r\n",
+      "expected_stdout": "hello\n",
+      "expected_stderr": "",
+      "expected_exit_code": 0
     }
   ]
 }

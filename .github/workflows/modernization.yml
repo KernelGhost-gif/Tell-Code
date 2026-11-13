@@ -70,6 +70,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.23.x"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - name: Test and build Windows runtime
         shell: pwsh
         run: |
@@ -79,6 +82,12 @@ jobs:
           go vet ./...
           go build -trimpath -o ../build/tell-windows-amd64.exe ./cmd/tell
           Pop-Location
+      - name: Verify byte-exact runtime conformance on Windows
+        run: |
+          python -m compileall -q tell tests scripts
+          python -m unittest discover -s tests -v
+          python scripts/conformance.py --runtime both --fixtures conformance/smoke-v1.json --native-bin build/tell-windows-amd64.exe
+          python scripts/conformance.py --runtime both --fixtures conformance/runtime-v1.json --native-bin build/tell-windows-amd64.exe
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
       - name: Compile Windows installer
