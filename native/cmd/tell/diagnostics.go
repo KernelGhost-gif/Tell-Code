@@ -56,7 +56,10 @@ func diagnosticFor(err error, filename string, defaultKind diagnostic.Kind) *dia
 	}
 
 	kind := defaultKind
-	if explicitKind == "IOError" {
+	switch explicitKind {
+	case "SyntaxError":
+		kind = diagnostic.SyntaxError
+	case "IOError":
 		kind = diagnostic.IOError
 	}
 	folded := strings.ToLower(message)
