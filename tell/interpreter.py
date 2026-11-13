@@ -174,7 +174,7 @@ class Environment:
             return self.values[name]
         if self.parent is not None:
             return self.parent.get(name)
-        raise TellError(f"I don't know what '{name}' means. Did you define it first?")
+        raise TellError(f'I don\'t know what "{name}" means. Did you define it first?')
 
     def set(self, name: str, value: Any) -> None:
         self.values[name] = value
@@ -1875,7 +1875,7 @@ class Interpreter:
         try:
             candidate = env.get(type_name)
         except TellError as exc:
-            raise TellError(f"Unknown type annotation {type_name!r}.") from exc
+            raise TellError(f'unknown type annotation "{type_name}"') from exc
         if not isinstance(candidate, TellClass):
             raise TellError(f"{type_name!r} is not a type.")
         current = value.tell_class if isinstance(value, TellInstance) else None
@@ -1887,7 +1887,7 @@ class Interpreter:
 
     def _check_type(self, type_name: str, value: Any, env: Environment, name: str) -> None:
         if not self._matches_type(type_name, value, env):
-            raise TellError(f"type mismatch for {name!r}: expected {type_name}, got {display_type(value)}")
+            raise TellError(f'type mismatch for "{name}": expected {type_name}, got {display_type(value)}')
 
     def declare(
         self,
