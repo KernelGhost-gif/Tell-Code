@@ -80,6 +80,19 @@ class DiagnosticContractTests(unittest.TestCase):
         self.assertEqual(make_diagnostic("type mismatch for age").kind, "TypeError")
         self.assertEqual(make_diagnostic("I don't know what 'missing' means").kind, "NameError")
 
+    def test_name_and_type_messages_match_cross_runtime_contract(self):
+        with self.assertRaises(TellError) as missing:
+            Interpreter().run("Say missing_name.", "name-error.tell")
+        name = make_diagnostic(missing.exception, "fallback.tell", "RuntimeError")
+        self.assertEqual(name.kind, "NameError")
+        self.assertEqual(name.message, 'I don\'t know what "missing_name" means. Did you define it first?')
+
+        with self.assertRaises(TellError) as mismatch:
+            Interpreter().run('Let age as number be "old".', "type-error.tell")
+        type_error = make_diagnostic(mismatch.exception, "fallback.tell", "RuntimeError")
+        self.assertEqual(type_error.kind, "TypeError")
+        self.assertEqual(type_error.message, 'type mismatch for "age": expected number, got text')
+
     def test_io_and_usage_status_codes(self):
         self.assertEqual(exit_code("IOError"), 74)
         self.assertEqual(exit_code("UsageError"), 64)
