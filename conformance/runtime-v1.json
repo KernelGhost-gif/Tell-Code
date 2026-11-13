@@ -74,6 +74,58 @@
       "expected_stdout": "",
       "expected_stderr": "[IOError] File \"missing-file.tell\", line 1, col 15: cannot read file \"missing.txt\"\n",
       "expected_exit_code": 74
+    },
+    {
+      "name": "Ask reads stdin and preserves prompt",
+      "filename": "ask-stdin.tell",
+      "source_code": "Ask \"Name? \" and save the answer as name.\nSay \"Hello {name}\".\n",
+      "stdin": "Ada\n",
+      "expected_stdout": "Name? Hello Ada\n",
+      "expected_stderr": "",
+      "expected_exit_code": 0
+    },
+    {
+      "name": "file write append read round trip",
+      "filename": "file-round-trip.tell",
+      "source_code": "Write \"one\" to the file \"data.txt\".\nAppend \" two\" to the file \"data.txt\".\nRead the file \"data.txt\" into contents.\nSay contents.\n",
+      "expected_stdout": "one two\n",
+      "expected_stderr": "",
+      "expected_exit_code": 0
+    },
+    {
+      "name": "relative local module import",
+      "filename": "modules/main.tell",
+      "source_code": "Use the module \"helpers.tell\" as helpers.\nSay helpers.add(2, 3).\n",
+      "files": {
+        "modules/helpers.tell": "To add with left and right:\n    Give back left plus right.\nEnd function.\n"
+      },
+      "expected_stdout": "5\n",
+      "expected_stderr": "",
+      "expected_exit_code": 0
+    },
+    {
+      "name": "typed list set add and remove",
+      "filename": "typed-collections.tell",
+      "source_code": "Let values be [1, 2].\nSet values[1] to 9.\nSet the item at position 0 in values to 7.\nAdd 3 to values.\nRemove 9 from values.\nSay values.\n",
+      "expected_stdout": "[7, 3]\n",
+      "expected_stderr": "",
+      "expected_exit_code": 0
+    },
+    {
+      "name": "Call Run and Tell method discard return values",
+      "filename": "call-statements.tell",
+      "source_code": "To emit with text:\n    Say text.\n    Give back \"ignored\".\nEnd function.\nCall emit with \"called\".\nRun emit with \"run\".\nCreate a class called Counter:\n    When creating a Counter:\n        Remember 1 as this.value.\n    End constructor.\n    To increment:\n        Remember this.value plus 1 as this.value.\n        Give back \"ignored\".\n    End function.\nEnd class.\nLet counter be a new Counter.\nTell counter to increment.\nSay counter.value.\n",
+      "expected_stdout": "called\nrun\n2\n",
+      "expected_stderr": "",
+      "expected_exit_code": 0
+    },
+    {
+      "name": "built-in library import alias",
+      "filename": "library-import.tell",
+      "source_code": "Use the math library as maths.\nSay maths.floor(2.9).\n",
+      "expected_stdout": "2\n",
+      "expected_stderr": "",
+      "expected_exit_code": 0
     }
   ]
 }
