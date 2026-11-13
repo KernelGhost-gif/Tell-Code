@@ -132,7 +132,7 @@
       "filename": "name-error.tell",
       "source_code": "Say missing_name.\n",
       "expected_stdout": "",
-      "expected_stderr": "[NameError] File \"name-error.tell\", line 1, col 1: I don't know what \"missing_name\" means. Did you define it first?\n",
+      "expected_stderr": "[NameError] File \"name-error.tell\", line 1, col 5: I don't know what \"missing_name\" means. Did you define it first?\n",
       "expected_exit_code": 70
     },
     {
