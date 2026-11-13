@@ -126,6 +126,22 @@
       "expected_stdout": "2\n",
       "expected_stderr": "",
       "expected_exit_code": 0
+    },
+    {
+      "name": "undefined name process diagnostic",
+      "filename": "name-error.tell",
+      "source_code": "Say missing_name.\n",
+      "expected_stdout": "",
+      "expected_stderr": "[NameError] File \"name-error.tell\", line 1, col 1: I don't know what \"missing_name\" means. Did you define it first?\n",
+      "expected_exit_code": 70
+    },
+    {
+      "name": "type mismatch process diagnostic",
+      "filename": "type-error.tell",
+      "source_code": "Let age as number be \"old\".\n",
+      "expected_stdout": "",
+      "expected_stderr": "[TypeError] File \"type-error.tell\", line 1, col 1: type mismatch for \"age\": expected number, got text\n",
+      "expected_exit_code": 70
     }
   ]
 }
