@@ -916,7 +916,22 @@ func (p *parser) block(stops map[string]bool) ([]node, string, error) {
 		}
 		text := stripSentenceEnd(line)
 		column := p.columnAt(lineNo)
-		out = append(out, node{kind: "statement", text: text, simple: parseSimpleStatement(text, lineNo, column), line: lineNo, column: column})
+		simple := parseSimpleStatement(text, lineNo, column)
+		if simple == nil {
+			for _, prefix := range []string{"say ", "show ", "print ", "check that ", "give back ", "return ", "raise an error saying "} {
+				expressionText, ok := prefixFold(text, prefix)
+				if !ok || expressionText == "" {
+					continue
+				}
+				offset := strings.Index(strings.ToLower(text), prefix) + len(prefix)
+				expressionColumn := column + utf8.RuneCountInString(text[:offset])
+				if _, parseErr := parseTellExpressionAt(expressionText, lineNo, expressionColumn); parseErr != nil {
+					return nil, "", parseErr
+				}
+				break
+			}
+		}
+		out = append(out, node{kind: "statement", text: text, simple: simple, line: lineNo, column: column})
 	}
 	return out, "", nil
 }
@@ -924,6 +939,10 @@ func parse(source, filename string) ([]node, error) {
 	p := &parser{lines: strings.Split(source, "\n"), filename: filename}
 	n, stop, err := p.block(map[string]bool{})
 	if err != nil {
+		var parseError *Error
+		if errors.As(err, &parseError) && parseError.Kind == "" {
+			parseError.Kind = "SyntaxError"
+		}
 		return nil, err
 	}
 	if stop != "" {

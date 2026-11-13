@@ -4,7 +4,7 @@ The schema is versioned by the top-level schema_version field. Each test case pr
 
 The harness compares stdout, stderr, and exit status byte-for-byte. Cases are run in fresh processes with UTF-8 source passed on stdin.
 
-runtime-v1.json is the byte-exact process contract for behavior implemented by both current runtimes. It covers numeric boundaries, closure capture, recursion limits, diagnostics and exit codes, null member access, stdin prompts, file round trips, relative module imports, collection mutation, indexed assignments, call statements, Tell method sentences, and built-in library imports. Keep expectations identical across runtimes; fix behavior rather than weakening fixtures when a regression appears.
+runtime-v1.json is the byte-exact process contract for behavior implemented by both current runtimes. It covers numeric boundaries, closure capture, recursion limits, byte-exact SyntaxError/NameError/TypeError/RuntimeError/IOError diagnostics and exit codes, null member access, stdin prompts, file round trips, relative module imports, collection mutation, indexed assignments, call statements, Tell method sentences, and built-in library imports. Keep expectations identical across runtimes; fix behavior rather than weakening fixtures when a regression appears.
 
 Run both engines after building the native binary:
 

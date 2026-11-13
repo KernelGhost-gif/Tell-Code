@@ -1,6 +1,6 @@
 # Tell Runtime Conformance Semantics (v1 target)
 
-Status: normative target for the 0.4 migration. The current 0.3 statement interpreters are not yet conformant to every rule or diagnostic below. Changes that intentionally alter these rules require a new conformance schema version and a language compatibility note.
+Status: normative target for the 0.4 migration. The process suite now verifies the diagnostic format and exit-code mapping for representative SyntaxError, NameError, TypeError, RuntimeError, and IOError cases in both current command-line runtimes. Remaining language and bytecode limitations are recorded in the modernization progress checkpoint. Changes that intentionally alter these rules require a new conformance schema version and a language compatibility note.
 
 ## Source model
 
@@ -47,9 +47,11 @@ Both command-line runtimes accept the same positive max-call-depth and max-loop-
 
 Process exit codes:
 - 0: successful execution.
-- 64: syntax or command usage error.
-- 70: type, name, or runtime error.
-- 74: file or I/O error.
+- 64: SyntaxError or command UsageError.
+- 70: TypeError, NameError, or RuntimeError.
+- 74: IOError.
+
+The v1 process corpus fixes the diagnostic message text as well as the category and exit status. Missing-name messages use the same double-quoted identifier form in Python and Go. Type-mismatch messages use the same double-quoted binding name and normalized type names. Parse-time expression errors identify the first invalid token with the same 1-based line/column and double-quoted token spelling in both CLIs. A syntax failure must be rejected during parsing, not deferred until execution and reported as RuntimeError.
 
 Program output is written to stdout. One diagnostic is written to stderr. Do not add tell:, stack traces, usage banners, or debug output to a normal program error. Multiple diagnostics may be emitted only by commands explicitly documented to perform multi-file analysis.
 

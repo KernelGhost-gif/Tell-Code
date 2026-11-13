@@ -93,6 +93,23 @@ Say paths.extname("/projects/tell/main.js").`
 	}
 }
 
+func TestMalformedExpressionStatementIsRejectedDuringParsing(t *testing.T) {
+	_, err := parse("Say 1 plus ).", "syntax-error.tell")
+	if err == nil {
+		t.Fatal("expected malformed expression statement to fail during parsing")
+	}
+	parseError, ok := err.(*Error)
+	if !ok {
+		t.Fatalf("parse error type = %T, want *Error", err)
+	}
+	if parseError.Kind != "SyntaxError" {
+		t.Fatalf("parse error kind = %q, want SyntaxError", parseError.Kind)
+	}
+	if got, want := err.Error(), `expected a value, found ")" at line 1, column 12`; !strings.Contains(got, want) {
+		t.Fatalf("parse error = %q, want it to contain %q", got, want)
+	}
+}
+
 func TestParserBuildsExpressionASTsForCommonStatements(t *testing.T) {
 	nodes, err := parse("Let answer be 1 plus 2.\nSet answer to answer plus 1.\nSay answer.", "ast.tell")
 	if err != nil {

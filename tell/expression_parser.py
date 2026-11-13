@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import re
 
 
@@ -276,7 +277,7 @@ class Parser:
                     self.require("}", "expected } after set")
                     node = Expr("set", children=tuple(items), start=token.offset)
         else:
-            raise ExpressionSyntaxError(f"expected a value, found {token.text!r}", token)
+            raise ExpressionSyntaxError(f"expected a value, found {json.dumps(token.text, ensure_ascii=False)}", token)
         return self.parse_postfix(node)
 
     def parse_postfix(self, value: Expr) -> Expr:
