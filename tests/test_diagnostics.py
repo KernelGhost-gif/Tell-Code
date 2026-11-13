@@ -80,6 +80,17 @@ class DiagnosticContractTests(unittest.TestCase):
         self.assertEqual(make_diagnostic("type mismatch for age").kind, "TypeError")
         self.assertEqual(make_diagnostic("I don't know what 'missing' means").kind, "NameError")
 
+    def test_invalid_expression_statement_has_matching_syntax_diagnostic(self):
+        with self.assertRaises(TellSyntaxError) as caught:
+            Parser("Say 1 plus ).", "syntax-error.tell").parse()
+        diagnostic = make_diagnostic(caught.exception, "fallback.tell", "SyntaxError")
+        self.assertEqual(diagnostic.filename, "syntax-error.tell")
+        self.assertEqual(diagnostic.line, 1)
+        self.assertEqual(diagnostic.column, 12)
+        self.assertEqual(diagnostic.message, 'expected a value, found ")"')
+        self.assertEqual(diagnostic.kind, "SyntaxError")
+        self.assertEqual(exit_code(diagnostic.kind), 64)
+
     def test_name_and_type_messages_match_cross_runtime_contract(self):
         with self.assertRaises(TellError) as missing:
             Interpreter().run("Say missing_name.", "name-error.tell")
