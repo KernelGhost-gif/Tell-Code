@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/KernelGhost-gif/Tell-Code/native/internal/diagnostic"
+	"github.com/KernelGhost-gif/Tell-Code/native/internal/tell"
 )
 
 func TestDiagnosticForLegacyRuntimeLocation(t *testing.T) {
@@ -40,6 +41,18 @@ func TestDiagnosticClassifiesNamesAndTypes(t *testing.T) {
 	typ := diagnosticFor(errors.New("type mismatch for age"), "x.tell", diagnostic.RuntimeError)
 	if typ.Kind != diagnostic.TypeError || typ.ExitCode() != 70 {
 		t.Fatalf("unexpected type diagnostic: %#v", typ)
+	}
+}
+
+func TestDiagnosticForHonorsExplicitSyntaxKind(t *testing.T) {
+	err := &tell.Error{Kind: "SyntaxError", Message: `expected a value, found ")" at line 1, column 12`}
+	got := diagnosticFor(err, "syntax-error.tell", diagnostic.RuntimeError)
+	want := `[SyntaxError] File "syntax-error.tell", line 1, col 12: expected a value, found ")"`
+	if got.Error() != want {
+		t.Fatalf("diagnostic = %q, want %q", got.Error(), want)
+	}
+	if got.ExitCode() != 64 {
+		t.Fatalf("exit code = %d, want 64", got.ExitCode())
 	}
 }
 
