@@ -73,6 +73,8 @@ def validate_case(case: Any) -> str | None:
             return str(exc)
     if "stdin" in case and not isinstance(case["stdin"], str):
         return "stdin must be a string"
+    if "type_check" in case and not isinstance(case["type_check"], bool):
+        return "type_check must be a boolean"
     fixture_files = case.get("files", {})
     if not isinstance(fixture_files, dict):
         return "files must be an object mapping paths to text"
@@ -123,6 +125,8 @@ def execute(command: list[str], case: dict[str, Any]) -> Result:
                           ("max_loop_iterations", "--max-loop-iterations")):
             if key in case:
                 args.extend([flag, str(case[key])])
+        if case.get("type_check", False):
+            args.append("--types")
         args.append(filename)
         env = os.environ.copy()
         env["PYTHONPATH"] = str(ROOT) + os.pathsep + env.get("PYTHONPATH", "")

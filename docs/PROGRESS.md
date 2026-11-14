@@ -86,3 +86,12 @@ The following work is on `modernization/0.4-foundation`; it has not been merged 
 - Extended `runtime-v1.json` with a missing-file case that checks byte-exact stderr and exit status, and corrected the process harness to place runtime options before the positional source filename so native Go flag parsing receives them.
 - CI now runs both the smoke suite and the full process-level runtime-v1 suite against Python and native binaries. The complete latest validation result is tracked in the modernization GitHub Actions run; do not infer release readiness from branch-local success alone.
 - Remaining migration work: move the remaining regex/line-based I/O, module, collection-mutation, object, and standard-library statements into typed statement nodes; expand process-level fixtures beyond the current seven runtime-v1 cases; complete the shared semantic pipeline and broader bytecode lowering. The production Go and Python runtimes still have separate statement/block parsers.
+
+
+## 2026-11-14 follow-on parity hardening (PR #9)
+
+- The native Go static analyzer now consumes the production typed statement/expression nodes and infers known builtin return types, class-constructor result types, and class inheritance. It rejects statically provable primitive, builtin-call, numeric-operator, and unrelated-class mismatches while continuing to defer dynamic values.
+- The Python analyzer's class/type diagnostic spelling is normalized to the same stable quoted names and message shape used by the native CLI.
+- Both parsers now accept the optional `, then` suffix on `If` and `Otherwise if` headers. The Go parser also validates malformed `Let` and `Set` right-hand expressions during parsing instead of deferring those failures to execution.
+- The process-conformance harness can invoke `--types` per fixture. The shared contract now covers class mismatch/subtyping, builtin return inference, known operator mismatch, optional `, then`, and malformed declaration syntax, alongside exact process output and exit codes.
+- These are targeted parity improvements. The production statement/block parsers remain separate and line-oriented; remaining host/runtime and standard-library differences still require further shared fixtures and staged migrations. Validation is delegated to the branch's Linux/Windows CI; do not mark the milestone verified until those runs complete.

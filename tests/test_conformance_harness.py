@@ -58,6 +58,17 @@ class ConformanceHarnessTests(unittest.TestCase):
         self.assertEqual(result.stdout, "Ada\r\nπ")
         self.assertEqual(result.exit_code, 0)
 
+    def test_types_option_is_passed_before_source_filename(self):
+        case = make_case(type_check=True)
+        command = [
+            sys.executable,
+            "-c",
+            "import sys; print(' '.join(sys.argv[1:]))",
+        ]
+        result = execute(command, case)
+        self.assertEqual(result.stdout, "--types nested/main.tell\\n")
+        self.assertEqual(result.exit_code, 0)
+
     def test_rejects_windows_style_and_parent_traversal_paths(self):
         for filename in ("..\\escape.tell", "C:/outside.tell", "//server/share/file.tell", "../escape.tell"):
             with self.subTest(filename=filename):
@@ -67,6 +78,7 @@ class ConformanceHarnessTests(unittest.TestCase):
         self.assertEqual(validate_case(make_case(expected_exit_code=True)), "expected_exit_code must be an integer")
         self.assertEqual(validate_case(make_case(files=[])), "files must be an object mapping paths to text")
         self.assertEqual(validate_case(make_case(timeout_seconds=float("inf"))), "timeout_seconds must be a positive finite number")
+        self.assertEqual(validate_case(make_case(type_check="yes")), "type_check must be a boolean")
 
     def test_standard_streams_are_utf8_with_stable_newlines(self):
         class FakeStream:

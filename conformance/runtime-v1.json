@@ -158,6 +158,58 @@
       "expected_stdout": "hello\n",
       "expected_stderr": "",
       "expected_exit_code": 0
+    },
+    {
+      "name": "optional then suffix is accepted in nested if branches",
+      "filename": "optional-then.tell",
+      "source_code": "If true, then:\n    Say \"primary\".\nOtherwise if false, then:\n    Say \"secondary\".\nOtherwise:\n    Say \"fallback\".\nEnd if.\n",
+      "expected_stdout": "primary\n",
+      "expected_stderr": "",
+      "expected_exit_code": 0
+    },
+    {
+      "name": "malformed let expression is rejected during parsing",
+      "filename": "malformed-let.tell",
+      "source_code": "Let value be 1 plus ).\n",
+      "expected_stdout": "",
+      "expected_stderr": "[SyntaxError] File \"malformed-let.tell\", line 1, col 21: expected a value, found \")\"\n",
+      "expected_exit_code": 64
+    },
+    {
+      "name": "static class mismatch is the same in both runtimes",
+      "filename": "class-mismatch.tell",
+      "type_check": true,
+      "source_code": "Create a class called Cat:\nEnd class.\nCreate a class called Dog:\nEnd class.\nLet pet as Cat be new Dog.\n",
+      "expected_stdout": "",
+      "expected_stderr": "[TypeError] File \"class-mismatch.tell\", line 5, col 1: type mismatch for \"pet\": annotation is Cat, but the expression has the type Dog\n",
+      "expected_exit_code": 70
+    },
+    {
+      "name": "static subclass assignment is accepted in both runtimes",
+      "filename": "class-subtype.tell",
+      "type_check": true,
+      "source_code": "Create a class called Parent:\nEnd class.\nCreate a class called Child based on Parent:\nEnd class.\nLet pet as Parent be new Child.\n",
+      "expected_stdout": "Looks good: class-subtype.tell\n",
+      "expected_stderr": "",
+      "expected_exit_code": 0
+    },
+    {
+      "name": "static builtin return type is checked in both runtimes",
+      "filename": "builtin-type-mismatch.tell",
+      "type_check": true,
+      "source_code": "Let count as text be len([1, 2]).\n",
+      "expected_stdout": "",
+      "expected_stderr": "[TypeError] File \"builtin-type-mismatch.tell\", line 1, col 1: type mismatch for \"count\": annotation is text, but the expression has the type number\n",
+      "expected_exit_code": 70
+    },
+    {
+      "name": "static operator mismatch is checked in both runtimes",
+      "filename": "operator-type-mismatch.tell",
+      "type_check": true,
+      "source_code": "Let value as number be \"not a number\" minus 1.\n",
+      "expected_stdout": "",
+      "expected_stderr": "[TypeError] File \"operator-type-mismatch.tell\", line 1, col 1: operator - requires numeric operands, got text and number\n",
+      "expected_exit_code": 70
     }
   ]
 }

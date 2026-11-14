@@ -731,7 +731,16 @@ func parseFunctionHeader(header string) (name string, params []string, ok bool) 
 	return name, params, true
 }
 
+func stripOptionalThen(condition string) string {
+	condition = strings.TrimSpace(condition)
+	if len(condition) >= len(", then") && strings.EqualFold(condition[len(condition)-len(", then"):], ", then") {
+		return strings.TrimSpace(condition[:len(condition)-len(", then")])
+	}
+	return condition
+}
+
 func (p *parser) ifBlock(condition string, lineNo int) (node, error) {
+	condition = stripOptionalThen(condition)
 	body, stop, err := p.block(map[string]bool{
 		"otherwise:": true, "otherwise-if": true, "end if.": true,
 	})
@@ -918,6 +927,9 @@ func (p *parser) block(stops map[string]bool) ([]node, string, error) {
 		column := p.columnAt(lineNo)
 		simple := parseSimpleStatement(text, lineNo, column)
 		if simple == nil {
+			if err := validateUnparsedStatementExpression(text, lineNo, column); err != nil {
+				return nil, "", err
+			}
 			for _, prefix := range []string{"say ", "show ", "print ", "check that ", "give back ", "return ", "raise an error saying "} {
 				expressionText, ok := prefixFold(text, prefix)
 				if !ok || expressionText == "" {
@@ -935,6 +947,45 @@ func (p *parser) block(stops map[string]bool) ([]node, string, error) {
 	}
 	return out, "", nil
 }
+func validateUnparsedStatementExpression(source string, line, column int) error {
+	var expressionText string
+	var offset int
+	if rest, ok := prefixFold(source, "let "); ok {
+		if tail, constant := prefixFold(rest, "constant "); constant {
+			rest = tail
+		}
+		if _, candidate, separated := splitFoldOnce(rest, " be "); separated {
+			expressionText = strings.TrimSpace(candidate)
+			if expressionText != "" {
+				offset = strings.Index(source, expressionText)
+			}
+		}
+	} else if rest, ok := prefixFold(source, "set "); ok {
+		if _, candidate, separated := splitFoldOnce(rest, " to "); separated {
+			expressionText = strings.TrimSpace(candidate)
+			if expressionText != "" {
+				offset = strings.Index(source, expressionText)
+			}
+		}
+	} else {
+		for _, prefix := range []string{"say ", "show ", "print ", "check that ", "give back ", "return ", "raise an error saying "} {
+			if candidate, ok := prefixFold(source, prefix); ok && strings.TrimSpace(candidate) != "" {
+				expressionText = strings.TrimSpace(candidate)
+				offset = strings.Index(source, expressionText)
+				break
+			}
+		}
+	}
+	if expressionText == "" {
+		return nil
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	_, err := parseTellExpressionAt(expressionText, line, column+utf8.RuneCountInString(source[:offset]))
+	return err
+}
+
 func parse(source, filename string) ([]node, error) {
 	p := &parser{lines: strings.Split(source, "\n"), filename: filename}
 	n, stop, err := p.block(map[string]bool{})
