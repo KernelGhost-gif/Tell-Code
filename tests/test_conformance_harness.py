@@ -66,7 +66,7 @@ class ConformanceHarnessTests(unittest.TestCase):
             "import sys; print(' '.join(sys.argv[1:]))",
         ]
         result = execute(command, case)
-        self.assertEqual(result.stdout, "--types nested/main.tell\\n")
+        self.assertEqual(result.stdout, "--types nested/main.tell\n")
         self.assertEqual(result.exit_code, 0)
 
     def test_rejects_windows_style_and_parent_traversal_paths(self):
