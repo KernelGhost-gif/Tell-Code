@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 import tempfile
 import unittest
@@ -58,15 +59,16 @@ class ConformanceHarnessTests(unittest.TestCase):
         self.assertEqual(result.stdout, "Ada\r\nπ")
         self.assertEqual(result.exit_code, 0)
 
-    def test_types_option_is_passed_before_source_filename(self):
+    def test_types_option_selects_check_subcommand_before_source_filename(self):
         case = make_case(type_check=True)
         command = [
             sys.executable,
             "-c",
             "import sys; print(' '.join(sys.argv[1:]))",
+            "run",
         ]
         result = execute(command, case)
-        self.assertEqual(result.stdout, "--types nested/main.tell\n")
+        self.assertEqual(result.stdout, f"check --types nested/main.tell{os.linesep}")
         self.assertEqual(result.exit_code, 0)
 
     def test_rejects_windows_style_and_parent_traversal_paths(self):

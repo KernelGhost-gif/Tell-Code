@@ -126,6 +126,8 @@ def execute(command: list[str], case: dict[str, Any]) -> Result:
             if key in case:
                 args.extend([flag, str(case[key])])
         if case.get("type_check", False):
+            if args and args[-1] == "run":
+                args[-1] = "check"
             args.append("--types")
         args.append(filename)
         env = os.environ.copy()

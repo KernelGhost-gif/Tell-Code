@@ -220,10 +220,10 @@ func (a *semanticAnalyzer) checkAnnotation(name, annotation, inferred string) er
 		if _, expectedIsClass := a.classes[typeName]; expectedIsClass && a.isSubtype(actual, typeName) {
 			return nil
 		}
-		return fail("type mismatch for %q: annotation is %s, but the expression has type %s", name, typeName, actual)
+		return fail("type mismatch for %q: annotation is %s, but the expression has the type %s", name, typeName, actual)
 	}
 	if inferred != normalized {
-		return fail("type mismatch for %q: annotation is %s, but the expression has type %s", name, typeName, inferred)
+		return fail("type mismatch for %q: annotation is %s, but the expression has the type %s", name, typeName, inferred)
 	}
 	return nil
 }
