@@ -28,6 +28,24 @@ class StaticAnalysisTests(unittest.TestCase):
             "classes.tell",
         )
 
+    def test_rejects_statistically_known_class_mismatch(self):
+        source = (
+            "Create a class called Cat:\nEnd class.\n"
+            "Create a class called Dog:\nEnd class.\n"
+            "Let pet as Cat be new Dog."
+        )
+        with self.assertRaisesRegex(SemanticError, "type mismatch"):
+            analyze(source, "classes.tell")
+
+    def test_infers_builtin_return_types(self):
+        analyze("Let count as number be len([1, 2]).", "builtins.tell")
+        with self.assertRaisesRegex(SemanticError, "type mismatch"):
+            analyze("Let count as text be len([1, 2]).", "builtins.tell")
+
+    def test_rejects_known_incompatible_operator_types(self):
+        with self.assertRaisesRegex(SemanticError, "requires numeric operands"):
+            analyze('Let value as number be "not a number" minus 1.', "operators.tell")
+
     def test_dynamic_values_remain_permitted(self):
         analyze("Let value be external_value.\nSet value to another_value.", "dynamic.tell")
 

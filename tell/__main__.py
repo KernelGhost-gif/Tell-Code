@@ -153,7 +153,20 @@ class TellArgumentParser(argparse.ArgumentParser):
         self.exit(exit_code(diagnostic.kind), str(diagnostic) + "\n")
 
 
+def _configure_standard_streams() -> None:
+    # Match the native runtime: UTF-8 streams and stable LF output on every OS.
+    for stream, newline in (
+        (sys.stdin, ""),
+        (sys.stdout, "\n"),
+        (sys.stderr, "\n"),
+    ):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            reconfigure(encoding="utf-8", errors="strict", newline=newline)
+
+
 def main() -> int:
+    _configure_standard_streams()
     parser = TellArgumentParser(
         prog="tell",
         description="Run, check, test, build, format, and edit Tell programs written as ordinary instructions.",

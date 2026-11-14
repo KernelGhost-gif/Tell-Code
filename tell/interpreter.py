@@ -996,7 +996,7 @@ class Parser:
             raise TellSyntaxError(str(exc), self.filename, line, column) from exc
 
     def _parse_if_block(self, condition: str, line_no: int, prefix_length: int = len("If ")) -> Node:
-        condition = condition.strip()
+        condition = re.sub(r",\s*then$", "", condition.strip(), flags=re.I).strip()
         condition_ast = self._validate_expression(
             condition, line_no, self._source_column(line_no), prefix_length
         )

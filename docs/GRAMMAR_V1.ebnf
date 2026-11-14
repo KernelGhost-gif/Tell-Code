@@ -74,8 +74,8 @@ The logical words and, or, and not are operators. The word in and phrase is in a
 
     block               = if-block | while-block | repeat-block | for-block
                         | function-block | class-block | try-block ;
-    if-block            = "If", expression, ":", block-body,
-                          { ("Otherwise if" | "Else if"), expression, ":", block-body },
+    if-block            = "If", expression, [", then"], ":", block-body,
+                          { ("Otherwise if" | "Else if"), expression, [", then"], ":", block-body },
                           [ ("Otherwise" | "Else"), ":", block-body ],
                           ("End if" | "End if.") ;
     while-block         = "While", expression, ":", block-body, ("End while" | "End while.") ;
