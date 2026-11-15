@@ -210,6 +210,30 @@
       "expected_stdout": "",
       "expected_stderr": "[TypeError] File \"operator-type-mismatch.tell\", line 1, col 1: operator - requires numeric operands, got text and number\n",
       "expected_exit_code": 70
+    },
+    {
+      "name": "Else-if and Else aliases match Otherwise branches without dotted terminators",
+      "filename": "else-branch-aliases.tell",
+      "source_code": "Let score be 15.\nIf score is less than 10:\n    Say \"low\".\nElse if score is less than 20:\n    Say \"middle\".\nElse:\n    Say \"high\".\nEnd if\n",
+      "expected_stdout": "middle\n",
+      "expected_stderr": "",
+      "expected_exit_code": 0
+    },
+    {
+      "name": "undotted loop and function terminators are accepted",
+      "filename": "undotted-block-terminators.tell",
+      "source_code": "Let count be 0.\nWhile count is less than 1:\n    Set count to count plus 1.\nEnd while\nRepeat 2 times:\n    Say count.\nEnd repeat\nFor each item in [1, 2]:\n    Say item.\nEnd loop\nTo identity with value:\n    Give back value.\nEnd function\nSay identity(count).\nTry:\n    Say \"try\".\nEnd try\n",
+      "expected_stdout": "1\n1\n2\n1\ntry\n",
+      "expected_stderr": "",
+      "expected_exit_code": 0
+    },
+    {
+      "name": "undotted class and constructor terminators are accepted",
+      "filename": "undotted-class-terminators.tell",
+      "source_code": "Create a class called Box:\n    When creating a Box with value:\n        Remember value as this.value.\n    End constructor\nEnd class\nLet box be new Box with 7.\nSay box.value.\n",
+      "expected_stdout": "7\n",
+      "expected_stderr": "",
+      "expected_exit_code": 0
     }
   ]
 }
