@@ -67,14 +67,14 @@ class Analyzer:
         type_name = annotation.strip()
         known = type_name.casefold() in self.BUILTIN_TYPES or type_name in self.classes
         if not known:
-            raise self.error(node, f"unknown type annotation {annotation!r}")
+            raise self.error(node, f'unknown type annotation "{annotation}"')
         if inferred not in {"", "any"} and type_name.casefold() != "any":
             if inferred.startswith("class:"):
                 actual = inferred.split(":", 1)[1]
                 if type_name not in self.classes or not self._is_subtype(actual, type_name):
-                    raise self.error(node, f"type mismatch for {name!r}: annotation is {annotation}, but the expression has type {actual}")
+                    raise self.error(node, f'type mismatch for "{name}": annotation is {annotation}, but the expression has the type {actual}')
             elif inferred != type_name.casefold():
-                raise self.error(node, f"type mismatch for {name!r}: annotation is {annotation}, but the expression has type {inferred}")
+                raise self.error(node, f'type mismatch for "{name}": annotation is {annotation}, but the expression has the type {inferred}')
 
     def _join(self, left: str, right: str) -> str:
         return left if left == right else "any"

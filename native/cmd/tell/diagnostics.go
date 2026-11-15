@@ -65,7 +65,8 @@ func diagnosticFor(err error, filename string, defaultKind diagnostic.Kind) *dia
 	folded := strings.ToLower(message)
 	if strings.Contains(folded, "type mismatch") ||
 		strings.Contains(folded, "type annotation") ||
-		strings.Contains(folded, "requires a number") {
+		strings.Contains(folded, "requires a number") ||
+		strings.Contains(folded, "requires numeric operands") {
 		kind = diagnostic.TypeError
 	} else if strings.Contains(folded, "i don't know what") ||
 		strings.Contains(folded, "undefined name") ||

@@ -67,3 +67,11 @@ func TestReportDiagnosticWritesOnlyFormattedDiagnostic(t *testing.T) {
 		t.Fatalf("output = %q, want %q", output.String(), want)
 	}
 }
+
+
+func TestDiagnosticClassifiesNumericOperatorTypeErrors(t *testing.T) {
+	got := diagnosticFor(errors.New("operator - requires numeric operands, got text and number"), "types.tell", diagnostic.RuntimeError)
+	if got.Kind != diagnostic.TypeError {
+		t.Fatalf("expected TypeError, got %s", got.Kind)
+	}
+}

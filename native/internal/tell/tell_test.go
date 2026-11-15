@@ -690,3 +690,47 @@ func TestFileAndConsoleStatementsUseTypedASTNodes(t *testing.T) {
 		t.Fatalf("Ask output = %q, want %q", got, want)
 	}
 }
+
+
+func TestParserAcceptsElseAliasesAndUndottedBlockTerminators(t *testing.T) {
+	source := `Let score be 15.
+If score is less than 10:
+    Say "low".
+Else if score is less than 20:
+    Say "middle".
+Else:
+    Say "high".
+End if
+Let count be 0.
+While count is less than 1:
+    Set count to count plus 1.
+End while
+Repeat 2 times:
+    Say count.
+End repeat
+For each item in [1, 2]:
+    Say item.
+End loop
+To identity with value:
+    Give back value.
+End function
+Say identity(count).
+Try:
+    Say "try".
+End try
+Create a class called Box:
+    When creating a Box with value:
+        Remember value as this.value.
+    End constructor
+End class
+Let box be new Box with 7.
+Say box.value.`
+	var output bytes.Buffer
+	if err := RunWithIO(source, "block-aliases.tell", bytes.NewReader(nil), &output); err != nil {
+		t.Fatalf("RunWithIO rejected documented block aliases: %v", err)
+	}
+	const want = "middle\n1\n1\n1\n2\n1\ntry\n7\n"
+	if got := output.String(); got != want {
+		t.Fatalf("output = %q, want %q", got, want)
+	}
+}

@@ -63,3 +63,31 @@ func TestCompileRunsSemanticAnalysis(t *testing.T) {
 		t.Fatalf("expected compiler to reject statically mismatched annotation, got %v", err)
 	}
 }
+
+
+func TestAnalyzeChecksClassConstructionAndInheritance(t *testing.T) {
+	valid := "Create a class called Parent:\nEnd class.\nCreate a class called Child based on Parent:\nEnd class.\nLet pet as Parent be new Child.\nSet pet to new Child."
+	if err := Analyze(valid, "classes.tell"); err != nil {
+		t.Fatalf("subclass assignment should be accepted: %v", err)
+	}
+	invalid := "Create a class called Cat:\nEnd class.\nCreate a class called Dog:\nEnd class.\nLet pet as Cat be new Dog."
+	if err := Analyze(invalid, "classes.tell"); err == nil || !strings.Contains(err.Error(), "type mismatch") {
+		t.Fatalf("expected statically-known class mismatch, got %v", err)
+	}
+}
+
+func TestAnalyzeInfersBuiltinCallReturnTypes(t *testing.T) {
+	if err := Analyze("Let count as number be len([1, 2]).", "builtins.tell"); err != nil {
+		t.Fatalf("known builtin return type should pass: %v", err)
+	}
+	if err := Analyze("Let count as text be len([1, 2]).", "builtins.tell"); err == nil || !strings.Contains(err.Error(), "type mismatch") {
+		t.Fatalf("expected builtin return type mismatch, got %v", err)
+	}
+}
+
+func TestAnalyzeRejectsKnownIncompatibleOperatorTypes(t *testing.T) {
+	source := "Let value as number be \"not a number\" minus 1."
+	if err := Analyze(source, "operator-types.tell"); err == nil || !strings.Contains(err.Error(), "requires numeric operands") {
+		t.Fatalf("expected known numeric-operator mismatch, got %v", err)
+	}
+}

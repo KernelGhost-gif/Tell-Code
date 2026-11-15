@@ -19,6 +19,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Install Go
         uses: actions/setup-go@v5
         with:
@@ -32,12 +34,21 @@ jobs:
         with:
           node-version: '22'
       - name: Run Python runtime tests
-        run: python -m unittest discover -s tests -v
-      - name: Run native tests
+        run: |
+          python -m compileall -q tell tests scripts
+          python -m unittest discover -s tests -v
+      - name: Run native tests, race detector, and vet
         working-directory: native
-        run: go test ./...
+        run: |
+          go test ./...
+          go test -race ./...
+          go vet ./...
       - name: Build Linux, macOS and Windows binaries
         run: ./scripts/build-all.sh
+      - name: Verify process-level runtime conformance
+        run: |
+          python scripts/conformance.py --runtime both --fixtures conformance/smoke-v1.json --native-bin releases/tell-linux-amd64
+          python scripts/conformance.py --runtime both --fixtures conformance/runtime-v1.json --native-bin releases/tell-linux-amd64
       - name: Run Tell source examples as tests
         run: ./releases/tell-linux-amd64 test examples
       - name: Upload native binaries
