@@ -223,7 +223,7 @@
       "name": "undotted loop and function terminators are accepted",
       "filename": "undotted-block-terminators.tell",
       "source_code": "Let count be 0.\nWhile count is less than 1:\n    Set count to count plus 1.\nEnd while\nRepeat 2 times:\n    Say count.\nEnd repeat\nFor each item in [1, 2]:\n    Say item.\nEnd loop\nTo identity with value:\n    Give back value.\nEnd function\nSay identity(count).\nTry:\n    Say \"try\".\nEnd try\n",
-      "expected_stdout": "1\n1\n2\n1\ntry\n",
+      "expected_stdout": "1\n1\n1\n2\n1\ntry\n",
       "expected_stderr": "",
       "expected_exit_code": 0
     },
