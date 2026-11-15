@@ -643,6 +643,23 @@ def _parse_function_header(header: str) -> tuple[str, list[str]] | None:
     return name, params
 
 
+_UNDOTTED_BLOCK_ENDINGS = {
+    "end if", "end while", "end repeat", "end loop",
+    "end function", "end try", "end constructor", "end class",
+}
+
+
+def _normalize_block_line(line: str) -> str:
+    normalized = line.strip().casefold()
+    if normalized == "else:":
+        return "otherwise:"
+    if normalized.startswith("else if ") and normalized.endswith(":"):
+        return "otherwise if " + normalized[len("else if "):]
+    if normalized in _UNDOTTED_BLOCK_ENDINGS:
+        return normalized + "."
+    return normalized
+
+
 class Parser:
     def __init__(self, source: str, filename: str = "<memory>"):
         self.filename = filename
@@ -996,7 +1013,7 @@ class Parser:
             raise TellSyntaxError(str(exc), self.filename, line, column) from exc
 
     def _parse_if_block(self, condition: str, line_no: int, prefix_length: int = len("If ")) -> Node:
-        condition = re.sub(r",\s*then$", "", condition.strip(), flags=re.I).strip()
+        condition = re.sub(r",\\s*then$", "", condition.strip(), flags=re.I).strip()
         condition_ast = self._validate_expression(
             condition, line_no, self._source_column(line_no), prefix_length
         )
@@ -1005,20 +1022,28 @@ class Parser:
         if stop == "end if.":
             return node
 
-        nested_condition = None
+        nested_header = None
         if stop == "otherwise:":
             otherwise, stop = self.parse_block({"otherwise-if", "end if."})
             node.data["otherwise"] = otherwise
             if stop == "end if.":
                 return node
             nested_header = _block_header(stop) if stop is not None else None
-            nested_condition = _take_prefix(nested_header, "otherwise if ") if nested_header else None
         elif stop is not None:
             nested_header = _block_header(stop)
+
+        nested_condition = None
+        nested_prefix_length = len("Otherwise if ")
+        if nested_header is not None:
             nested_condition = _take_prefix(nested_header, "otherwise if ")
+            if nested_condition is None:
+                nested_condition = _take_prefix(nested_header, "else if ")
+                nested_prefix_length = len("Else if ")
 
         if nested_condition:
-            node.data["otherwise"] = [self._parse_if_block(nested_condition, self.index, len("Otherwise if "))]
+            node.data["otherwise"] = [
+                self._parse_if_block(nested_condition, self.index, nested_prefix_length)
+            ]
             return node
         raise TellError(f"If block on line {line_no} needs 'End if.'.")
 
@@ -1032,11 +1057,14 @@ class Parser:
             if not line:
                 continue
             low = line.lower()
-            if "otherwise-if" in stops and low.startswith("otherwise if ") and line.endswith(":"):
+            normalized = _normalize_block_line(line)
+            if "otherwise-if" in stops and normalized.startswith("otherwise if ") and normalized.endswith(":"):
                 return nodes, line
-            if low in stops:
-                return nodes, low
-            if low in {"end if.", "end while.", "end repeat.", "end loop.", "end function.", "end try.", "end constructor.", "end class.", "otherwise:", "if something goes wrong:"}:
+            if normalized in stops:
+                return nodes, normalized
+            if normalized in {"end if.", "end while.", "end repeat.", "end loop.", "end function.", "end try.", "end constructor.", "end class.", "otherwise:", "if something goes wrong:"} or (
+                normalized.startswith("otherwise if ") and normalized.endswith(":")
+            ):
                 raise TellError(f"Unexpected block ending '{line}' on line {line_no}.")
 
             header = _block_header(line)
@@ -1181,7 +1209,7 @@ def format_source(source: str, filename: str = "<memory>") -> str:
     depth = 0
     ends = {"end if.", "end while.", "end repeat.", "end loop.", "end function.", "end try.", "end constructor.", "end class."}
     for line_number, raw in enumerate(lines, start=1):
-        cleaned = Parser.clean(raw).casefold()
+        cleaned = _normalize_block_line(Parser.clean(raw))
         trimmed = raw.strip()
         if not trimmed:
             formatted.append("")
