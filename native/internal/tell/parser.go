@@ -83,6 +83,7 @@ func withSourceLocation(err error, filename string, line, column int) error {
 type node struct {
 	kind, text               string
 	line, column             int
+	conditionColumnOffset   int
 	condition, name, base    string
 	conditionExpr            expression
 	params                   []string
@@ -739,7 +740,34 @@ func stripOptionalThen(condition string) string {
 	return condition
 }
 
-func (p *parser) ifBlock(condition string, lineNo int) (node, error) {
+func normalizeBlockLine(line string) string {
+	normalized := strings.ToLower(strings.TrimSpace(line))
+	if normalized == "else:" {
+		return "otherwise:"
+	}
+	if strings.HasPrefix(normalized, "else if ") && strings.HasSuffix(normalized, ":") {
+		return "otherwise if " + strings.TrimPrefix(normalized, "else if ")
+	}
+	switch normalized {
+	case "end if", "end while", "end repeat", "end loop",
+		"end function", "end try", "end constructor", "end class":
+		return normalized + "."
+	default:
+		return normalized
+	}
+}
+
+func parseOtherwiseIfHeader(header string) (string, int, bool) {
+	if condition, ok := prefixFold(header, "otherwise if "); ok && condition != "" {
+		return condition, len("Otherwise if "), true
+	}
+	if condition, ok := prefixFold(header, "else if "); ok && condition != "" {
+		return condition, len("Else if "), true
+	}
+	return "", 0, false
+}
+
+func (p *parser) ifBlock(condition string, lineNo, prefixLength int) (node, error) {
 	condition = stripOptionalThen(condition)
 	body, stop, err := p.block(map[string]bool{
 		"otherwise:": true, "otherwise-if": true, "end if.": true,
@@ -747,41 +775,31 @@ func (p *parser) ifBlock(condition string, lineNo int) (node, error) {
 	if err != nil {
 		return node{}, err
 	}
-	result := node{kind: "if", condition: strings.TrimSpace(condition), body: body, line: lineNo, column: p.columnAt(lineNo)}
+	result := node{
+		kind: "if", condition: strings.TrimSpace(condition), body: body,
+		line: lineNo, column: p.columnAt(lineNo), conditionColumnOffset: prefixLength,
+	}
 	if stop == "end if." {
 		return result, nil
 	}
+	nestedHeader := ""
 	if stop == "otherwise:" {
 		other, otherStop, err := p.block(map[string]bool{"otherwise-if": true, "end if.": true})
 		if err != nil {
 			return node{}, err
 		}
-		if strings.HasPrefix(strings.ToLower(otherStop), "otherwise if ") {
-			nestedHeader, _ := blockHeader(otherStop)
-			nestedCondition, ok := prefixFold(nestedHeader, "otherwise if ")
-			if !ok {
-				return node{}, fail("invalid Otherwise if block on line %d", p.index)
-			}
-			nested, err := p.ifBlock(nestedCondition, p.index)
-			if err != nil {
-				return node{}, err
-			}
-			result.otherwise = []node{nested}
+		if otherStop == "end if." {
+			result.otherwise = other
 			return result, nil
 		}
-		if otherStop != "end if." {
-			return node{}, fail("if block on line %d needs 'End if.'", lineNo)
-		}
-		result.otherwise = other
-		return result, nil
+		nestedHeader, _ = blockHeader(otherStop)
+	} else if stop != "" {
+		nestedHeader, _ = blockHeader(stop)
 	}
-	if strings.HasPrefix(strings.ToLower(stop), "otherwise if ") {
-		nestedHeader, _ := blockHeader(stop)
-		nestedCondition, ok := prefixFold(nestedHeader, "otherwise if ")
-		if !ok {
-			return node{}, fail("invalid Otherwise if block on line %d", p.index)
-		}
-		nested, err := p.ifBlock(nestedCondition, p.index)
+
+	nestedCondition, nestedPrefixLength, ok := parseOtherwiseIfHeader(nestedHeader)
+	if ok {
+		nested, err := p.ifBlock(nestedCondition, p.index, nestedPrefixLength)
 		if err != nil {
 			return node{}, err
 		}
@@ -811,14 +829,15 @@ func (p *parser) block(stops map[string]bool) ([]node, string, error) {
 			continue
 		}
 		low := strings.ToLower(line)
-		if stops["otherwise-if"] && strings.HasPrefix(low, "otherwise if ") && strings.HasSuffix(line, ":") {
+		normalized := normalizeBlockLine(line)
+		if stops["otherwise-if"] && strings.HasPrefix(normalized, "otherwise if ") && strings.HasSuffix(normalized, ":") {
 			return out, line, nil
 		}
-		if stops[low] {
-			return out, low, nil
+		if stops[normalized] {
+			return out, normalized, nil
 		}
 		header, hasHeader := blockHeader(line)
-		if low == "end if." || low == "end while." || low == "end repeat." || low == "end loop." || low == "end function." || low == "end try." || low == "end constructor." || low == "end class." || low == "otherwise:" || low == "if something goes wrong:" {
+		if normalized == "end if." || normalized == "end while." || normalized == "end repeat." || normalized == "end loop." || normalized == "end function." || normalized == "end try." || normalized == "end constructor." || normalized == "end class." || normalized == "otherwise:" || normalized == "if something goes wrong:" || (strings.HasPrefix(normalized, "otherwise if ") && strings.HasSuffix(normalized, ":")) {
 			return nil, "", fail("unexpected block ending %q on line %d", line, lineNo)
 		}
 		if name, base, ok := parseClassHeader(header); hasHeader && ok {
@@ -849,7 +868,7 @@ func (p *parser) block(stops map[string]bool) ([]node, string, error) {
 			continue
 		}
 		if condition, ok := prefixFold(header, "if "); hasHeader && ok && condition != "" {
-			conditional, err := p.ifBlock(condition, lineNo)
+			conditional, err := p.ifBlock(condition, lineNo, len("If "))
 			if err != nil {
 				return nil, "", err
 			}
@@ -1013,7 +1032,7 @@ func validateNodeExpressions(nodes []node, lines []string, filename string) erro
 		switch current.kind {
 		case "if":
 			expressionText = current.condition
-			column += len("If ")
+			column += current.conditionColumnOffset
 		case "while":
 			expressionText = current.condition
 			column += len("While ")
