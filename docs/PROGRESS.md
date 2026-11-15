@@ -95,3 +95,11 @@ The following work is on `modernization/0.4-foundation`; it has not been merged 
 - Both parsers now accept the optional `, then` suffix on `If` and `Otherwise if` headers. The Go parser also validates malformed `Let` and `Set` right-hand expressions during parsing instead of deferring those failures to execution.
 - The process-conformance harness can invoke `--types` per fixture. The shared contract now covers class mismatch/subtyping, builtin return inference, known operator mismatch, optional `, then`, and malformed declaration syntax, alongside exact process output and exit codes.
 - These are targeted parity improvements. The production statement/block parsers remain separate and line-oriented; remaining host/runtime and standard-library differences still require further shared fixtures and staged migrations. Validation is delegated to the branch's Linux/Windows CI; do not mark the milestone verified until those runs complete.
+
+ 
+## 2026-11-15 parser grammar convergence
+
+- Both production parsers accept the documented conditional aliases: `Else if` maps to `Otherwise if`, and `Else` maps to `Otherwise`.
+- Block terminators accept both documented spellings, with or without a final period, for If, While, Repeat, For each, Function, Try, Constructor, and Class blocks.
+- The native parser preserves the source offset for nested `Else if` and `Otherwise if` condition expressions when formatting diagnostics.
+- Three shared fresh-process fixtures exercise conditional aliases and undotted block endings across loops, functions, classes, constructors, and Try blocks.
