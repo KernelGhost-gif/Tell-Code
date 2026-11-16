@@ -2,8 +2,6 @@ name: TellC LLVM compiler
 
 on:
   push:
-    branches:
-      - "fix/tellc-pr12-review"
     paths:
       - "TellC/**"
       - ".github/workflows/tellc.yml"
