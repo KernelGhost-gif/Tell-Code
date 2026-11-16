@@ -1,0 +1,5 @@
+# Both declarations refer to functions exposed with the C ABI.
+extern c function add(int32 left, int32 right) returns int32 as "c_add"
+extern swift function double_value(float64 value) returns float64 as "swift_double_value"
+let number result be add(2, 3)
+say double_value(1.5)
