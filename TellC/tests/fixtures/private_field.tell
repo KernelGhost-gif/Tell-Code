@@ -1,0 +1,11 @@
+object Vault:
+    own:
+        let text self secret be "top-secret"
+    others:
+        to reveal() out text:
+            give back self.secret
+        end function
+end object
+
+let Vault box be Vault()
+say box.secret
