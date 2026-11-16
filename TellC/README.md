@@ -13,7 +13,7 @@ Newlines terminate statements; semicolons separate statements on the same line. 
 
 The initial subset supports typed declarations, assignment to names, output, return, functions, if/otherwise, while, literals, lists, calls, member and index access, and common symbolic and word operators. It does not yet implement the entire Tell grammar, including natural-language comparison phrases, classes, imports, and named call arguments. Strings currently support basic escapes; source columns count bytes. Unsupported syntax is reported as a parse error.
 
-Build from the repository root with CMake and a compatible LLVM build. The compiler was tested against LLVM 24 development sources on Apple Silicon. Set `LLVM_DIR` to the directory that contains `LLVMConfig.cmake`.
+Build from the repository root with CMake and a compatible LLVM build. TellC builds with LLVM 24 development sources on Apple Silicon and LLVM 21 on Debian x86-64. Set `LLVM_DIR` to the directory that contains `LLVMConfig.cmake`.
 
 ```sh
 cmake -S TellC -B TellC/build -DLLVM_DIR=/path/to/llvm-build/lib/cmake/llvm
@@ -22,6 +22,12 @@ TellC/build/tellc TellC/examples/objects.tell -o macbook
 ```
 
 The default output is `a.out`. TellC uses `llc` from the configured LLVM build for object generation and Clang on `PATH` to link. The LLVM build needs an `llc` binary with a backend for the target machine. The public parser API is `tell::parse` in `include/tell/parser.hpp`.
+
+On Debian x86-64 with LLVM 21 installed, configure CMake with
+`-DLLVM_DIR=/usr/lib/llvm-21/lib/cmake/llvm`. A native installation defaults
+to the `llc` next to that LLVM build. For a cross-built compiler, set
+`-DTELL_LLC_PATH=llc-21` so it finds the matching tool on the Debian machine's
+`PATH`. TellC uses `clang` on `PATH` for linking on both macOS and Linux.
 
 Typed functions can call themselves or other typed functions, including functions declared later in the file.
 

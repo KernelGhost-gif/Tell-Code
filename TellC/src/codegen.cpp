@@ -1,4 +1,5 @@
 #include "codegen.hpp"
+#include <llvm/Config/llvm-config.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Verifier.h>
@@ -33,7 +34,11 @@ struct Object {
 class Generator {
     llvm::LLVMContext context;
     llvm::Module module{"tell", context};
+#if LLVM_VERSION_MAJOR >= 24
     llvm::IRBuilder<> ir{module};
+#else
+    llvm::IRBuilder<> ir{context};
+#endif
     std::map<std::string, Value> variables;
     llvm::FunctionCallee printf_fn;
     std::map<std::string, Object> objects;

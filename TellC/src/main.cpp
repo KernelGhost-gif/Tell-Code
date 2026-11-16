@@ -52,7 +52,9 @@ int main(int argc,char** argv) {
         }
         if(triple.empty()) throw std::runtime_error("could not read Clang target triple");
         const std::string target_arg="-mtriple="+triple;
-        if(run(TELL_LLC_PATH,{TELL_LLC_PATH,"-filetype=obj",target_arg.c_str(),ir_file.path.c_str(),"-o",object_file.path.c_str()})!=0) {
+        if (run(TELL_LLC_PATH, {TELL_LLC_PATH, "-filetype=obj", "-relocation-model=pic",
+                               target_arg.c_str(), ir_file.path.c_str(), "-o",
+                               object_file.path.c_str()}) != 0) {
             std::cerr<<"tellc: LLVM machine code generation failed\n";return 1;
         }
         if(run("clang",{"clang",object_file.path.c_str(),"-o",output.c_str()})!=0) {
