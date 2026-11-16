@@ -23,4 +23,12 @@ if(BUILD_TESTING)
   add_executable(tell_parser_objects_test tests/objects.cpp)
   target_link_libraries(tell_parser_objects_test PRIVATE tell_parser)
   add_test(NAME object_ast COMMAND tell_parser_objects_test)
+  add_test(
+    NAME compiler_integration
+    COMMAND ${CMAKE_COMMAND}
+      "-DTELL_COMPILER=$<TARGET_FILE:tellc>"
+      "-DTELL_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
+      "-DTELL_WORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/integration"
+      -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/compiler_integration.cmake"
+  )
 endif()
