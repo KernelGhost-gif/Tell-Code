@@ -10,3 +10,5 @@ releases/*.tmp
 *.tell-cache
 .DS_Store
 *.test
+
+/TellC/build-standalone/

@@ -26,27 +26,35 @@ end function
 
 The compiler checks argument, initializer, and return types. It does not silently infer or weaken function signatures to accommodate untyped code.
 
-Build from the repository root with CMake and a compatible LLVM build. TellC builds with LLVM 24 development sources on Apple Silicon and LLVM 21 on Debian x86-64. The current command-line driver targets macOS and Linux and requires Clang plus a matching LLVM `llc` on `PATH`. Set `LLVM_DIR` to the directory that contains `LLVMConfig.cmake`.
+On Apple silicon, build the standalone compiler from the repository root:
 
 ```sh
-cmake -S TellC -B TellC/build -DLLVM_DIR=/path/to/llvm-build/lib/cmake/llvm
-cmake --build TellC/build
-TellC/build/tellc TellC/examples/objects.tell -o macbook
+LLVM_SOURCE=/path/to/llvm-project ./scripts/build-tellc-macos.sh
+build/tellc-macos-arm64/tellc/tellc TellC/examples/objects.tell -o macbook
 ```
 
-The default output is `a.out`. TellC uses `llc` from the configured LLVM build for object generation and Clang on `PATH` to link. The LLVM build needs an `llc` binary with a backend for the target machine. The public parser API is `tell::parse` in `include/tell/parser.hpp`.
+The script needs CMake, Ninja, Xcode command-line tools and the matching LLVM
+24 source tree at build time. Set `TELL_BUILD_ROOT` to change its build
+location and `JOBS` to control parallelism. The result is one ARM64 executable;
+LLVM and the Mach-O linker are linked into it. The compiler generates its object
+code and links it in memory, writing only the requested executable. It does not
+need `clang`, `llc`, LLD, an SDK, or a temporary directory at runtime. The
+compiler and its output target macOS 11 or later and use macOS system libraries.
+The embedded linker consumes LLVM's internal Mach-O input cache, so its source
+and libraries must come from the same LLVM revision as the compiler's headers.
 
-On Debian x86-64 with LLVM 21 installed, configure CMake with
-`-DLLVM_DIR=/usr/lib/llvm-21/lib/cmake/llvm`. A native installation defaults
-to the `llc` next to that LLVM build. For a cross-built compiler, set
-`-DTELL_LLC_PATH=llc-21` so it finds the matching tool on the Debian machine's
-`PATH`. TellC uses `clang` on `PATH` for linking on both macOS and Linux.
+For distribution outside your own Mac, Apple code signing and notarization may
+be needed to avoid Gatekeeper warnings. A build made with newer LLVM libraries
+or a newer deployment target may not run on macOS 11; use the script above to
+build the dependencies and compiler together.
 
-Run parser and compiler integration tests with:
+On Linux, build with CMake and a compatible LLVM installation. Set `LLVM_DIR` to
+the directory containing `LLVMConfig.cmake`. TellC uses `llc` from that LLVM
+build and Clang on `PATH` to link. For cross-built compilers, set
+`-DTELL_LLC_PATH=llc-21` (or the matching tool) to find it on the target's
+`PATH`. The public parser API is `tell::parse` in `include/tell/parser.hpp`.
 
-```sh
-ctest --test-dir TellC/build --output-on-failure
-```
+Run parser and compiler integration tests with `ctest --test-dir <build-directory> --output-on-failure`.
 
 The integration test compiles and runs the factorial and object examples, and verifies that invalid private access, parameter types, return types, and incomplete return paths fail compilation. The LLVM-backed test job runs on Linux in GitHub Actions.
 

@@ -4,6 +4,13 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/raw_ostream.h>
+#ifdef TELL_STANDALONE_MACOS
+#include <llvm/MC/TargetRegistry.h>
+#include <llvm/Target/TargetMachine.h>
+#include <llvm/TargetParser/Host.h>
+#include <llvm/Support/TargetSelect.h>
+#include <llvm/IR/LegacyPassManager.h>
+#endif
 #include <algorithm>
 #include <cctype>
 #include <map>
@@ -397,7 +404,11 @@ public:
         printf_fn = module.getOrInsertFunction("printf", signature);
     }
 
-    void generate(const Program& program, const std::string& path) {
+    void generate(const Program& program, const std::string& path
+#ifdef TELL_STANDALONE_MACOS
+                  , llvm::SmallVectorImpl<char>* object = nullptr
+#endif
+                  ) {
         declare(program);
         for (const auto& stmt : program.statements) {
             if (stmt.kind != Stmt::Kind::Object) continue;
@@ -415,11 +426,38 @@ public:
         }
         ir.CreateRet(ir.getInt32(0));
         if(llvm::verifyModule(module,&llvm::errs())) throw std::runtime_error("generated invalid LLVM IR");
+#ifdef TELL_STANDALONE_MACOS
+        if (object) {
+            llvm::InitializeNativeTarget();
+            llvm::InitializeNativeTargetAsmPrinter();
+            llvm::Triple triple("arm64-apple-macosx11.0.0");
+            std::string error;
+            const auto* target = llvm::TargetRegistry::lookupTarget(triple, error);
+            if (!target) throw std::runtime_error("cannot select LLVM target: " + error);
+            llvm::TargetOptions options;
+            std::unique_ptr<llvm::TargetMachine> machine(target->createTargetMachine(
+                triple, "generic", "", options, llvm::Reloc::PIC_));
+            if (!machine) throw std::runtime_error("cannot create LLVM target machine");
+            module.setTargetTriple(triple);
+            module.setDataLayout(machine->createDataLayout());
+            llvm::raw_svector_ostream out(*object);
+            llvm::legacy::PassManager passes;
+            if (machine->addPassesToEmitFile(passes, out, nullptr, llvm::CodeGenFileType::ObjectFile))
+                throw std::runtime_error("LLVM cannot emit object code for this target");
+            passes.run(module);
+            return;
+        }
+#endif
         std::error_code ec;llvm::raw_fd_ostream out(path,ec);if(ec) throw std::runtime_error("cannot write temporary LLVM IR: "+ec.message());module.print(out,nullptr);out.flush();if(out.has_error()) throw std::runtime_error("cannot write temporary LLVM IR");
     }
 };
 } // namespace
 
+#ifdef TELL_STANDALONE_MACOS
+void generate_object(const Program& program, llvm::SmallVectorImpl<char>& object) {
+    Generator{}.generate(program, "", &object);
+}
+#endif
 void generate_ir(const Program& program, const std::string& path) {
     Generator{}.generate(program, path);
 }
