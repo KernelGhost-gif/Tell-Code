@@ -11,6 +11,8 @@ Current version: **0.3.7**.
 
 Tell can optionally call functions from installed Python modules and JavaScript/Node.js modules from either runtime. Foreign calls cross a JSON boundary and run in a separate process. See [foreign-language interoperability](docs/INTEROPERABILITY.md), [the Python example](examples/python_interop.tell), and [the JavaScript example](examples/javascript_interop.tell).
 
+The experimental [TellC compiler](TellC/README.md) builds native executables with LLVM. It uses a typed Tell dialect with support for objects and typed methods.
+
 ## A first program
 
 ```tell

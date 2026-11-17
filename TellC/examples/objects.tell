@@ -1,0 +1,15 @@
+object MacBook:
+    own:
+        let text self password be "12345678"
+    others:
+        to check password(text: Password) out bool:
+            if Password = password:
+                give back true
+            end if
+            give back false
+        end function
+end object
+
+let MacBook laptop be MacBook()
+say laptop.check password("12345678")
+say laptop.check password("wrong")
