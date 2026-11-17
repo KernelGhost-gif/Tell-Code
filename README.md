@@ -11,7 +11,7 @@ Current version: **0.3.7**.
 
 Tell can optionally call functions from installed Python modules and JavaScript/Node.js modules from either runtime. Foreign calls cross a JSON boundary and run in a separate process. See [foreign-language interoperability](docs/INTEROPERABILITY.md), [the Python example](examples/python_interop.tell), and [the JavaScript example](examples/javascript_interop.tell).
 
-The experimental [TellC compiler](TellC/README.md) builds native executables with LLVM. It uses a typed Tell dialect with support for objects and typed methods.
+The experimental [TellC compiler](TellC/README.md) uses LLVM to build native executables from a separate, strongly typed Tell dialect. It is distinct from the Go runtime's bytecode compiler.
 
 ## A first program
 
@@ -81,6 +81,36 @@ tell run examples/hello.tbc
 
 Use `tell build source.tell --output output.tbc` to choose the artifact path. The compiler supports functions, recursion, closures, core control flow, local modules embedded in the artifact, `Try`/`Raise`, and the initial class model with constructors, fields, methods, single inheritance, and overrides. `Finally` and other language features remain unsupported in bytecode; see the [CLI reference](docs/CLI_REFERENCE.md) for its exact subset and limits. [examples/compiled-objects.tell](examples/compiled-objects.tell) demonstrates an object program that can be run by either interpreter or compiled to bytecode by the native runtime.
 
+## Compile native executables with TellC
+
+TellC is an experimental C++ compiler that translates its typed dialect through LLVM into a native executable. Its dialect is separate from the dynamically typed language used by the Go and Python runtimes; programs are not necessarily interchangeable. For example:
+
+```tell
+to factorial(number: n) out number:
+    if n <= 1:
+        return 1
+    end if
+    return n * factorial(n - 1)
+end function
+
+let number result be factorial(5)
+say result
+```
+
+Declarations specify a type, function and method parameters use `type: name`, and every function declares a result with `out type` (or `out void`). The compiler checks initializers, arguments, and returns, and requires a value-returning function to return on every path. Built-in types include `number` (signed 64-bit integer), `decimal` (64-bit floating point), `text`, and `bool`. Newlines end statements; semicolons can separate statements on one line. Keywords and built-in type names are case insensitive; object type names are case sensitive.
+
+The executable backend supports typed functions, integer arithmetic, equality, `if` blocks, output and interpolation, and objects with fields and typed methods. Object members can be private (`own`) or public (`others`); see [the object example](TellC/examples/objects.tell). The parser accepts some constructs that the backend cannot yet compile, including assignment, loops, and lists. Decimal arithmetic, imports, and executable foreign calls are also unsupported. TellC reports unsupported syntax or compilation features instead of silently running them; see the [TellC guide](TellC/README.md) for the complete current scope.
+
+On Apple silicon, build the standalone compiler from the repository root with CMake, Ninja, Xcode command-line tools, and a matching LLVM 24 source tree:
+
+```sh
+LLVM_SOURCE=/path/to/llvm-project ./scripts/build-tellc-macos.sh
+build/tellc-macos-arm64/tellc/tellc TellC/examples/factorial.tell -o factorial
+./factorial
+```
+
+The example prints `120`. The standalone compiler embeds LLVM code generation and the Mach-O linker; it and its output target macOS 11 or later. A Linux build uses a compatible LLVM installation, `llc`, and Clang. Build details, dependencies, and tests are in the [TellC guide](TellC/README.md). `tellc source.tell` defaults to `a.out`; use `-o` to choose the output and `tellc --llvm-version` to inspect its LLVM version.
+
 ## Run the Python version
 
 Python 3.10 or newer is required for this runtime only.
@@ -132,7 +162,8 @@ After installing Tell with `python -m pip install .`, launch it with `tell-ide` 
 | Basic file read/write/append | Yes | Yes |
 | Try / error handling | Yes | Yes |
 | Math, random, JSON, statistics, date/time libraries | Core functions | Python-backed allowlist |
-| Full Python module ecosystem | Optional Python process bridge | Python imports in-process |\n| JavaScript/Node.js module functions | Optional Node.js process bridge | Optional Node.js process bridge |
+| Full Python module ecosystem | Optional Python process bridge | Python imports in-process |
+| JavaScript/Node.js module functions | Optional Node.js process bridge | Optional Node.js process bridge |
 | Constructors, fields, instance methods, single inheritance | Yes | Yes |
 | Local `.tell` modules with public exports and import caching | Yes | Yes |
 | Static methods, access modifiers, multiple inheritance | Planned | Planned |
@@ -321,6 +352,7 @@ Tell-Code/
 ├── native/                 # Standalone Go runtime and tests
 │   ├── cmd/tell/            # Native CLI entry point
 │   └── internal/tell/       # Parser, evaluator, and runtime
+├── TellC/                  # Experimental LLVM compiler and typed dialect
 ├── scripts/                # Build and test helpers
 ├── tell/                   # Python interpreter
 ├── tests/                  # Python interpreter tests
