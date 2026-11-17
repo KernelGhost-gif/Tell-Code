@@ -1,0 +1,7 @@
+to maybe(number: value) out number:
+    if value > 0:
+        give back value
+    end if
+end function
+
+say maybe(1)

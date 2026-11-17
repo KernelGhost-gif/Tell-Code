@@ -1,0 +1,5 @@
+to answer() out number:
+    give back "forty-two"
+end function
+
+say answer()

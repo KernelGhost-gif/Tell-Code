@@ -1,0 +1,5 @@
+to describe(number: age) out text:
+    give back "age"
+end function
+
+say describe("twenty")

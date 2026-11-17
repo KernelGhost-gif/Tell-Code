@@ -1,0 +1,46 @@
+name: TellC LLVM compiler
+
+on:
+  push:
+    paths:
+      - "TellC/**"
+      - ".github/workflows/tellc.yml"
+  pull_request:
+    paths:
+      - "TellC/**"
+      - ".github/workflows/tellc.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tellc-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-llvm:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install LLVM 21 and Clang
+        run: |
+          curl -fsSL https://apt.llvm.org/llvm.sh -o llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 21
+          sudo apt-get update
+          sudo apt-get install -y llvm-21-dev clang-21
+          echo "/usr/lib/llvm-21/bin" >> "$GITHUB_PATH"
+
+      - name: Configure TellC
+        run: |
+          cmake -S TellC -B build/tellc \
+            -DLLVM_DIR=/usr/lib/llvm-21/lib/cmake/llvm \
+            -DTELL_LLC_PATH=/usr/lib/llvm-21/bin/llc
+
+      - name: Build TellC
+        run: cmake --build build/tellc --parallel 2
+
+      - name: Run parser and compiler integration tests
+        run: ctest --test-dir build/tellc --output-on-failure
