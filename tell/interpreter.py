@@ -1,3 +1,10 @@
+"""Deprecated Python compatibility runtime.
+
+New language and performance work targets the native Go runtime. This module
+remains available during the migration so existing Python integrations keep
+working while their dependencies are moved.
+"""
+
 from __future__ import annotations
 
 import csv

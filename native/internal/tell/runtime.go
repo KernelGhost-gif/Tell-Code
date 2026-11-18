@@ -41,11 +41,13 @@ type namedCallable func([]any, map[string]any) (any, error)
 type pythonModule struct{ name string }
 type pythonFunction struct{ module, name string }
 type userFunction struct {
-	name    string
-	params  []string
-	body    []node
-	closure *env
-	runtime *runtime
+	name       string
+	params     []string
+	paramTypes []string
+	returnType string
+	body       []node
+	closure    *env
+	runtime    *runtime
 }
 type userClass struct {
 	name        string
@@ -95,10 +97,12 @@ func typeMatches(typeName string, value any, e *env) (bool, error) {
 		return true, nil
 	case "nothing":
 		return value == nil, nil
-	case "boolean":
+	case "boolean", "bool":
 		_, ok := value.(bool)
 		return ok, nil
-	case "number":
+	case "void":
+		return value == nil, nil
+	case "number", "decimal":
 		switch value.(type) {
 		case float64, int, int64:
 			return true, nil

@@ -141,7 +141,7 @@ func (r *runtime) execNode(n node, e *env) error {
 		}
 		return nil
 	case "function":
-		e.set(n.name, &userFunction{name: n.name, params: n.params, body: n.body, closure: e, runtime: r})
+		e.set(n.name, &userFunction{name: n.name, params: n.params, paramTypes: n.paramTypes, returnType: n.returnType, body: n.body, closure: e, runtime: r})
 		return nil
 	case "class":
 		class := &userClass{name: n.name, methods: make(map[string]*userFunction)}
@@ -159,7 +159,7 @@ func (r *runtime) execNode(n node, e *env) error {
 		}
 		hasConstructor := false
 		for _, member := range n.body {
-			function := &userFunction{name: member.name, params: member.params, body: member.body, closure: e, runtime: r}
+			function := &userFunction{name: member.name, params: member.params, paramTypes: member.paramTypes, returnType: member.returnType, body: member.body, closure: e, runtime: r}
 			if member.kind == "constructor" {
 				if strings.ToLower(member.name) != strings.ToLower(n.name) {
 					return fail("constructor name %q does not match class %q", member.name, n.name)

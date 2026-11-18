@@ -2,10 +2,7 @@
 
 **Tell is a sentence-first programming language.** Its goal is to make code read like clear instructions written in ordinary language, while keeping familiar programming capabilities underneath.
 
-Tell has two runtimes:
-
-- **Native runtime:** a standalone executable written in Go. It runs `.tell` programs directly and does not need Python or Go installed on the user's machine.
-- **Python runtime:** the original interpreter, kept for compatibility, experimentation, and people who want to embed or extend Tell from Python.
+Tell's primary runtime is the standalone Go executable. The Python interpreter is deprecated and remains available only as a compatibility bridge while existing projects migrate. New language features target Go; new desktop editor work targets Rust/GPUI Studio.
 
 Current version: **0.3.7**.
 
@@ -81,6 +78,30 @@ tell run examples/hello.tbc
 
 Use `tell build source.tell --output output.tbc` to choose the artifact path. The compiler supports functions, recursion, closures, core control flow, local modules embedded in the artifact, `Try`/`Raise`, and the initial class model with constructors, fields, methods, single inheritance, and overrides. `Finally` and other language features remain unsupported in bytecode; see the [CLI reference](docs/CLI_REFERENCE.md) for its exact subset and limits. [examples/compiled-objects.tell](examples/compiled-objects.tell) demonstrates an object program that can be run by either interpreter or compiled to bytecode by the native runtime.
 
+## Typed Tell on the native Go runtime
+
+The Go runtime supports an opt-in typed dialect with type-first declarations
+and explicit function signatures:
+
+~~~tell
+to factorial(number: n) out number:
+    if n <= 1:
+        give back 1
+    end if
+    give back n * factorial(n - 1)
+end function
+
+let number answer be factorial(5)
+say answer
+~~~
+
+Use `tell --typed native/examples/native-typed.tell` to require explicit
+types for variables, function parameters, and return values. The same strict
+validation is available through `tell check --typed` and `tell build --typed`.
+Typed parameter and return contracts are enforced during normal execution
+and preserved in bytecode. Existing dynamic Tell programs remain supported
+without `--typed`; see the [typed Go dialect guide](docs/TYPED_TELL.md).
+
 ## Compile native executables with TellC
 
 TellC is an experimental C++ compiler that translates its typed dialect through LLVM into a native executable. Its dialect is separate from the dynamically typed language used by the Go and Python runtimes; programs are not necessarily interchangeable. For example:
@@ -111,9 +132,9 @@ build/tellc-macos-arm64/tellc/tellc TellC/examples/factorial.tell -o factorial
 
 The example prints `120`. The standalone compiler embeds LLVM code generation and the Mach-O linker; it and its output target macOS 11 or later. A Linux build uses a compatible LLVM installation, `llc`, and Clang. Build details, dependencies, and tests are in the [TellC guide](TellC/README.md), [build guide](TellC/docs/BUILDING.md), and [test guide](TellC/docs/TESTING.md). `tellc source.tell` defaults to `a.out`; use `-o` to choose the output and `tellc --llvm-version` to inspect its LLVM version.
 
-## Run the Python version
+## Legacy Python runtime (deprecated)
 
-Python 3.10 or newer is required for this runtime only.
+Python 3.10 or newer is required only for this legacy compatibility runtime. New development should target the native Go runtime.
 
 ```bash
 python tell.py examples/hello.tell
@@ -132,15 +153,17 @@ python -m pip install .
 tell examples/hello.tell
 ```
 
-## Desktop IDE
+## Native desktop editor
 
-Tell includes a Python Tk desktop IDE with a tabbed `.tell` editor, line numbers, syntax colours, block-aware indentation, file open/save, Find, and a persistent interactive shell. Run, syntax check, bytecode build, and project tests invoke the native Go runtime when it is available. The Python runtime is the fallback. The IDE is optional and does not change the standalone native runtime.
+The replacement editor is the early Rust/GPUI application in [studio/](studio/README.md). It opens one Tell source file, supports basic editing and saving, and runs the native Go executable. Build it from the repository root:
 
-```powershell
-python -m tell ide
-```
+~~~sh
+cargo run --manifest-path studio/Cargo.toml -- path/to/program.tell
+~~~
 
-After installing Tell with `python -m pip install .`, launch it with `tell-ide` (or `tell ide`). Tkinter is included with the standard Windows Python installer; on some Linux distributions install `python3-tk`. See the [IDE guide](docs/IDE.md) for shortcuts and runtime selection.
+Set TELL_NATIVE_EXECUTABLE to the Go executable path when it is not available as tell on PATH. This is an initial editor foundation, not yet a full Zed-style IDE; tabs, diagnostics, language-server integration, undo/redo, and project navigation remain future work.
+
+The Python/Tk IDE is deprecated and remains temporarily available as a compatibility fallback through python -m tell ide, which prints a deprecation warning. New installations no longer include the separate tell-ide console command. See the [migration guide](docs/IDE.md).
 
 ## Language features
 
@@ -169,7 +192,7 @@ After installing Tell with `python -m pip install .`, launch it with `tell-ide` 
 | Static methods, access modifiers, multiple inheritance | Planned | Planned |
 | Async, package manager | Planned | Planned |
 
-The native and Python runtimes aim to share the same core syntax. The Python runtime currently has a broader set of built-ins and standard-library behavior. This is an evolving language, not a claim of complete Python compatibility.
+The Go runtime is the primary implementation and the Python runtime is maintained only for compatibility during migration. Cross-runtime differences remain; use the Go executable for new projects. This is an evolving language, not a claim of complete Python compatibility.
 
 ## Syntax guide
 

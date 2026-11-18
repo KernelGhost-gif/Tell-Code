@@ -1,0 +1,10 @@
+[package]
+name = "tell-studio"
+version = "0.1.0"
+edition = "2021"
+description = "Native Tell source editor built with Rust and GPUI"
+license = "MIT"
+
+[dependencies]
+gpui = { git = "https://github.com/zed-industries/zed", rev = "f3626706fa6855274a561f8f4aebf40666051596" }
+gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "f3626706fa6855274a561f8f4aebf40666051596" }

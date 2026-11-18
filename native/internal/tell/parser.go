@@ -87,6 +87,8 @@ type node struct {
 	condition, name, base    string
 	conditionExpr            expression
 	params                   []string
+	paramTypes               []string
+	returnType               string
 	body, otherwise, handler []node
 	simple                   *simpleStatement
 }
@@ -307,7 +309,13 @@ func parseSimpleStatement(source string, line, column int) *simpleStatement {
 		if separated {
 			name, annotation, annotated := splitFoldOnce(binding, " as ")
 			if !annotated {
-				name = binding
+				// Also accept type-first declarations such as "Let number count be 3".
+				parts := strings.Fields(binding)
+				if len(parts) == 2 && identifier(parts[0]) && identifier(parts[1]) {
+					annotation, name, annotated = parts[0], parts[1], true
+				} else {
+					name = binding
+				}
 			}
 			if strings.Contains(binding, ",") && !annotated {
 				if names, valid := parseLoopNames(binding); valid && len(names) > 1 {
@@ -658,78 +666,130 @@ func newSetValue(values []any) setValue {
 	return result
 }
 
-func parseConstructorHeader(header string) (name string, params []string, ok bool) {
+func parseConstructorHeader(header string) (name string, params, paramTypes []string, ok bool) {
 	rest, ok := prefixFold(header, "when creating ")
 	if !ok {
-		return "", nil, false
+		return "", nil, nil, false
 	}
-	articleRest := rest
-	rest, hasArticle := prefixFold(articleRest, "an ")
+	rest, hasArticle := prefixFold(rest, "an ")
 	if !hasArticle {
-		rest, hasArticle = prefixFold(articleRest, "a ")
+		rest, hasArticle = prefixFold(header[len("when creating "):], "a ")
 	}
 	if !hasArticle {
-		return "", nil, false
+		return "", nil, nil, false
 	}
 	name, tail := firstWord(rest)
 	if !identifier(name) {
-		return "", nil, false
+		return "", nil, nil, false
 	}
 	if tail != "" {
 		tail, ok = prefixFold(tail, "with ")
 		if !ok {
-			return "", nil, false
+			return "", nil, nil, false
 		}
-		params = splitAnd(tail)
-		for index, param := range params {
-			parsed, valid := parseParameterText(param)
-			if !valid {
-				return "", nil, false
+		parts := splitAnd(tail)
+		typed := len(parts) > 0 && strings.Contains(parts[0], ":")
+		for _, parameter := range parts {
+			if typed {
+				typeName, parameterName, separated := splitFoldOnce(parameter, ":")
+				if !separated || !identifier(typeName) || !identifier(parameterName) {
+					return "", nil, nil, false
+				}
+				params = append(params, parameterName)
+				paramTypes = append(paramTypes, typeName)
+			} else {
+				parsed, valid := parseParameterText(parameter)
+				if !valid {
+					return "", nil, nil, false
+				}
+				params = append(params, parsed)
+				paramTypes = append(paramTypes, "")
 			}
-			params[index] = parsed
 		}
 		if !validParameters(params) {
-			return "", nil, false
+			return "", nil, nil, false
 		}
 	}
-	return name, params, true
+	return name, params, paramTypes, true
 }
 
-func parseFunctionHeader(header string) (name string, params []string, ok bool) {
+func parseFunctionHeader(header string) (name string, params, paramTypes []string, returnType string, ok bool) {
 	rest, ok := prefixFold(header, "to ")
 	if !ok {
 		rest, ok = prefixFold(header, "define a function called ")
 	}
 	if !ok {
-		return "", nil, false
+		return "", nil, nil, "", false
 	}
 	name, tail := firstWord(rest)
 	if !identifier(name) {
-		return "", nil, false
+		return "", nil, nil, "", false
 	}
-	if strings.HasPrefix(tail, "(") && strings.HasSuffix(tail, ")") {
-		inner := strings.TrimSpace(tail[1 : len(tail)-1])
+
+	if strings.HasPrefix(tail, "(") {
+		close := strings.Index(tail, ")")
+		if close < 0 {
+			return "", nil, nil, "", false
+		}
+		inner := strings.TrimSpace(tail[1:close])
+		suffix := strings.TrimSpace(tail[close+1:])
+		if suffix != "" {
+			resultType, hasOut := prefixFold(suffix, "out ")
+			if !hasOut || !identifier(resultType) {
+				return "", nil, nil, "", false
+			}
+			returnType = resultType
+		}
 		if inner != "" {
-			params = splitTop(inner, ",")
+			parts := splitTop(inner, ",")
+			typed := strings.Contains(parts[0], ":")
+			for _, part := range parts {
+				if typed {
+					typeName, parameterName, separated := splitFoldOnce(part, ":")
+					if !separated || !identifier(typeName) || !identifier(parameterName) {
+						return "", nil, nil, "", false
+					}
+					params = append(params, parameterName)
+					paramTypes = append(paramTypes, typeName)
+				} else {
+					parsed, valid := parseParameterText(part)
+					if !valid {
+						return "", nil, nil, "", false
+					}
+					params = append(params, parsed)
+					paramTypes = append(paramTypes, "")
+				}
+			}
+			if !validParameters(params) {
+				return "", nil, nil, "", false
+			}
 		}
 	} else if tail != "" {
-		tail, ok = prefixFold(tail, "with ")
-		if !ok {
-			return "", nil, false
+		if resultType, hasOut := prefixFold(tail, "out "); hasOut {
+			if !identifier(resultType) {
+				return "", nil, nil, "", false
+			}
+			returnType = resultType
+		} else {
+			tail, hasWith := prefixFold(tail, "with ")
+			if !hasWith {
+				return "", nil, nil, "", false
+			}
+			parts := splitAnd(tail)
+			for _, part := range parts {
+				parsed, valid := parseParameterText(part)
+				if !valid {
+					return "", nil, nil, "", false
+				}
+				params = append(params, parsed)
+				paramTypes = append(paramTypes, "")
+			}
+			if !validParameters(params) {
+				return "", nil, nil, "", false
+			}
 		}
-		params = splitAnd(tail)
 	}
-	for index, param := range params {
-		parsed, valid := parseParameterText(param)
-		if !valid {
-			return "", nil, false
-		}
-		params[index] = parsed
-	}
-	if !validParameters(params) {
-		return "", nil, false
-	}
-	return name, params, true
+	return name, params, paramTypes, returnType, true
 }
 
 func stripOptionalThen(condition string) string {
@@ -856,7 +916,7 @@ func (p *parser) block(stops map[string]bool) ([]node, string, error) {
 			out = append(out, node{kind: "class", name: name, base: base, body: body, line: lineNo, column: p.columnAt(lineNo)})
 			continue
 		}
-		if name, params, ok := parseConstructorHeader(header); hasHeader && ok {
+		if name, params, paramTypes, ok := parseConstructorHeader(header); hasHeader && ok {
 			body, stop, err := p.block(map[string]bool{"end constructor.": true})
 			if err != nil {
 				return nil, "", err
@@ -864,7 +924,7 @@ func (p *parser) block(stops map[string]bool) ([]node, string, error) {
 			if stop != "end constructor." {
 				return nil, "", fail("constructor on line %d needs 'End constructor.'", lineNo)
 			}
-			out = append(out, node{kind: "constructor", name: name, params: params, body: body, line: lineNo, column: p.columnAt(lineNo)})
+			out = append(out, node{kind: "constructor", name: name, params: params, paramTypes: paramTypes, body: body, line: lineNo, column: p.columnAt(lineNo)})
 			continue
 		}
 		if condition, ok := prefixFold(header, "if "); hasHeader && ok && condition != "" {
@@ -913,7 +973,7 @@ func (p *parser) block(stops map[string]bool) ([]node, string, error) {
 			out = append(out, node{kind: "for", name: strings.Join(loopNames, ","), condition: items, body: body, line: lineNo, column: p.columnAt(lineNo)})
 			continue
 		}
-		if name, params, ok := parseFunctionHeader(header); hasHeader && ok {
+		if name, params, paramTypes, returnType, ok := parseFunctionHeader(header); hasHeader && ok {
 			body, stop, err := p.block(map[string]bool{"end function.": true})
 			if err != nil {
 				return nil, "", err
@@ -921,7 +981,7 @@ func (p *parser) block(stops map[string]bool) ([]node, string, error) {
 			if stop != "end function." {
 				return nil, "", fail("function %q on line %d needs 'End function.'", name, lineNo)
 			}
-			out = append(out, node{kind: "function", name: name, params: params, body: body, line: lineNo, column: p.columnAt(lineNo)})
+			out = append(out, node{kind: "function", name: name, params: params, paramTypes: paramTypes, returnType: returnType, body: body, line: lineNo, column: p.columnAt(lineNo)})
 			continue
 		}
 		if low == "try:" {

@@ -43,9 +43,11 @@ type BytecodeModule struct {
 
 // BytecodeFunction stores a separately compiled function body and its signature.
 type BytecodeFunction struct {
-	Name         string                `json:"name"`
-	Parameters   []string              `json:"parameters"`
-	Defaults     []int                 `json:"default_functions,omitempty"`
+	Name           string                `json:"name"`
+	Parameters     []string              `json:"parameters"`
+	ParameterTypes []string              `json:"parameter_types,omitempty"`
+	ReturnType     string                `json:"return_type,omitempty"`
+	Defaults       []int                 `json:"default_functions,omitempty"`
 	Variadic     int                   `json:"variadic_index,omitempty"`
 	HasVariadic  bool                  `json:"has_variadic,omitempty"`
 	Receiver     bool                  `json:"receiver,omitempty"`
@@ -162,7 +164,7 @@ func (c *bytecodeCompiler) statements(nodes []node) error {
 		c.line = statement.line
 		switch statement.kind {
 		case "function":
-			index, err := c.compileFunction(statement.name, statement.params, statement.body, false)
+			index, err := c.compileFunction(statement.name, statement.params, statement.paramTypes, statement.returnType, statement.body, false)
 			if err != nil {
 				return err
 			}
@@ -173,7 +175,7 @@ func (c *bytecodeCompiler) statements(nodes []node) error {
 			compiledClass := BytecodeClass{Name: statement.name, Base: statement.base, Methods: map[string]int{}}
 			hasConstructor := false
 			for _, member := range statement.body {
-				index, err := c.compileFunction(member.name, member.params, member.body, true)
+				index, err := c.compileFunction(member.name, member.params, member.paramTypes, member.returnType, member.body, true)
 				if err != nil {
 					return err
 				}
@@ -299,7 +301,7 @@ func (c *bytecodeCompiler) statements(nodes []node) error {
 	return nil
 }
 
-func (c *bytecodeCompiler) compileFunction(name string, params []string, body []node, receiver bool) (int, error) {
+func (c *bytecodeCompiler) compileFunction(name string, params, parameterTypes []string, returnType string, body []node, receiver bool) (int, error) {
 	parameterNames := make([]string, len(params))
 	defaultFunctions := make([]int, len(params))
 	hasDefaults := false
@@ -333,7 +335,7 @@ func (c *bytecodeCompiler) compileFunction(name string, params []string, body []
 	}
 	functionCompiler.emit("PUSH")
 	functionCompiler.emit("RETURN")
-	function := BytecodeFunction{Name: name, Parameters: parameterNames, Variadic: max(variadicIndex, 0), HasVariadic: variadicIndex >= 0, Receiver: receiver, Instructions: functionCompiler.code}
+	function := BytecodeFunction{Name: name, Parameters: parameterNames, ParameterTypes: append([]string(nil), parameterTypes...), ReturnType: returnType, Variadic: max(variadicIndex, 0), HasVariadic: variadicIndex >= 0, Receiver: receiver, Instructions: functionCompiler.code}
 	if hasDefaults {
 		function.Defaults = defaultFunctions
 	}
@@ -1193,6 +1195,18 @@ func validateExecutableBytecode(program BytecodeProgram) error {
 	for index, function := range program.Functions {
 		if function.Name == "" || len(function.Instructions) == 0 {
 			return fail("invalid bytecode function at index %d", index)
+		}
+		if len(function.ParameterTypes) != 0 && len(function.ParameterTypes) != len(function.Parameters) {
+			return fail("invalid parameter type table for bytecode function %q", function.Name)
+		}
+		for _, typeName := range function.ParameterTypes {
+			// Empty entries preserve the dynamic parameters of legacy functions.
+			if strings.TrimSpace(typeName) != "" && !identifier(typeName) {
+				return fail("invalid parameter type for bytecode function %q", function.Name)
+			}
+		}
+		if function.ReturnType != "" && !identifier(function.ReturnType) {
+			return fail("invalid return type for bytecode function %q", function.Name)
 		}
 		if len(function.Defaults) != 0 && len(function.Defaults) != len(function.Parameters) {
 			return fail("invalid default-argument table for bytecode function %q", function.Name)
@@ -2059,10 +2073,38 @@ func callBytecodeFunction(r *runtime, function BytecodeFunction, closure *env, f
 		}
 		local.set(parameter, value)
 	}
+	for index, parameter := range function.Parameters {
+		if index >= len(function.ParameterTypes) || strings.TrimSpace(function.ParameterTypes[index]) == "" {
+			continue
+		}
+		if value, exists := local.values[parameter]; exists {
+			if err := r.checkType(function.ParameterTypes[index], value, local, parameter); err != nil {
+				return nil, err
+			}
+		}
+	}
 	previous := r.global
 	r.global = local
 	defer func() { r.global = previous }()
-	return executeBytecodeCode(r, function.Instructions, functions, classes)
+	result, err := executeBytecodeCode(r, function.Instructions, functions, classes)
+	if err != nil {
+		return nil, err
+	}
+	if function.ReturnType != "" {
+		if strings.EqualFold(function.ReturnType, "void") {
+			if result != nil {
+				return nil, fail("%q declares out void but returned a value", function.Name)
+			}
+		} else {
+			if result == nil {
+				return nil, fail("%q must return a value of type %s", function.Name, function.ReturnType)
+			}
+			if err := r.checkType(function.ReturnType, result, local, function.Name+" return value"); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return result, nil
 }
 
 func constructBytecodeInstance(r *runtime, class *bytecodeClassValue, args []any, named map[string]any) (any, error) {
