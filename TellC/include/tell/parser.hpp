@@ -20,7 +20,7 @@ struct Expr {
 struct Parameter { std::string type; std::string name; Location location; };
 struct ForeignParameter { std::string type; std::string name; Location location; };
 struct Stmt {
-    enum class Kind { Let, Set, Say, Check, Return, Expression, If, ElseIf, Else, While, Repeat, For, Function, Object, AccessSection, ForeignFunction, Break, Continue };
+    enum class Kind { Let, Set, Say, Check, Return, Expression, If, ElseIf, Else, Switch, Case, While, Repeat, For, Function, Object, AccessSection, ForeignFunction, Break, Continue, Try, Raise };
     Kind kind;
     Location location;
     std::string name;
@@ -34,6 +34,7 @@ struct Stmt {
     bool constant = false;
     std::string type;
     std::unique_ptr<Expr> expression;
+    std::unique_ptr<Expr> target;
     std::vector<Stmt> body;
     std::vector<Stmt> branches;
 };

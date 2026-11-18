@@ -1,0 +1,38 @@
+to amount() out number:
+    say "evaluated"
+    return 50
+end function
+
+switch amount():
+    if it is 0: say "tank is empty"
+    if it is 25: say "Quarter of the tank is full"
+    if it is 50: say "Half the tank is full"
+    if it is 75: say "3/4 of the tank is full"
+    if it is 100: say "Tank is full"
+say "after"
+switch "water":
+    if it is "water":
+        say "matched text"
+        switch 1:
+            if it is 1: say "nested"
+    if it is "water": say "should not run"
+end switch
+switch 3:
+    if it is 2: say "should not run"
+say "done"
+to candidate(number: n) out number:
+    say n
+    return n
+end function
+to describe(number: n) out text:
+    switch n:
+        if it is candidate(1): return "one"
+        if it is candidate(2): return "two"
+        if it is candidate(3): return "three"
+    return "other"
+end function
+say describe(2)
+switch 1.5:
+    if it is 1.5: say "decimal"
+switch true:
+    if it is true: say "boolean"

@@ -1,0 +1,33 @@
+to countdown(number: n) out number:
+    while n > 0:
+        set n to n - 1
+        if n = 2:
+            continue
+        end if
+        if n = 1:
+            break
+        end if
+        say n
+    end while
+    return n
+end function
+let number total be 0
+repeat 4 times:
+    set total to total + 1
+    if total = 2:
+        continue
+    end if
+    if total = 3:
+        break
+    end if
+    say total
+end repeat
+say total
+say countdown(4)
+let list of list of number rows be [[1, 2], [3]]
+set rows[0][1] to 9
+say rows[0][1]
+if true:
+    set total to 8
+end if
+say total

@@ -1,0 +1,4 @@
+to fail() out number:
+    return number("no")
+end function
+say fail()

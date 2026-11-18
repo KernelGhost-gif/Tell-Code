@@ -31,7 +31,7 @@ class Parser {
     Token get(){return t[p++];}
     void expect(const std::string& s){if(!take(s)) throw Error(peek().loc,"expected '"+s+"'");}
     std::string name(){if(peek().kind!=Token::Word) throw Error(peek().loc,"expected identifier"); return get().text;}
-    std::string type_name(){ auto value=name(); auto canonical=lower(value); if(canonical=="text"||canonical=="number"||canonical=="decimal"||canonical=="bool"||canonical=="void") return canonical; return value; }
+    std::string type_name(){ auto value=name(); auto canonical=lower(value); if(canonical=="list"||canonical=="vector") { expect("of"); auto element=type_name(); if(element=="void") throw Error(peek().loc,"collection element type cannot be void"); return "list of " + element; } if(canonical=="text"||canonical=="number"||canonical=="decimal"||canonical=="bool"||canonical=="void") return canonical; return value; }
     // A phrase is a name only when followed by a call. Operator words still
     // delimit expressions, for example in "value and ready()".
     std::string call_name(std::string value) {
@@ -62,6 +62,7 @@ class Parser {
             if(is("(")){Token op=get();auto n=node(Expr::Kind::Call,op);n->children.push_back(std::move(x));if(!take(")")){do{n->children.push_back(expr());}while(take(","));expect(")");}x=std::move(n);continue;}
             if(is("[")){Token op=get();auto n=node(Expr::Kind::Index,op);n->children.push_back(std::move(x));n->children.push_back(expr());expect("]");x=std::move(n);continue;}
             if(is(".") && p+1<t.size() && t[p+1].kind==Token::Word){Token op=get();op.text=call_name(name());auto n=node(Expr::Kind::Member,op);n->children.push_back(std::move(x));x=std::move(n);continue;}
+            if(is("times") && p+1<t.size() && t[p+1].text==":") break;
             int bp=prec(lower(peek().text));if(bp<min||bp==0)break;Token op=get();auto n=node(Expr::Kind::Binary,op);n->children.push_back(std::move(x));n->children.push_back(expr(bp+(op.text=="**"?0:1)));x=std::move(n);
         } return x;
     }
@@ -70,7 +71,7 @@ class Parser {
         if(take("extern")){
             s.kind=Stmt::Kind::ForeignFunction;
             s.foreign_language=lower(name());
-            if(s.foreign_language!="c" && s.foreign_language!="swift") throw Error(first.loc,"expected foreign language c or swift");
+            if(s.foreign_language!="c" && s.foreign_language!="cpp" && s.foreign_language!="swift") throw Error(first.loc,"expected foreign language c, cpp, or swift");
             expect("function"); s.name=name(); expect("(");
             auto foreign_type=[&](bool allow_void) { Token tok=peek(); auto type=lower(name());
                 if(type!="int32" && type!="int64" && type!="float32" && type!="float64" && !(allow_void && type=="void"))
@@ -83,10 +84,38 @@ class Parser {
             end();return s;
         }
         if(take("let")){s.kind=Stmt::Kind::Let;s.constant=take("constant");s.type=type_name();if(s.type=="void")throw Error(first.loc,"variable type cannot be void");s.instance_member=take("self");s.name=name();expect("be");s.expression=expr();end();return s;}
-        if(take("set")){s.kind=Stmt::Kind::Set;s.name=name();expect("to");s.expression=expr();end();return s;}
+        if(take("set")){s.kind=Stmt::Kind::Set; Token target=peek(); s.name=name();
+            if(is("[")){s.target=node(Expr::Kind::Name,target);while(is("[")){Token op=get();auto index=node(Expr::Kind::Index,op);index->children.push_back(std::move(s.target));index->children.push_back(expr());expect("]");s.target=std::move(index);}}
+            expect("to");s.expression=expr();end();return s;}
         if(take("say")||take("show")||take("print")){s.kind=Stmt::Kind::Say;s.expression=expr();end();return s;}
         if(take("return")||take("give")){s.kind=Stmt::Kind::Return;if(lower(first.text)=="give")expect("back");if(!is("\n")&&!is(";")&&peek().kind!=Token::End)s.expression=expr();end();return s;}
+        if(take("raise")){expect("an");expect("error");expect("saying");s.kind=Stmt::Kind::Raise;s.expression=expr();end();return s;}
+        if(take("try")){s.kind=Stmt::Kind::Try;expect(":");end();separators();
+            while(peek().kind!=Token::End && !is("end") && !(is("if") && p+1<t.size() && lower(t[p+1].text)=="something")) s.body.push_back(statement());
+            if(is("if")){expect("if");expect("something");expect("goes");expect("wrong");expect(":");end();Stmt handler{};handler.kind=Stmt::Kind::Else;handler.location=first.loc;handler.body=body("try");s.branches.push_back(std::move(handler));}
+            expect("end");expect("try");take(".");end();return s;}
+        if(take("switch")){
+            s.kind=Stmt::Kind::Switch;s.expression=expr();expect(":");end();
+            size_t case_column=peek().loc.column;
+            if(peek().kind==Token::End || case_column<=first.loc.column || !is("if"))
+                throw Error(peek().loc,"expected an indented switch case");
+            while(peek().kind!=Token::End && peek().loc.column>first.loc.column){
+                Token start=peek();
+                if(start.loc.column!=case_column || !take("if")) throw Error(start.loc,"expected switch case at the same indentation");
+                expect("it");expect("is");Stmt arm{};arm.kind=Stmt::Kind::Case;arm.location=start.loc;arm.expression=expr();expect(":");
+                if(peek().kind!=Token::End && !is("\n") && !is(";")) arm.body.push_back(statement());
+                else { end(); while(peek().kind!=Token::End && peek().loc.column>case_column) arm.body.push_back(statement()); }
+                if(arm.body.empty()) throw Error(start.loc,"switch case requires a body");
+                s.branches.push_back(std::move(arm));
+            }
+            if(is("end") && peek().loc.column==first.loc.column && p+1<t.size() && lower(t[p+1].text)=="switch") {get();get();take(".");end();}
+            return s;
+        }
         if(take("if")){s.kind=Stmt::Kind::If;s.expression=expr();expect(":");end();s.body=body("if",true);while(is("otherwise")||is("else")){Token b=get();Stmt branch{};branch.location=b.loc;if(take("if")){branch.kind=Stmt::Kind::ElseIf;branch.expression=expr();}else branch.kind=Stmt::Kind::Else;expect(":");end();branch.body=body("if",true);s.branches.push_back(std::move(branch));if(s.branches.back().kind==Stmt::Kind::Else)break;}expect("end");expect("if");take(".");end();return s;}
+        if(take("for")){expect("each");s.kind=Stmt::Kind::For;s.name=name();expect("in");s.expression=expr();expect(":");end();s.body=body("for");expect("end");expect("for");take(".");end();return s;}
+        if(take("break")){s.kind=Stmt::Kind::Break;end();return s;}
+        if(take("continue")){s.kind=Stmt::Kind::Continue;end();return s;}
+        if(take("repeat")){s.kind=Stmt::Kind::Repeat;s.expression=expr();expect("times");expect(":");end();s.body=body("repeat");expect("end");expect("repeat");take(".");end();return s;}
         if(take("while")){s.kind=Stmt::Kind::While;s.expression=expr();expect(":");end();s.body=body("while");expect("end");expect("while");take(".");end();return s;}
         if(take("object")){
             s.kind=Stmt::Kind::Object;s.name=name();expect(":");end();

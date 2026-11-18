@@ -1,0 +1,27 @@
+to values() out vector of number:
+    say "evaluated"
+    return [1, 2, 3]
+end function
+let list of text words be ["one", "two"]
+say words[0]
+for each item in values():
+    if item = 2:
+        continue
+    end if
+    say item
+end for
+for each word in words:
+    say word
+    break
+end for
+let vector of number empty be []
+for each unused in empty:
+    say unused
+end for
+let list of list of number nested be [[4], []]
+say nested[0][0]
+for each row in nested:
+    for each value in row:
+        say value
+    end for
+end for
