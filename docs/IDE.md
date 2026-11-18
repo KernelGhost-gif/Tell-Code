@@ -44,3 +44,5 @@ editor reach sufficient parity. The Python runtime should receive only
 security, compatibility, and migration fixes; new runtime features belong in
 Go. The IDE should receive only critical compatibility fixes; new editor
 features belong in GPUI Studio.
+
+For editor diagnostics for the typed TellC dialect, see the separate [TellC language server](../lsp/README.md).

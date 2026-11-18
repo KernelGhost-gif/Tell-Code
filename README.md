@@ -113,7 +113,7 @@ say result
 
 Declarations specify a type, function and method parameters use `type: name`, and every function declares a result with `out type` (or `out void`). The compiler checks initializers, arguments, and returns, and requires a value-returning function to return on every path. Built-in types include `number` (signed 64-bit integer), `decimal` (64-bit floating point), `text`, and `bool`. Newlines end statements; semicolons can separate statements on one line. Keywords and built-in type names are case insensitive; object type names are case sensitive.
 
-The executable backend supports typed functions, integer arithmetic, equality, `if` blocks, output and interpolation, and objects with fields and typed methods. Object members can be private (`own`) or public (`others`); see [the object example](TellC/examples/objects.tell). The parser accepts some constructs that the backend cannot yet compile, including assignment, loops, and lists. Decimal arithmetic, imports, and executable foreign calls are also unsupported. TellC reports unsupported syntax or compilation features instead of silently running them; see the [TellC guide](TellC/README.md) for the complete current scope.
+TellC compiles typed functions, objects, loops, resizable typed lists, and basic console and file I/O. Object members can be private (`own`) or public (`others`), as shown in the [object example](TellC/examples/objects.tell). See the [TellC guide](TellC/README.md) for supported operations and library linking.
 
 On Apple silicon, build the standalone compiler from the repository root with CMake, Ninja, Xcode command-line tools, and a matching LLVM 24 source tree:
 

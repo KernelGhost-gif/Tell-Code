@@ -58,7 +58,13 @@ add_library(tell_parser src/parser.cpp)
 target_include_directories(tell_parser PUBLIC include)
 target_compile_features(tell_parser PUBLIC cxx_std_17)
 
-add_executable(tellc src/main.cpp src/codegen.cpp)
+add_library(tell_codegen STATIC src/codegen.cpp)
+target_include_directories(tell_codegen SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS})
+target_compile_definitions(tell_codegen PRIVATE ${LLVM_DEFINITIONS})
+target_link_libraries(tell_codegen PUBLIC tell_parser PRIVATE ${TELL_LLVM_LIBS})
+
+add_executable(tellc src/main.cpp)
+target_link_libraries(tellc PRIVATE tell_codegen)
 target_compile_features(tellc PRIVATE cxx_std_17)
 target_include_directories(tellc SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS})
 target_compile_definitions(tellc PRIVATE ${LLVM_DEFINITIONS} TELL_LLC_PATH="${TELL_LLC_PATH}")
@@ -80,10 +86,11 @@ if(TELL_STANDALONE_LINUX)
   target_include_directories(tellc SYSTEM PRIVATE ${LLD_INCLUDE_DIRS})
   target_include_directories(tellc PRIVATE "${runtime_dir}")
   target_link_options(tellc PRIVATE -s)
-  target_link_libraries(tellc PRIVATE tell_parser ${TELL_LLVM_LIBS})
+  target_compile_definitions(tell_codegen PRIVATE TELL_STANDALONE_LINUX TELL_EMBEDDED_CODEGEN)
 elseif(TELL_STANDALONE_MACOS)
   target_compile_definitions(tellc PRIVATE TELL_STANDALONE_MACOS TELL_EMBEDDED_CODEGEN)
   target_include_directories(tellc SYSTEM PRIVATE "${LLD_SOURCE_DIR}/include")
+  target_compile_definitions(tell_codegen PRIVATE TELL_EMBEDDED_CODEGEN)
 
   # Keep an escape hatch for custom LLVM builds that still expose shared zstd.
   set(TELL_ZSTD_STATIC_LIBRARY "" CACHE FILEPATH "Static zstd library used by LLVM")
@@ -96,17 +103,24 @@ elseif(TELL_STANDALONE_MACOS)
   endif()
 
   target_link_libraries(tellc PRIVATE
-    tell_parser
     "${LLD_BUILD_DIR}/lib/liblldMachO.a"
     "${LLD_BUILD_DIR}/lib/liblldCommon.a"
     ${TELL_LLVM_LIBS})
-else()
-  target_link_libraries(tellc PRIVATE tell_parser ${TELL_LLVM_LIBS})
 endif()
+
+add_executable(tell-lsp src/lsp.cpp)
+target_include_directories(tell-lsp SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS})
+target_compile_definitions(tell-lsp PRIVATE ${LLVM_DEFINITIONS})
+target_link_libraries(tell-lsp PRIVATE tell_codegen)
+install(TARGETS tell-lsp RUNTIME DESTINATION bin)
 
 include(CTest)
 if(BUILD_TESTING)
   find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  add_test(NAME language_server
+    COMMAND ${CMAKE_COMMAND} -E env "TELL_LSP_BINARY=$<TARGET_FILE:tell-lsp>"
+      "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../lsp/test_lsp.py")
+
   add_test(NAME cli_smoke
     COMMAND "${Python3_EXECUTABLE}"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/cli_smoke.py"

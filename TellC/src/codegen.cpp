@@ -54,7 +54,7 @@ class Generator {
     Value receiver{nullptr, ""};
     std::vector<std::pair<llvm::BasicBlock*, llvm::BasicBlock*>> loops;
     bool is_list(const std::string& type) { return type.rfind("list of ", 0) == 0; }
-    llvm::StructType* list_layout() { return llvm::StructType::get(context, {ir.getInt64Ty(), ir.getPtrTy()}); }
+    llvm::StructType* list_layout() { return llvm::StructType::get(context, {ir.getInt64Ty(), ir.getPtrTy(), ir.getInt64Ty()}); }
     llvm::AllocaInst* entry_alloca(llvm::Type* type) {
         auto& entry = ir.GetInsertBlock()->getParent()->getEntryBlock();
 #if LLVM_VERSION_MAJOR >= 24
@@ -303,6 +303,12 @@ class Generator {
                 fail(callee.location, "method '" + callee.value + "' is private");
             args.push_back(object.value);
         } else if (callee.kind == Expr::Kind::Name) {
+            if (callee.value == "len") {
+                if (expr.children.size() != 2) fail(expr.location, "len requires one argument");
+                auto collection = expression(*expr.children[1]);
+                if (!is_list(collection.type)) fail(expr.location, "len requires a list or vector");
+                return {ir.CreateLoad(ir.getInt64Ty(), ir.CreateStructGEP(list_layout(), collection.value, 0)), "number"};
+            }
             if (callee.value == "input") return builtin_input(expr);
             if (callee.value == "read_file" || callee.value == "write_file" || callee.value == "append_file") return builtin_file(expr, callee.value);
             if (callee.value == "number" || callee.value == "decimal") return builtin_number(expr, callee.value);
@@ -402,10 +408,8 @@ class Generator {
         if (lhs.type == "decimal") return ir.CreateFCmpOEQ(lhs.value, rhs.value);
         return ir.CreateICmpEQ(lhs.value, rhs.value);
     }
-    Value index_address(const Expr& e) {
-        auto list = expression(*e.children[0]);
+    Value index_address(const Expr& e, Value list, Value index) {
         if (!is_list(list.type)) fail(e.location, "indexing requires a list or vector");
-        auto index = expression(*e.children[1]);
         require_type(index, "number", e.children[1]->location);
         auto layout = list_layout();
         auto length = ir.CreateLoad(ir.getInt64Ty(), ir.CreateStructGEP(layout, list.value, 0));
@@ -449,17 +453,68 @@ class Generator {
             auto header = allocate(header_size);
             ir.CreateStore(ir.getInt64(values.size()), ir.CreateStructGEP(layout, header, 0));
             ir.CreateStore(data, ir.CreateStructGEP(layout, header, 1));
+            ir.CreateStore(ir.getInt64(values.empty() ? 1 : values.size()), ir.CreateStructGEP(layout, header, 2));
             return {header, "list of " + element};
         }
         if (e.kind == K::Index) {
-            auto address = index_address(e);
+            auto list = expression(*e.children[0]);
+            auto index = expression(*e.children[1]);
+            auto address = index_address(e, list, index);
             return {ir.CreateLoad(llvm_type(address.type, e.location), address.value), address.type};
         }
         if (e.kind == K::Name) return lookup(e.value, e.location);
         if (e.kind == K::Member) return field(expression(*e.children[0]), e.value, e.location);
         if (e.kind == K::Call) return call(e);
+        auto check_bitwise_range = [&](llvm::Value* value) {
+            auto low = ir.CreateICmpSLT(value, ir.getInt64(-9007199254740991LL));
+            auto high = ir.CreateICmpSGT(value, ir.getInt64(9007199254740991LL));
+            raise_if(ir.CreateOr(low, high), "bitwise value exceeds exact numeric range");
+        };
+        if (e.kind == K::Unary) {
+            auto operand = expression(*e.children[0]);
+            auto op = e.value;
+            for (auto& c : op) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            if (op == "not" || op == "!") {
+                require_type(operand, "bool", e.location);
+                return {ir.CreateNot(operand.value), "bool"};
+            }
+            if (op == "~") {
+                require_type(operand, "number", e.location);
+                check_bitwise_range(operand.value);
+                auto result = ir.CreateNot(operand.value);
+                check_bitwise_range(result);
+                return {result, "number"};
+            }
+            if (op == "+" || op == "-") {
+                if (operand.type == "number") return {op == "-" ? ir.CreateNeg(operand.value) : operand.value, "number"};
+                if (operand.type == "decimal") return {op == "-" ? ir.CreateFNeg(operand.value) : operand.value, "decimal"};
+            }
+            fail(e.location, "invalid unary operator or operand");
+        }
         if (e.kind == K::Binary) {
             auto lhs = expression(*e.children[0]);
+            auto op = e.value;
+            for (auto& c : op) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            if (op == "and" || op == "&&" || op == "or" || op == "||") {
+                require_type(lhs, "bool", e.location);
+                bool is_and = op == "and" || op == "&&";
+                auto fn = ir.GetInsertBlock()->getParent();
+                auto from = ir.GetInsertBlock();
+                auto rhs_block = llvm::BasicBlock::Create(context, "logic.rhs", fn);
+                auto merge = llvm::BasicBlock::Create(context, "logic.end", fn);
+                if (is_and) ir.CreateCondBr(lhs.value, rhs_block, merge);
+                else ir.CreateCondBr(lhs.value, merge, rhs_block);
+                ir.SetInsertPoint(rhs_block);
+                auto rhs = expression(*e.children[1]);
+                require_type(rhs, "bool", e.children[1]->location);
+                auto rhs_end = ir.GetInsertBlock();
+                ir.CreateBr(merge);
+                ir.SetInsertPoint(merge);
+                auto result = ir.CreatePHI(ir.getInt1Ty(), 2);
+                result->addIncoming(ir.getInt1(!is_and), from);
+                result->addIncoming(rhs.value, rhs_end);
+                return {result, "bool"};
+            }
             auto rhs = expression(*e.children[1]);
             require_type(rhs, lhs.type, e.children[1]->location);
             if (e.value == "=" || e.value == "==" || e.value == "!=") {
@@ -467,6 +522,24 @@ class Generator {
                 return {e.value == "!=" ? ir.CreateNot(equal) : equal, "bool"};
             }
             if (lhs.type == "number") {
+                if (e.value == "&" || e.value == "|" || e.value == "^" || e.value == "<<" || e.value == ">>") {
+                    check_bitwise_range(lhs.value);
+                    check_bitwise_range(rhs.value);
+                    llvm::Value* result = nullptr;
+                    if (e.value == "&") result = ir.CreateAnd(lhs.value, rhs.value);
+                    else if (e.value == "|") result = ir.CreateOr(lhs.value, rhs.value);
+                    else if (e.value == "^") result = ir.CreateXor(lhs.value, rhs.value);
+                    else {
+                        auto bad = ir.CreateOr(ir.CreateICmpSLT(rhs.value, ir.getInt64(0)), ir.CreateICmpSGE(rhs.value, ir.getInt64(64)));
+                        raise_if(bad, "shift count must be between 0 and 63");
+                        if (e.value == "<<") {
+                            result = ir.CreateShl(lhs.value, rhs.value);
+                            raise_if(ir.CreateICmpNE(ir.CreateAShr(result, rhs.value), lhs.value), "bitwise shift overflow");
+                        } else result = ir.CreateAShr(lhs.value, rhs.value);
+                    }
+                    check_bitwise_range(result);
+                    return {result, "number"};
+                }
                 if (e.value == "+") return {ir.CreateAdd(lhs.value, rhs.value), "number"};
                 if (e.value == "-") return {ir.CreateSub(lhs.value, rhs.value), "number"};
                 if (e.value == "*") return {ir.CreateMul(lhs.value, rhs.value), "number"};
@@ -533,6 +606,7 @@ class Generator {
                     fail(stmt.location, "duplicate callable '" + stmt.name + "'");
                 if (stmt.foreign_symbol == "main" || stmt.foreign_symbol == "malloc" ||
                     stmt.foreign_symbol == "strcmp" || stmt.foreign_symbol == "abort" ||
+                    stmt.foreign_symbol == "realloc" || stmt.foreign_symbol == "memmove" ||
                     module.getNamedValue(stmt.foreign_symbol))
                     fail(stmt.location, "duplicate or reserved external symbol '" + stmt.foreign_symbol + "'");
                 std::vector<llvm::Type*> args;
@@ -713,9 +787,14 @@ class Generator {
         }
         case Stmt::Kind::Set: {
             if (stmt.target) {
-                auto address = index_address(*stmt.target);
-                auto value = expression(*stmt.expression, address.type);
-                require_type(value, address.type, stmt.expression->location);
+                const auto& target = *stmt.target;
+                auto list = expression(*target.children[0]);
+                if (!is_list(list.type)) fail(target.location, "indexing requires a list or vector");
+                auto index = expression(*target.children[1]);
+                require_type(index, "number", target.children[1]->location);
+                auto value = expression(*stmt.expression, list.type.substr(8));
+                require_type(value, list.type.substr(8), stmt.expression->location);
+                auto address = index_address(target, list, index);
                 ir.CreateStore(value.value, address.value);
                 break;
             }
@@ -726,6 +805,72 @@ class Generator {
             auto value = expression(*stmt.expression, it->second.type);
             require_type(value, it->second.type, stmt.expression->location);
             ir.CreateStore(value.value, it->second.value);
+            break;
+        }
+        case Stmt::Kind::Add:
+        case Stmt::Kind::Remove: {
+            auto value = expression(*stmt.expression);
+            auto list = expression(*stmt.target);
+            if (!is_list(list.type)) fail(stmt.target->location, "add and remove require a list or vector");
+            auto type = list.type.substr(8);
+            require_type(value, type, stmt.expression->location);
+            auto layout = list_layout();
+            auto length_ptr = ir.CreateStructGEP(layout, list.value, 0);
+            auto data_ptr = ir.CreateStructGEP(layout, list.value, 1);
+            auto capacity_ptr = ir.CreateStructGEP(layout, list.value, 2);
+            auto length = ir.CreateLoad(ir.getInt64Ty(), length_ptr);
+            auto element_type = llvm_type(type, stmt.location);
+            auto null = llvm::ConstantPointerNull::get(ir.getPtrTy());
+            auto element_size = ir.CreatePtrToInt(ir.CreateGEP(element_type, null, ir.getInt64(1)), ir.getInt64Ty());
+            auto fn = ir.GetInsertBlock()->getParent();
+            if (stmt.kind == Stmt::Kind::Add) {
+                auto capacity = ir.CreateLoad(ir.getInt64Ty(), capacity_ptr);
+                auto grow = llvm::BasicBlock::Create(context, "list.grow", fn);
+                auto ready = llvm::BasicBlock::Create(context, "list.ready", fn);
+                ir.CreateCondBr(ir.CreateICmpEQ(length, capacity), grow, ready);
+                ir.SetInsertPoint(grow);
+                auto max_capacity = ir.CreateUDiv(ir.getInt64(INT64_MAX), element_size);
+                raise_if(ir.CreateICmpUGT(capacity, ir.CreateUDiv(max_capacity, ir.getInt64(2))), "list too large");
+                auto new_capacity = ir.CreateMul(capacity, ir.getInt64(2));
+                auto data = ir.CreateLoad(ir.getPtrTy(), data_ptr);
+                auto signature = llvm::FunctionType::get(ir.getPtrTy(), {ir.getPtrTy(), ir.getInt64Ty()}, false);
+                auto resized = ir.CreateCall(module.getOrInsertFunction("realloc", signature), {data, ir.CreateMul(new_capacity, element_size)});
+                raise_if(ir.CreateIsNull(resized), "cannot grow list");
+                ir.CreateStore(resized, data_ptr);
+                ir.CreateStore(new_capacity, capacity_ptr);
+                ir.CreateBr(ready);
+                ir.SetInsertPoint(ready);
+                auto current = ir.CreateLoad(ir.getPtrTy(), data_ptr);
+                ir.CreateStore(value.value, ir.CreateGEP(element_type, current, length));
+                ir.CreateStore(ir.CreateAdd(length, ir.getInt64(1)), length_ptr);
+            } else {
+                auto data = ir.CreateLoad(ir.getPtrTy(), data_ptr);
+                auto start = ir.GetInsertBlock();
+                auto search = llvm::BasicBlock::Create(context, "list.search", fn);
+                auto compare = llvm::BasicBlock::Create(context, "list.compare", fn);
+                auto next = llvm::BasicBlock::Create(context, "list.next", fn);
+                auto found = llvm::BasicBlock::Create(context, "list.found", fn);
+                ir.CreateBr(search);
+                ir.SetInsertPoint(search);
+                auto index = ir.CreatePHI(ir.getInt64Ty(), 2);
+                index->addIncoming(ir.getInt64(0), start);
+                raise_if(ir.CreateICmpUGE(index, length), "item not found in list");
+                ir.CreateBr(compare);
+                ir.SetInsertPoint(compare);
+                auto item = ir.CreateLoad(element_type, ir.CreateGEP(element_type, data, index));
+                ir.CreateCondBr(equal_values({item, type}, value, stmt.location), found, next);
+                ir.SetInsertPoint(next);
+                auto increment = ir.CreateAdd(index, ir.getInt64(1));
+                ir.CreateBr(search);
+                index->addIncoming(increment, next);
+                ir.SetInsertPoint(found);
+                auto after = ir.CreateAdd(index, ir.getInt64(1));
+                auto dest = ir.CreateGEP(element_type, data, index);
+                auto src = ir.CreateGEP(element_type, data, after);
+                auto bytes = ir.CreateMul(ir.CreateSub(length, after), element_size);
+                ir.CreateMemMove(dest, llvm::MaybeAlign(), src, llvm::MaybeAlign(), bytes);
+                ir.CreateStore(ir.CreateSub(length, ir.getInt64(1)), length_ptr);
+            }
             break;
         }
         case Stmt::Kind::Repeat: {
@@ -790,8 +935,6 @@ class Generator {
             auto list = expression(*stmt.expression);
             if (!is_list(list.type)) fail(stmt.expression->location, "for each requires a list or vector");
             auto layout = list_layout();
-            auto length = ir.CreateLoad(ir.getInt64Ty(), ir.CreateStructGEP(layout, list.value, 0));
-            auto data = ir.CreateLoad(ir.getPtrTy(), ir.CreateStructGEP(layout, list.value, 1));
             auto fn = ir.GetInsertBlock()->getParent();
             auto preheader = ir.GetInsertBlock();
             auto condition = llvm::BasicBlock::Create(context, "for.condition", fn);
@@ -802,8 +945,10 @@ class Generator {
             ir.SetInsertPoint(condition);
             auto index = ir.CreatePHI(ir.getInt64Ty(), 2);
             index->addIncoming(ir.getInt64(0), preheader);
+            auto length = ir.CreateLoad(ir.getInt64Ty(), ir.CreateStructGEP(layout, list.value, 0));
             ir.CreateCondBr(ir.CreateICmpULT(index, length), body, done);
             ir.SetInsertPoint(body);
+            auto data = ir.CreateLoad(ir.getPtrTy(), ir.CreateStructGEP(layout, list.value, 1));
             auto type = list.type.substr(8);
             auto element_type = llvm_type(type, stmt.location);
             auto value = ir.CreateLoad(element_type, ir.CreateGEP(element_type, data, index));

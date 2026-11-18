@@ -1,8 +1,11 @@
 name: TellC LLVM compiler
 
 on:
-  # The embedded LLVM/LLD build is intentionally excluded from normal PRs:
-  # upstream builds are expensive and the native Go/runtime suites run on PRs.
+  pull_request:
+    paths:
+      - "TellC/**"
+      - "lsp/**"
+      - ".github/workflows/tellc.yml"
   schedule:
     - cron: "17 2 * * 1"
   workflow_dispatch:
@@ -39,10 +42,11 @@ jobs:
       - name: Build TellC
         run: cmake --build build/tellc --parallel 2
 
-      - name: Run parser, CLI, and compiler integration tests
+      - name: Run compiler and language server tests
         run: ctest --test-dir build/tellc --output-on-failure
 
   macos-standalone:
+    if: github.event_name != 'pull_request'
     name: Apple silicon / embedded LLVM + LLD
     runs-on: macos-15
     steps:
@@ -70,6 +74,7 @@ jobs:
           if-no-files-found: error
 
   macos-intel:
+    if: github.event_name != 'pull_request'
     name: Intel macOS / external LLVM toolchain
     runs-on: macos-15-intel
     steps:
