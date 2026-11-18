@@ -92,3 +92,4 @@ cmake --build "$BUILD_ROOT/tellc" --parallel "$JOBS"
 ctest --test-dir "$BUILD_ROOT/tellc" --output-on-failure
 
 printf 'Standalone compiler: %s\n' "$BUILD_ROOT/tellc/tellc"
+printf 'Language server: %s\n' "$BUILD_ROOT/tellc/tell-lsp"
