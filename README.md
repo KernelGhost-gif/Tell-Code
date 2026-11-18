@@ -130,7 +130,7 @@ build/tellc-macos-arm64/tellc/tellc TellC/examples/factorial.tell -o factorial
 ./factorial
 ```
 
-The example prints `120`. The standalone compiler embeds LLVM code generation and the Mach-O linker; it and its output target macOS 11 or later. A Linux build uses a compatible LLVM installation, `llc`, and Clang. Build details, dependencies, and tests are in the [TellC guide](TellC/README.md), [build guide](TellC/docs/BUILDING.md), and [test guide](TellC/docs/TESTING.md). `tellc source.tell` defaults to `a.out`; use `-o` to choose the output and `tellc --llvm-version` to inspect its LLVM version.
+The example prints `120`. The standalone compiler embeds LLVM code generation and the Mach-O linker; it and its output target macOS 11 or later. The [standalone Linux build](TellC/docs/BUILDING.md#standalone-linux) produces static x86-64 and ARM64 compilers that can each emit executables for either architecture. Build details, dependencies, and tests are in the [TellC guide](TellC/README.md), [build guide](TellC/docs/BUILDING.md), and [test guide](TellC/docs/TESTING.md). `tellc source.tell` defaults to `a.out`; use `-o` to choose the output and `tellc --llvm-version` to inspect its LLVM version.
 
 ## Legacy Python runtime (deprecated)
 

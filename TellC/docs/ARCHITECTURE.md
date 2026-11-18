@@ -14,12 +14,15 @@ the parser is not automatically guaranteed to have backend support.
 4. The selected platform path turns that module into a native executable:
    - Apple silicon standalone mode emits an AArch64 Mach-O object in memory
      and invokes the embedded LLD Mach-O driver with in-memory inputs.
-   - Linux and Intel macOS write temporary LLVM IR and object files, invoke
+   - Standalone Linux emits x86-64 or AArch64 ELF object code and uses the
+     embedded LLD ELF driver. It passes the object and embedded static runtime
+     inputs via anonymous memory-backed files.
+   - External-toolchain builds write temporary LLVM IR and object files, invoke
      the matching llc, and use Clang for the final link.
 
 ## Platform boundaries
 
-The standalone linker is currently limited to Apple silicon and macOS 11+.
+The standalone macOS linker targets Apple silicon and macOS 11+.
 Its libSystem text stub is deliberately minimal and mirrors the symbols the
 current generated code imports. New runtime calls must update that stub and
 the no-toolchain integration test together.
