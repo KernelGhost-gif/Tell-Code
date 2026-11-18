@@ -54,6 +54,9 @@ type system: unresolved/dynamic values are checked at runtime, collection
 element types and generics are not yet supported, and class method overloads,
 traits, interfaces, and typed FFI are not part of this initial slice.
 
+
+A runnable native example is available at [native/examples/native-typed.tell](../native/examples/native-typed.tell).
+
 ## Migration
 
 For new programs, prefer the typed form. Existing programs can migrate one
