@@ -4,10 +4,14 @@ on:
   push:
     paths:
       - "TellC/**"
+      - "scripts/build-tellc-macos.sh"
+      - "README.md"
       - ".github/workflows/tellc.yml"
   pull_request:
     paths:
       - "TellC/**"
+      - "scripts/build-tellc-macos.sh"
+      - "README.md"
       - ".github/workflows/tellc.yml"
   workflow_dispatch:
 
@@ -20,6 +24,7 @@ concurrency:
 
 jobs:
   linux-llvm:
+    name: Linux / external LLVM toolchain
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -42,5 +47,54 @@ jobs:
       - name: Build TellC
         run: cmake --build build/tellc --parallel 2
 
-      - name: Run parser and compiler integration tests
+      - name: Run parser, CLI, and compiler integration tests
         run: ctest --test-dir build/tellc --output-on-failure
+
+  macos-standalone:
+    name: Apple silicon / embedded LLVM + LLD
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out the LLVM 24 source revision
+        uses: actions/checkout@v4
+        with:
+          repository: llvm/llvm-project
+          ref: 5966b6af610f1e7b2628e15e013b0618404aa54c
+          path: llvm-project
+          fetch-depth: 1
+
+      - name: Build the standalone compiler and run all tests
+        env:
+          LLVM_SOURCE: ${{ github.workspace }}/llvm-project
+          JOBS: "2"
+        run: ./scripts/build-tellc-macos.sh
+
+      - name: Upload Apple silicon compiler
+        uses: actions/upload-artifact@v4
+        with:
+          name: tellc-macos-arm64
+          path: build/tellc-macos-arm64/tellc/tellc
+          if-no-files-found: error
+
+  macos-intel:
+    name: Intel macOS / external LLVM toolchain
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install LLVM and Ninja
+        run: brew install llvm ninja
+
+      - name: Configure TellC using the external toolchain
+        run: |
+          LLVM_PREFIX="$(brew --prefix llvm)"
+          cmake -S TellC -B build/tellc-intel -G Ninja \
+            -DLLVM_DIR="$LLVM_PREFIX/lib/cmake/llvm" \
+            -DTELL_LLC_PATH="$LLVM_PREFIX/bin/llc"
+          grep -q '^TELL_STANDALONE_MACOS:BOOL=OFF$' build/tellc-intel/CMakeCache.txt
+
+      - name: Build and test the Intel-compatible configuration
+        run: |
+          cmake --build build/tellc-intel --parallel 2
+          ctest --test-dir build/tellc-intel --output-on-failure

@@ -2,6 +2,8 @@
 
 A C++17 compiler for an explicitly typed variant of Tell. It parses source into an AST and generates LLVM IR and native executables for the supported subset.
 
+Platform setup, build requirements, and test coverage are documented in [the documentation index](docs/README.md), [the build guide](docs/BUILDING.md), [the testing guide](docs/TESTING.md), and [the architecture guide](docs/ARCHITECTURE.md).
+
 ```tell
 let text name be "Steve Jobs"; let number age be 56
 let decimal height be 1.88
