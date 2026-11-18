@@ -202,6 +202,10 @@ def main() -> int:
         return repl(max_call_depth=args.max_call_depth, max_loop_iterations=args.max_loop_iterations, quiet=args.quiet_repl)
 
     if command == "ide" and args.file is None:
+        print(
+            "warning: the Python/Tk IDE is deprecated. Use Tell Studio (Rust + GPUI) for new editor development.",
+            file=sys.stderr,
+        )
         from .ide import main as ide_main
 
         return ide_main()

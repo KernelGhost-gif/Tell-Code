@@ -19,7 +19,8 @@ var version = "0.3.7"
 
 func main() {
 	check := flag.Bool("check", false, "parse the program without running it")
-	typeCheck := flag.Bool("types", false, "check statically knowable type annotations (native runtime)")
+	typeCheck := flag.Bool("types", false, "check statically knowable type annotations")
+	typedMode := flag.Bool("typed", false, "require explicit variable, parameter, and return types")
 	showVersion := flag.Bool("version", false, "print the Tell version")
 	quietREPL := flag.Bool("quiet-repl", false, "omit terminal prompts and banner (for IDE integrations)")
 	buildOutput := flag.String("output", "", "write compiled bytecode to this path")
@@ -192,6 +193,11 @@ func main() {
 		if outputPath == "" {
 			outputPath = strings.TrimSuffix(filename, filepath.Ext(filename)) + ".tbc"
 		}
+		if *typedMode {
+			if err := tell.ValidateTypedProgram(string(data), filename); err != nil {
+				exitWithDiagnostic(err, filename, diagnostic.TypeError)
+			}
+		}
 		compiled, err := tell.Compile(string(data), filename)
 		if err != nil {
 			exitWithDiagnostic(err, filename, diagnostic.SyntaxError)
@@ -213,16 +219,22 @@ func main() {
 		if filename == "-" {
 			displayName = "<stdin>"
 		}
-		checkSource := tell.Check
-		if *typeCheck {
-			checkSource = tell.Analyze
-		}
-		if err := checkSource(string(data), displayName); err != nil {
-			kind := diagnostic.SyntaxError
-			if *typeCheck {
-				kind = diagnostic.TypeError
+		if *typedMode {
+			if err := tell.ValidateTypedProgram(string(data), displayName); err != nil {
+				exitWithDiagnostic(err, displayName, diagnostic.TypeError)
 			}
-			exitWithDiagnostic(err, displayName, kind)
+		} else {
+			checkSource := tell.Check
+			if *typeCheck {
+				checkSource = tell.Analyze
+			}
+			if err := checkSource(string(data), displayName); err != nil {
+				kind := diagnostic.SyntaxError
+				if *typeCheck {
+					kind = diagnostic.TypeError
+				}
+				exitWithDiagnostic(err, displayName, kind)
+			}
 		}
 		fmt.Printf("Looks good: %s\n", displayName)
 		return
@@ -230,6 +242,11 @@ func main() {
 	runName := filename
 	if filename == "-" {
 		runName = "<stdin>"
+	}
+	if *typedMode {
+		if err := tell.ValidateTypedProgram(string(data), runName); err != nil {
+			exitWithDiagnostic(err, runName, diagnostic.TypeError)
+		}
 	}
 	if err := tell.NewSessionWithLimits(os.Stdin, os.Stdout, limits).Exec(string(data), runName); err != nil {
 		exitWithDiagnostic(err, runName, diagnostic.RuntimeError)

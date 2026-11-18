@@ -1,4 +1,8 @@
-"""Tk desktop IDE for editing, running, and interactively exploring Tell."""
+"""Deprecated Tk compatibility IDE.
+
+The replacement editor is the Rust/GPUI application under studio/. This
+module remains available as a transition fallback for existing installations.
+"""
 
 from __future__ import annotations
 

@@ -1,35 +1,46 @@
-# Tell IDE
+# Tell Studio and IDE migration
 
-Tell IDE is an optional desktop editor and interactive shell built with Python's Tk interface. It follows the editing and run loop of Python IDLE while executing programs with Tell itself.
+The Python/Tk desktop IDE is deprecated. It remains available temporarily as a
+compatibility fallback, but new editor work belongs in the Rust/GPUI
+application under [studio/](../studio/README.md).
 
-## Start
+## Current replacement: Tell Studio
 
-From a Tell source checkout:
+Tell Studio is an early native desktop shell built on GPUI, the Rust UI
+framework used by Zed. It provides a single-file source workspace, basic
+keyboard editing, save, and execution through the native Go runtime.
 
-```console
+Build and launch it from the repository root:
+
+~~~sh
+cargo run --manifest-path studio/Cargo.toml -- path/to/program.tell
+~~~
+
+The native Go executable must be available as tell on PATH, or set
+TELL_NATIVE_EXECUTABLE to its absolute path. Studio is an early foundation,
+not a full Zed-style IDE yet: multi-tab editing, diagnostics, language-server
+integration, debugger tooling, and project navigation are future work.
+
+## Legacy Python/Tk editor
+
+For compatibility during the transition only:
+
+~~~sh
 python -m tell ide
-```
+~~~
 
-After installing the Python package, use either command:
+This command prints a deprecation warning. The standalone tell-ide Python
+console entry point is no longer installed by new package builds.
 
-```console
-tell ide
-tell-ide
-```
+The legacy UI requires Python 3.10 or newer and Tkinter. Existing projects may
+continue using it while migrating, but new features should be added to
+studio/ and the native Go toolchain instead.
 
-The UI requires Python 3.10 or newer and Tkinter. Windows Python installers normally include Tkinter. On Linux, install the distribution's `python3-tk` package if needed. The Go runtime is preferred for execution. Set `TELL_NATIVE_EXECUTABLE` to a native Tell executable to select one explicitly. If no native executable is found, the editor falls back to the Python Tell runtime. A Python fallback requires the Tell Python package to be importable by the child process.
+## Migration policy
 
-## Editor and shell
-
-- Open multiple `.tell` files in tabs; create, save, and close files with unsaved-change prompts.
-- Use syntax colours, line numbers, block-aware indentation, horizontal and vertical scrolling, and Find.
-- The bottom shell is persistent: variables and functions survive between entries. Use Shift+Enter to write a multi-line shell entry, or enter a block one line at a time.
-- Shell input is routed to a running program while it is waiting for `Ask`; otherwise, it goes to the persistent Tell REPL.
-- Run a module with F5, check syntax with F7, build native bytecode with Ctrl+B, and run project tests with Ctrl+T.
-- Build output is written beside the source as `.tbc`. The IDE asks before replacing an existing bytecode file.
-- Run and check can execute the current unsaved buffer as a temporary source file in the same directory, preserving relative module lookup. Temporary files are removed when the command exits.
-
-The IDE is an editor and runtime console, not a debugger or language server. Highlighting is lexical and provides no static diagnostics while typing. Bytecode building requires the native Go runtime; ordinary run/check operations can use either runtime.
-
-
-For editor integration with the typed TellC language, see the separate [language server](../lsp/README.md).
+The Python interpreter and IDE are not deleted in this change. They remain
+compatibility components until supported Go runtime features and the Rust
+editor reach sufficient parity. The Python runtime should receive only
+security, compatibility, and migration fixes; new runtime features belong in
+Go. The IDE should receive only critical compatibility fixes; new editor
+features belong in GPUI Studio.

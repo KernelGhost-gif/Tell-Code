@@ -4,14 +4,14 @@
 
 Both runtimes parse block headers with explicit prefix and delimiter routines, including nested otherwise-if chains. The parser now builds expression ASTs for common `Let`, `Set`, instance member assignment, output, assertion, return, raise, loop-control, bare expression, and `Tell object to method` statements. The expression AST includes tuple literals with shared runtime semantics. Other statements still use the line-oriented compatibility recognizers.
 
-Tell has two independent runtimes:
+Tell is moving toward one primary native runtime. The Python implementation is deprecated and remains only as a compatibility runtime during migration. New language features should target Go; new desktop editor features should target Rust/GPUI Studio.
 
 - `native/internal/tell` is a Go interpreter compiled into standalone binaries. Its block parser retains source line/column information and represents migrated statements with a `simpleStatement` containing a parsed expression AST. The runtime evaluates that AST directly; the bytecode compiler also lowers it directly rather than reparsing the statement text. Remaining statement families still use compatibility recognizers. Its expression lexer recognizes human-language operators directly, supports Unicode expression identifiers, and records offsets and Unicode-aware line/column coordinates. A few prefix and object-construction phrases remain syntax rewrites.
-- `tell/interpreter.py` parses line-oriented blocks into nodes with typed dictionaries for migrated statements, and uses its own Tell lexer, Pratt parser, and expression nodes for the shared expression grammar. Python expression evaluation now uses Tell ASTs exclusively; host-only Python expression forms fail Tell parsing rather than falling through to a second expression language. Control-flow conditions are parsed into cached ASTs before execution.
+- `tell/interpreter.py` is the deprecated Python compatibility interpreter. It parses line-oriented blocks into nodes with typed dictionaries for migrated statements, and uses its own Tell lexer, Pratt parser, and expression nodes for the shared expression grammar. Python expression evaluation now uses Tell ASTs exclusively; host-only Python expression forms fail Tell parsing rather than falling through to a second expression language. Control-flow conditions are parsed into cached ASTs before execution.
 
 Both runtimes own separate environments, built-ins, class/instance implementations, module loaders, and standard-library adapters. Local modules execute in an environment parented by the runtime globals, export public top-level bindings, and are cached by resolved file path per interpreter. `conformance/core.json` is the shared executable corpus. Each runtime test runner executes those same programs and compares output against the declared expected output.
 
-The optional Python adapter is deliberately outside ordinary runtime startup. The Python implementation imports requested modules in its current process. The native Go runtime invokes a configured Python executable per foreign function call and exchanges JSON values over stdin/stdout. Named and positional arguments work; opaque Python objects and persistent Python-side module state do not cross calls. This keeps the default Go runtime independent of Python while making the dependency explicit for programs that choose the adapter.
+The optional Python adapter is deliberately outside ordinary Go runtime startup. The Python runtime is deprecated and should not be used as the target for new features. The Python implementation imports requested modules in its current process. The native Go runtime invokes a configured Python executable per foreign function call and exchanges JSON values over stdin/stdout. Named and positional arguments work; opaque Python objects and persistent Python-side module state do not cross calls. This keeps the default Go runtime independent of Python while making the dependency explicit for programs that choose the adapter.
 
 ## Current execution path
 
@@ -36,7 +36,7 @@ It supports `Let`, `Set`, `Remember` field initialization, output statements, ba
 
 ## Persistent sessions
 
-The Python `Interpreter` retains its global environment between `run` calls. The native `Session` API provides the same behavior with `NewSession` or `NewSessionWithLimits` and `Exec`. Both REPLs rely on this persistence and pass the same execution-limit settings used by command-line program runs.
+The deprecated Python `Interpreter` retains its global environment between `run` calls. The native `Session` API provides the same behavior with `NewSession` or `NewSessionWithLimits` and `Exec`. Both REPLs rely on this persistence and pass the same execution-limit settings used by command-line program runs.
 
 ## Architectural priorities
 
@@ -44,6 +44,8 @@ The Python `Interpreter` retains its global environment between `run` calls. The
 2. Replace expression phrase rewriting with explicit tokens in both runtimes while retaining the English operator grammar.
 3. Separate parser, AST, diagnostics, runtime, standard library, and CLI code into focused modules/packages.
 4. Build shared semantic analysis and a stable IR, then expand bytecode lowering from the current syntax-limited subset.
-5. Align numeric, collection, error, and library behavior with cross-runtime conformance cases as each statement family moves to the AST.
+5. Continue migrating the supported typed dialect into the Go parser, semantic checker, runtime, and bytecode format.
+6. Keep the Python runtime in compatibility-only mode until native feature coverage and migration guidance are sufficient.
+7. Build the Rust/GPUI Studio editor around the Go CLI and the existing Tell language server.
 
 See [ENGINEERING_AUDIT.md](ENGINEERING_AUDIT.md) for measured gaps and current validation evidence.

@@ -1,0 +1,9 @@
+to factorial(number: n) out number:
+    if n <= 1:
+        give back 1
+    end if
+    give back n * factorial(n - 1)
+end function
+
+let number result be factorial(5)
+say result

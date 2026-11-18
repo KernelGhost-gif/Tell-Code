@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "tell-language"
 version = "0.3.7"
-description = "Tell, a sentence-first polyglot programming language with Python, JavaScript, and native runtimes"
+description = "Legacy Python compatibility runtime for Tell; the native Go runtime is recommended"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -13,7 +13,6 @@ authors = [{ name = "Tell Language contributors" }]
 
 [project.scripts]
 tell = "tell.__main__:main"
-tell-ide = "tell.ide:main"
 
 [tool.setuptools]
 packages = ["tell"]

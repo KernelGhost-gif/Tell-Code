@@ -156,15 +156,43 @@ func (f *userFunction) callNamed(args []any, named map[string]any, receiver *use
 		}
 		local.set(parameter, value)
 	}
+	for index, parameter := range parameterNames {
+		if index >= len(f.paramTypes) || strings.TrimSpace(f.paramTypes[index]) == "" {
+			continue
+		}
+		if value, exists := local.values[parameter]; exists {
+			if err := f.runtime.checkType(f.paramTypes[index], value, local, parameter); err != nil {
+				return nil, err
+			}
+		}
+	}
+	validateReturn := func(value any) (any, error) {
+		if f.returnType == "" {
+			return value, nil
+		}
+		if strings.EqualFold(f.returnType, "void") {
+			if value != nil {
+				return nil, fail("%q declares out void but returned a value", f.name)
+			}
+			return nil, nil
+		}
+		if value == nil {
+			return nil, fail("%q must return a value of type %s", f.name, f.returnType)
+		}
+		if err := f.runtime.checkType(f.returnType, value, local, f.name+" return value"); err != nil {
+			return nil, err
+		}
+		return value, nil
+	}
 	err := f.runtime.execute(f.body, local)
 	if err != nil {
 		var s signal
 		if errors.As(err, &s) && s.kind == "return" {
-			return s.value, nil
+			return validateReturn(s.value)
 		}
 		return nil, err
 	}
-	return nil, nil
+	return validateReturn(nil)
 }
 
 func invoke(v any, args []any) (any, error) {

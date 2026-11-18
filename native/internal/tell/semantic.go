@@ -7,9 +7,17 @@ type semanticBinding struct {
 	inferred   string
 }
 
+type semanticSignature struct {
+	parameters []string
+	types []string
+	returnType string
+}
+
 type semanticAnalyzer struct {
 	filename string
-	classes  map[string]string
+	classes map[string]string
+	functions map[string]semanticSignature
+	currentReturn string
 }
 
 var semanticBuiltins = map[string]string{
@@ -23,7 +31,8 @@ var semanticBuiltins = map[string]string{
 }
 
 var semanticBuiltinTypes = map[string]bool{
-	"any": true, "nothing": true, "boolean": true, "number": true,
+	"any": true, "nothing": true, "boolean": true, "bool": true, "void": true,
+	"number": true, "decimal": true,
 	"text": true, "list": true, "tuple": true, "set": true,
 	"dictionary": true, "function": true, "class": true,
 }
@@ -39,8 +48,9 @@ func Analyze(source, filename string) error {
 }
 
 func analyzeBytecodeSemantics(nodes []node, filename string) error {
-	analyzer := semanticAnalyzer{filename: filename, classes: make(map[string]string)}
+	analyzer := semanticAnalyzer{filename: filename, classes: make(map[string]string), functions: make(map[string]semanticSignature)}
 	analyzer.collectClasses(nodes)
+	analyzer.collectFunctions(nodes)
 	return analyzer.statements(nodes, map[string]semanticBinding{}, false)
 }
 
@@ -52,6 +62,34 @@ func (a *semanticAnalyzer) collectClasses(nodes []node) {
 		a.collectClasses(statement.body)
 		a.collectClasses(statement.otherwise)
 		a.collectClasses(statement.handler)
+	}
+}
+
+func (a *semanticAnalyzer) collectFunctions(nodes []node) {
+	for _, statement := range nodes {
+		if statement.kind == "function" {
+			a.functions[statement.name] = semanticSignature{
+				parameters: append([]string(nil), statement.params...),
+				types: append([]string(nil), statement.paramTypes...),
+				returnType: statement.returnType,
+			}
+		}
+		a.collectFunctions(statement.body)
+		a.collectFunctions(statement.otherwise)
+		a.collectFunctions(statement.handler)
+	}
+}
+
+func normalizeSemanticType(typeName string) string {
+	switch strings.ToLower(strings.TrimSpace(typeName)) {
+	case "bool":
+		return "boolean"
+	case "void":
+		return "nothing"
+	case "decimal":
+		return "number"
+	default:
+		return strings.ToLower(strings.TrimSpace(typeName))
 	}
 }
 
@@ -68,22 +106,52 @@ func (a *semanticAnalyzer) statements(nodes []node, bindings map[string]semantic
 				local := map[string]semanticBinding{
 					"this": {inferred: "class:" + statement.name},
 				}
-				for _, parameter := range member.params {
-					local[parameter] = semanticBinding{inferred: "any"}
+				for index, parameter := range member.params {
+					typeName := ""
+					if index < len(member.paramTypes) {
+						typeName = member.paramTypes[index]
+					}
+					if typeName == "" {
+						local[parameter] = semanticBinding{inferred: "any"}
+					} else {
+						if err := a.checkAnnotation(parameter, typeName, "any"); err != nil {
+							return a.at(member, err)
+						}
+						local[parameter] = semanticBinding{annotation: typeName}
+					}
 				}
+				previousReturn := a.currentReturn
+				a.currentReturn = member.returnType
 				if err := a.statements(member.body, local, true); err != nil {
+					a.currentReturn = previousReturn
 					return err
 				}
+				a.currentReturn = previousReturn
 			}
 		case "function":
 			bindings[statement.name] = semanticBinding{inferred: "function"}
 			local := map[string]semanticBinding{statement.name: {inferred: "function"}}
-			for _, parameter := range statement.params {
-				local[parameter] = semanticBinding{inferred: "any"}
+			for index, parameter := range statement.params {
+				typeName := ""
+				if index < len(statement.paramTypes) {
+					typeName = statement.paramTypes[index]
+				}
+				if typeName == "" {
+					local[parameter] = semanticBinding{inferred: "any"}
+				} else {
+					if err := a.checkAnnotation(parameter, typeName, "any"); err != nil {
+						return a.at(statement, err)
+					}
+					local[parameter] = semanticBinding{annotation: typeName}
+				}
 			}
+			previousReturn := a.currentReturn
+			a.currentReturn = statement.returnType
 			if err := a.statements(statement.body, local, true); err != nil {
+				a.currentReturn = previousReturn
 				return err
 			}
+			a.currentReturn = previousReturn
 		case "if":
 			if statement.conditionExpr != nil {
 				if _, err := a.infer(statement.conditionExpr, bindings); err != nil {
@@ -138,6 +206,22 @@ func (a *semanticAnalyzer) statement(statement node, bindings map[string]semanti
 	}
 
 	switch simple.kind {
+	case "return":
+		inferred, err := inferExpression(simple.expression)
+		if err != nil {
+			return a.at(statement, err)
+		}
+		if a.currentReturn != "" {
+			if strings.EqualFold(a.currentReturn, "void") {
+				if simple.hasExpression && inferred != "nothing" {
+					return a.at(statement, fail("void function cannot return a value"))
+				}
+			} else if !simple.hasExpression {
+				return a.at(statement, fail("%q must return a value of type %s", "function", a.currentReturn))
+			} else if err := a.checkAnnotation("return value", a.currentReturn, inferred); err != nil {
+				return a.at(statement, err)
+			}
+		}
 	case "let":
 		inferred, err := inferExpression(simple.expression)
 		if err != nil {
@@ -214,6 +298,10 @@ func (a *semanticAnalyzer) checkAnnotation(name, annotation, inferred string) er
 	}
 	if inferred == "" || inferred == "any" || normalized == "any" {
 		return nil
+	}
+	normalized = normalizeSemanticType(normalized)
+	if !strings.HasPrefix(inferred, "class:") {
+		inferred = normalizeSemanticType(inferred)
 	}
 	if strings.HasPrefix(inferred, "class:") {
 		actual := strings.TrimPrefix(inferred, "class:")
@@ -415,10 +503,13 @@ func (a *semanticAnalyzer) infer(expr expression, bindings map[string]semanticBi
 		}
 		return "any", nil
 	case callExpression:
-		for _, argument := range value.args {
-			if _, err := a.infer(argument.value, bindings); err != nil {
+		argumentTypes := make([]string, len(value.args))
+		for index, argument := range value.args {
+			inferred, err := a.infer(argument.value, bindings)
+			if err != nil {
 				return "", err
 			}
+			argumentTypes[index] = inferred
 		}
 		if callee, ok := value.callee.(nameExpression); ok {
 			if _, isClass := a.classes[callee.name]; isClass {
@@ -426,6 +517,43 @@ func (a *semanticAnalyzer) infer(expr expression, bindings map[string]semanticBi
 			}
 			if result, isBuiltin := semanticBuiltins[callee.name]; isBuiltin {
 				return result, nil
+			}
+			if signature, exists := a.functions[callee.name]; exists {
+				positionalIndex := 0
+				used := make(map[string]bool)
+				for index, argument := range value.args {
+					parameterIndex := -1
+					if argument.name != "" {
+						for candidate, parameter := range signature.parameters {
+							if parameter == argument.name {
+								parameterIndex = candidate
+								break
+							}
+						}
+					} else {
+						parameterIndex = positionalIndex
+						positionalIndex++
+					}
+					if parameterIndex < 0 || parameterIndex >= len(signature.parameters) {
+						continue
+					}
+					parameterName := signature.parameters[parameterIndex]
+					if used[parameterName] {
+						return "", fail("%q got multiple values for %q", callee.name, parameterName)
+					}
+					used[parameterName] = true
+					if parameterIndex < len(signature.types) && signature.types[parameterIndex] != "" {
+						if err := a.checkAnnotation(parameterName, signature.types[parameterIndex], argumentTypes[index]); err != nil {
+							return "", err
+						}
+					}
+				}
+				if signature.returnType != "" {
+					if _, class := a.classes[signature.returnType]; class {
+						return "class:" + signature.returnType, nil
+					}
+					return normalizeSemanticType(signature.returnType), nil
+				}
 			}
 		}
 		return "any", nil
