@@ -851,6 +851,8 @@ func foldBytecodeExpression(expr expression) expression {
 			switch value.operator {
 			case "not":
 				result = !truthy(literal)
+			case "~":
+				result, err = bitwiseNot(literal)
 			case "+", "-":
 				var number float64
 				number, err = numberValue(literal)
@@ -1505,6 +1507,10 @@ func executeBytecodeCode(r *runtime, instructions []BytecodeInstruction, functio
 			case "UNARY":
 				if instruction.Name == "not" {
 					stack = append(stack, !truthy(value))
+				} else if instruction.Name == "~" {
+					var result any
+					result, err = bitwiseNot(value)
+					if err == nil { stack = append(stack, result) }
 				} else {
 					var number float64
 					number, err = numberValue(value)

@@ -56,6 +56,7 @@ var languagePhrases = []languagePhrase{
 	{"is at most", "<=", "<="},
 	{"is not in", "notin", "notin"},
 	{"is equal to", "==", "=="},
+	{"equal to", "==", "=="},
 	{"isn't", "!=", "!="},
 	{"is not", "!=", "!="},
 	{"is below", "<", "<"},
@@ -206,13 +207,16 @@ func lex(s string) ([]token, error) {
 		}
 		if i+1 < len(s) {
 			two := s[i : i+2]
-			if two == ">=" || two == "<=" || two == "==" || two == "!=" || two == "**" || two == "//" {
-				appendToken(two, two, start, i+2)
+			if two == "&&" || two == "||" || two == "<<" || two == ">>" || two == ">=" || two == "<=" || two == "==" || two == "!=" || two == "**" || two == "//" {
+				kind := two
+				if two == "&&" { kind = "and" }; if two == "||" { kind = "or" }
+				appendToken(kind, two, start, i+2)
 				i += 2
 				continue
 			}
 		}
-		if strings.ContainsRune("+-*/%<>()[]{}.,:", c) {
+		if c == '!' { appendToken("not", "!", start, start+size); i += size; continue }
+		if strings.ContainsRune("+-*/%<>()[]{}.,:~&|^", c) {
 			appendToken(string(c), string(c), start, start+size)
 			i += size
 			continue
@@ -235,14 +239,22 @@ func precedence(op string) int {
 		return 1
 	case "and":
 		return 2
-	case "==", "!=", "<", ">", "<=", ">=", "in", "notin":
+	case "=", "==", "!=", "<", ">", "<=", ">=", "in", "notin":
 		return 3
-	case "+", "-":
+	case "|":
 		return 4
-	case "*", "/", "//", "%":
+	case "^":
 		return 5
-	case "**":
+	case "&":
 		return 6
+	case "<<", ">>":
+		return 7
+	case "+", "-":
+		return 8
+	case "*", "/", "//", "%":
+		return 9
+	case "**":
+		return 11
 	}
 	return 0
 }
