@@ -1,18 +1,19 @@
-Note: A tiny number guessing game. The answer is fixed to keep the example predictable.
-
-Let secret be 7.
+# A deterministic input exercise; the fixed value makes each run reproducible.
+Let reference_value be 7.
 Let guess be 0.
+Let attempts be 0.
 
-While guess is not equal to secret:
-    Ask "Guess a number from 1 to 10: " and save the answer as raw_guess.
+Say "Reference value exercise: enter a number from 1 to 10.".
+While guess is not equal to reference_value:
+    Ask "Your entry: " and save the answer as raw_guess.
     Set guess to number(raw_guess).
-    If guess is less than secret:
-        Say "Too low. Try again.".
-    Otherwise:
-        If guess is greater than secret:
-            Say "Too high. Try again.".
-        End if.
+    Set attempts to attempts plus 1.
+
+    If guess is less than reference_value:
+        Say "The entry is below the reference value. Try again.".
+    Otherwise if guess is greater than reference_value:
+        Say "The entry is above the reference value. Try again.".
     End if.
 End while.
 
-Say "You got it!".
+Say "Correct. Confirmation completed after {attempts} entries.".

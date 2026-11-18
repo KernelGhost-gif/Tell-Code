@@ -1,14 +1,20 @@
-Let languages as set be {"Tell", "Go", "Python", "Tell"}.
-Say languages.
-Say "Go" is in languages.
+# Set operations can help compare a planned rollout with approved regions.
+Let approved_regions as set be {"ap-south-1", "eu-west-1", "us-east-1"}.
+Let requested_regions as set be {"ap-south-1", "ca-central-1"}.
 
-Let compiled_languages be union(languages, set(["C#", "Java"])).
-Say compiled_languages.
-Say intersection(languages, set(["Go", "Rust"])).
-Say difference(languages, set(["Python"])).
+Let all_reviewed_regions be union(approved_regions, requested_regions).
+Let ready_regions be intersection(approved_regions, requested_regions).
+Let regions_needing_approval be difference(requested_regions, approved_regions).
+Let canada_in_review be "ca-central-1" is in all_reviewed_regions.
+Let asia_approved be "ap-south-1" is in ready_regions.
+Let canada_needs_approval be "ca-central-1" is in regions_needing_approval.
 
-Add "C#" to languages.
-Remove "Go" from languages.
-For each language in languages:
-    Say language.
-End loop.
+Say "The requested rollout includes {len(requested_regions)} regions.".
+Say "Canada is included in the review set: {canada_in_review}.".
+Say "The rollout has an approved region: {asia_approved}.".
+Say "A new approval is required for Canada: {canada_needs_approval}.".
+
+Add "ca-central-1" to approved_regions.
+Remove "eu-west-1" from approved_regions.
+Let canada_is_enabled be "ca-central-1" is in approved_regions.
+Say "After the approval update, Canada is enabled: {canada_is_enabled}.".

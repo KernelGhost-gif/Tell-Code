@@ -1,15 +1,18 @@
-To greet with person and greeting:
-    Give back "{greeting}, {person}.".
+# Demonstrates Unicode identifiers, named arguments, and short-circuit logic.
+To format_status with owner and status:
+    Give back "{owner}: {status}.".
 End function.
 
-Let constant hello_prefix as text be "Hello".
-Let café as number be 2.
+Let constant service_name as text be "Customer Portal".
+Let évaluations as number be 2.
+
+# The second operand is intentionally unsafe; short-circuiting keeps it unevaluated.
 If false and (1 divided by 0 is equal to 0):
     Say "This branch should not run.".
-Otherwise if café is equal to 2:
-    Say greet(person="Ada", greeting=hello_prefix).
+Otherwise if évaluations is equal to 2:
+    Say format_status(owner="Customer Operations", status="Ready for review").
 Otherwise:
-    Say "The value was unexpected.".
+    Say "The review count needs attention.".
 End if.
 
-Say "Unicode value: {café}.".
+Say "Service: {service_name}; completed evaluations: {évaluations}.".

@@ -1,35 +1,34 @@
-Note: A small tour of Tell's core features.
+# A compact service report using lists, functions, decisions, loops, and math.
+Let review_durations be [12, 18, 15, 21, 24].
+Let target_duration be 20.
 
-Let name be "Ada".
-Let score be 7.
-Let numbers be [2, 4, 6, 8].
-
-If score is greater than 5:
-    Say "Welcome, {name}. Your score is {score}.".
-Otherwise:
-    Say "Keep practising, {name}.".
-End if.
-
-Let size be the length of numbers.
-Say "The list has {size} items.".
-
-Add 10 to numbers.
-Say numbers.
-
-For each number in numbers:
-    Say number times 2.
-End loop.
-
-Repeat 3 times:
-    Say "Loop number {the current repetition number}.".
-End repeat.
-
-To multiply(first, second):
-    Give back first times second.
+To calculate_average(values):
+    Let total be 0.
+    For each value in values:
+        Set total to total plus value.
+    End loop.
+    Give back total divided by len(values).
 End function.
 
-Let answer be the result of multiply with 6 and 7.
-Say "Six times seven is {answer}.".
+Let average_duration be the result of calculate_average with review_durations.
+Say "Average review time: {average_duration} days.".
+
+If average_duration is at most target_duration:
+    Say "The team is meeting the {target_duration}-day target.".
+Otherwise:
+    Say "The team is above the {target_duration}-day target.".
+End if.
+
+Let squared_deviation_total be 0.
+For each duration in review_durations:
+    Let difference be duration minus average_duration.
+    Set squared_deviation_total to squared_deviation_total plus difference times difference.
+End loop.
 
 Use the math library as maths.
-Say maths.sqrt(81).
+Let standard_deviation be maths.sqrt(squared_deviation_total divided by len(review_durations)).
+Say "Variation across reviews: {standard_deviation} days.".
+
+Repeat 3 times:
+    Say "Quality checkpoint {the current repetition number} recorded.".
+End repeat.

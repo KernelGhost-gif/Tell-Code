@@ -1,3 +1,4 @@
-To double(value):
-    Give back value times 2.
+# Shared pricing calculation used by modules.tell.
+To calculate_line_total(unit_rate, quantity):
+    Give back unit_rate times quantity.
 End function.

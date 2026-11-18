@@ -1,5 +1,9 @@
-# Both declarations refer to functions exposed with the C ABI.
+# These declarations bind to functions supplied by linked integration libraries.
+# The C and Swift symbols must match the libraries' exported ABI exactly.
 extern c function add(int32 left, int32 right) returns int32 as "c_add"
 extern swift function double_value(float64 value) returns float64 as "swift_double_value"
-let number result be add(2, 3)
-say double_value(1.5)
+
+let number combined_count be add(2, 3)
+let decimal adjusted_measurement be double_value(1.5)
+say "Combined record count: {combined_count}"
+say "Adjusted measurement: {adjusted_measurement}"

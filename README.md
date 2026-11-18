@@ -13,22 +13,15 @@ The experimental [TellC compiler](TellC/README.md) uses LLVM to build native exe
 ## A first program
 
 ```tell
-Let name be "Ada".
-Let age be 20.
-
-If age is greater than 18:
-    Say "Hello, {name}!".
-    Say "You are an adult.".
-Otherwise:
-    Say "You are still young!".
-End if.
+Let colleague be "Avery".
+Let workspace be "Customer Operations".
+Say "Welcome, {colleague}. Your {workspace} workspace is ready.".
 ```
 
 Output:
 
 ```text
-Hello, Ada!
-You are an adult.
+Welcome, Avery. Your Customer Operations workspace is ready.
 ```
 
 ## Run Tell natively
