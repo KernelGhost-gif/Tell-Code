@@ -1,7 +1,7 @@
-# This example needs Python available to the runtime.
+# Requires Python and the standard-library statistics module.
 Use the Python library called statistics as stats.
 
-Let scores be [12, 18, 24, 30].
-Say "Mean: {stats.mean(scores)}".
-Say "Population standard deviation: {stats.pstdev(scores)}".
-Say "Named argument: {stats.fmean(data=scores)}".
+Let weekly_ticket_counts be [42, 47, 51, 45, 55].
+Say "Weekly average: {stats.mean(weekly_ticket_counts)} tickets.".
+Say "Population standard deviation: {stats.pstdev(weekly_ticket_counts)} tickets.".
+Say "Named-argument average: {stats.fmean(data=weekly_ticket_counts)} tickets.".

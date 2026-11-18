@@ -1,2 +1,4 @@
-Check that 2 plus 2 is equal to 4.
-Check that len(["Tell", "tests"]) is equal to 2.
+# Minimal assertions for a small project planning workflow.
+Let review_items be ["Design review", "Release review"].
+Check that len(review_items) is equal to 2.
+Check that 24 times 60 is equal to 1440.
