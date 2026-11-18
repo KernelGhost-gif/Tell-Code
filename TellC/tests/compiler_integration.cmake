@@ -105,3 +105,7 @@ execute_process(COMMAND "${TELL_WORK_DIR}/uncaught_error" RESULT_VARIABLE uncaug
 if(NOT uncaught_result EQUAL 1 OR NOT uncaught_output STREQUAL "" OR NOT uncaught_error STREQUAL "Error: invalid number\n")
   message(FATAL_ERROR "Unexpected uncaught error: ${uncaught_result}, [${uncaught_output}], [${uncaught_error}]")
 endif()
+compile_and_run(mutable_collections tests/fixtures/mutable_collections.tell "5\n7\n9\n5\n2\n7\n2\n3\n4\n9\n8\ntwo\nitem not found in list\n2\n1\n3\n2\nfalse\n")
+expect_compile_failure(mutable_type tests/fixtures/mutable_type.tell "expected 'number', got 'text'")
+expect_compile_failure(mutable_target tests/fixtures/mutable_target.tell "add and remove require a list or vector")
+compile_and_run(operators tests/fixtures/operators.tell "2\n7\n5\n-6\n16\n-2\n13\ntrue\nfalse\ntrue\ntrue\nfalse\ntrue\ninvalid shift\nshift out of range\n")

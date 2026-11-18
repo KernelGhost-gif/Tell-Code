@@ -1,0 +1,48 @@
+to append_value(list of number: items) out void:
+    add 4 to items
+end function
+to change(list of number: items) out number:
+    add 9 to items
+    return 7
+end function
+let vector of number values be []
+let list of number alias be values
+add 1 to values
+add 2 to values
+add 2 to alias
+add 3 to values
+append_value(alias)
+say len(values)
+set values[0] to change(alias)
+say values[0]
+say values[5]
+remove 2 from alias
+say len(values)
+say values[1]
+for each item in values:
+    say item
+    if item = 4:
+        add 8 to alias
+    end if
+end for
+let list of text words be ["one", "two", "two"]
+remove "two" from words
+say words[1]
+try:
+    remove "missing" from words
+if something goes wrong:
+    say error_message
+end try
+say len(words)
+let list of number shrinking be [1, 2, 3]
+for each current in shrinking:
+    say current
+    if current = 1:
+        remove 1 from shrinking
+    end if
+end for
+say len(shrinking)
+let list of bool flags be [true]
+add false to flags
+remove true from flags
+say flags[0]
