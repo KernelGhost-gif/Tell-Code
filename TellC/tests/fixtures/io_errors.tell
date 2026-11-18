@@ -1,0 +1,32 @@
+to convert(text: value) out number:
+    return number(value)
+end function
+try:
+    let text raw be input("Value? ")
+    let number value be convert(raw)
+    say value
+if something goes wrong:
+    say error_message
+end try
+write_file("io-test.txt", "hello")
+append_file("io-test.txt", " world")
+say read_file("io-test.txt")
+try:
+    try:
+        raise an error saying "custom error"
+    end try
+if something goes wrong:
+    say error_message
+end try
+try:
+    say read_file("file-that-does-not-exist.txt")
+if something goes wrong:
+    say error_message
+end try
+try:
+    let list of number values be [1]
+    say values[5]
+if something goes wrong:
+    say error_message
+end try
+say decimal("2.5")

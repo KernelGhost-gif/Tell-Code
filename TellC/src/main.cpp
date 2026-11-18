@@ -1,3 +1,7 @@
+#ifdef TELL_STANDALONE_MACOS
+#include <llvm/Object/MachOUniversal.h>
+#include <llvm/BinaryFormat/MachO.h>
+#endif
 #include "tell/parser.hpp"
 #include "codegen.hpp"
 
@@ -21,6 +25,11 @@
 
 #ifdef TELL_STANDALONE_MACOS
 #include <fcntl.h>
+#include <dlfcn.h>
+#include <set>
+#include <llvm/Object/Archive.h>
+#include <llvm/Object/Binary.h>
+#include <llvm/Object/ObjectFile.h>
 #include <llvm/ADT/CachedHashString.h>
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/Support/MemoryBuffer.h>
@@ -40,7 +49,7 @@ namespace {
 void print_usage(std::ostream& out) {
     out << "TellC - experimental strongly typed Tell compiler\n"
            "Usage:\n"
-           "  tellc <file.tell> [-o executable]\n"
+           "  tellc <file.tell> [-o executable] [--link library]...\n"
            "  tellc --help\n"
            "  tellc --version\n"
            "  tellc --llvm-version\n";
@@ -114,6 +123,69 @@ int run(const char* executable, const std::vector<const char*>& arguments) {
     return 1;
 }
 #else
+// Build small import stubs for system symbols actually referenced by inputs.
+// dlsym checks the running macOS system instead of depending on an installed SDK.
+void collect_system_symbols(llvm::object::ObjectFile& object, void* system, void* cpp,
+                            std::set<std::string>& systemSymbols, std::set<std::string>& cppSymbols) {
+    for (const auto& symbol : object.symbols()) {
+        auto flags = symbol.getFlags();
+        if (!flags) { llvm::consumeError(flags.takeError()); continue; }
+        if (!(*flags & llvm::object::SymbolRef::SF_Undefined)) continue;
+        auto name = symbol.getName();
+        if (!name) { llvm::consumeError(name.takeError()); continue; }
+        if (!name->starts_with("_") || name->size() < 2) continue;
+        std::string raw = name->drop_front().str();
+        if (dlsym(system, raw.c_str())) systemSymbols.insert(name->str());
+        else if (dlsym(cpp, raw.c_str())) cppSymbols.insert(name->str());
+    }
+}
+
+void scan_binary(llvm::object::Binary& binary, void* system, void* cpp,
+                 std::set<std::string>& systemSymbols, std::set<std::string>& cppSymbols) {
+    if (auto* object = llvm::dyn_cast<llvm::object::ObjectFile>(&binary)) {
+        collect_system_symbols(*object, system, cpp, systemSymbols, cppSymbols);
+    } else if (auto* universal = llvm::dyn_cast<llvm::object::MachOUniversalBinary>(&binary)) {
+        for (const auto& slice : universal->objects()) {
+            if (slice.getArchFlagName() != "arm64") continue;
+            auto object = slice.getAsObjectFile();
+            if (object) {
+                scan_binary(**object, system, cpp, systemSymbols, cppSymbols);
+            } else {
+                llvm::consumeError(object.takeError());
+                auto archive = slice.getAsArchive();
+                if (!archive) throw std::runtime_error("cannot inspect ARM64 library slice: " + llvm::toString(archive.takeError()));
+                scan_binary(**archive, system, cpp, systemSymbols, cppSymbols);
+            }
+            return;
+        }
+        throw std::runtime_error("library does not contain an ARM64 slice");
+    } else if (auto* archive = llvm::dyn_cast<llvm::object::Archive>(&binary)) {
+        llvm::Error error = llvm::Error::success();
+        for (const auto& child : archive->children(error)) {
+            auto member = child.getAsBinary();
+            if (!member) { llvm::consumeError(member.takeError()); continue; }
+            if (auto* object = llvm::dyn_cast<llvm::object::ObjectFile>(member->get()))
+                collect_system_symbols(*object, system, cpp, systemSymbols, cppSymbols);
+        }
+        if (error) throw std::runtime_error("cannot read archive: " + llvm::toString(std::move(error)));
+    }
+}
+
+std::string make_stub(const char* library, const std::set<std::string>& symbols) {
+    std::string stub = std::string("--- !tapi-tbd\ntbd-version: 4\ntargets: [ arm64-macos ]\ninstall-name: ") +
+        library + "\nexports:\n  - targets: [ arm64-macos ]\n    symbols: [ ";
+    bool first = true;
+    for (const auto& name : symbols) {
+        if (!first) stub += ", ";
+        first = false;
+        // Mach-O symbols can contain characters with special YAML meanings.
+        stub += "\"";
+        for (char c : name) { if (c == '\\' || c == '"') stub += '\\'; stub += c; }
+        stub += "\"";
+    }
+    return stub + " ]\n...\n";
+}
+
 class StdoutRedirect {
     int saved_stdout_ = -1;
 
@@ -179,19 +251,32 @@ public:
     }
 };
 
-void link_macos(llvm::StringRef object, const std::string& output) {
+void link_macos(llvm::StringRef object, const std::string& output, const std::vector<std::string>& libraries) {
     constexpr const char* arch = "arm64";
     constexpr const char* minimum = "11.0";
     constexpr const char* target = "arm64-macos";
     constexpr const char* object_name = "tell-generated.o";
     constexpr const char* stub_name = "tell-libSystem.tbd";
 
-    // TellC's current backend only imports these stable libSystem C ABI symbols.
-    const std::string stub =
-        std::string("--- !tapi-tbd\ntbd-version: 4\ntargets: [ ") + target +
-        " ]\ninstall-name: /usr/lib/libSystem.B.dylib\nexports:\n"
-        "  - targets: [ " + target +
-        " ]\n    symbols: [ _printf, _strcmp, _malloc, _abort, dyld_stub_binder ]\n...\n";
+    void* system = dlopen("/usr/lib/libSystem.B.dylib", RTLD_LAZY | RTLD_LOCAL);
+    void* cpp = dlopen("/usr/lib/libc++.1.dylib", RTLD_LAZY | RTLD_LOCAL);
+    if (!system || !cpp) throw std::runtime_error("cannot load macOS system libraries");
+    std::set<std::string> systemSymbols = {"_printf", "_strcmp", "_malloc", "_abort", "dyld_stub_binder"};
+    std::set<std::string> cppSymbols;
+    auto generated = llvm::object::createBinary(llvm::MemoryBufferRef(object, object_name));
+    if (!generated) throw std::runtime_error("cannot inspect generated object: " + llvm::toString(generated.takeError()));
+    scan_binary(**generated, system, cpp, systemSymbols, cppSymbols);
+    for (const auto& path : libraries) {
+        auto binary = llvm::object::createBinary(path);
+        if (!binary) throw std::runtime_error("cannot read library '" + path + "': " + llvm::toString(binary.takeError()));
+        scan_binary(*binary->getBinary(), system, cpp, systemSymbols, cppSymbols);
+    }
+    dlclose(cpp); dlclose(system);
+    const std::string stub = make_stub("/usr/lib/libSystem.B.dylib", systemSymbols);
+    const std::string cpp_stub = make_stub("/usr/lib/libc++.1.dylib", cppSymbols);
+    constexpr const char* cpp_stub_name = "tell-libc++.tbd";
+    const llvm::CachedHashStringRef cpp_stub_key(cpp_stub_name);
+    lld::macho::cachedReads[cpp_stub_key] = llvm::MemoryBufferRef(cpp_stub, cpp_stub_name);
 
     const llvm::CachedHashStringRef object_key(object_name);
     const llvm::CachedHashStringRef stub_key(stub_name);
@@ -203,10 +288,13 @@ void link_macos(llvm::StringRef object, const std::string& output) {
     bool output_created = false;
     try {
         StdoutRedirect redirect(output, output_created);
-        const char* args[] = {
+        std::vector<const char*> args = {
             "ld64.lld", "-arch", arch, "-platform_version", "macos",
-            minimum, minimum, "-o", "-", object_name, stub_name
+            minimum, minimum, "-o", "-", object_name
         };
+        for (const auto& library : libraries) args.push_back(library.c_str());
+        args.push_back(stub_name);
+        if (!cppSymbols.empty()) args.push_back(cpp_stub_name);
         const lld::DriverDef drivers[] = {{lld::Darwin, &lld::macho::link}};
         const auto result = lld::lldMain(args, llvm::outs(), llvm::errs(), drivers);
         const bool output_ok = redirect.restore();
@@ -218,6 +306,7 @@ void link_macos(llvm::StringRef object, const std::string& output) {
     } catch (...) {
         lld::macho::cachedReads.erase(object_key);
         lld::macho::cachedReads.erase(stub_key);
+        lld::macho::cachedReads.erase(cpp_stub_key);
         if (output_created) {
             unlink(output.c_str());
         }
@@ -228,6 +317,7 @@ void link_macos(llvm::StringRef object, const std::string& output) {
     // leave those references in LLD's process-global cache after the link.
     lld::macho::cachedReads.erase(object_key);
     lld::macho::cachedReads.erase(stub_key);
+    lld::macho::cachedReads.erase(cpp_stub_key);
 }
 #endif
 
@@ -270,10 +360,14 @@ int main(int argc, char** argv) {
     std::string input;
     std::string output = "a.out";
     bool output_option_seen = false;
+    std::vector<std::string> libraries;
 
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
-        if (arg == "-o") {
+        if (arg == "--link") {
+            if (++i == argc || std::string(argv[i]).empty()) { std::cerr << "tellc: --link requires a library filename\n"; return 2; }
+            libraries.emplace_back(argv[i]);
+        } else if (arg == "-o") {
             if (output_option_seen) {
                 std::cerr << "tellc: -o may only be specified once\n";
                 return 2;
@@ -300,6 +394,12 @@ int main(int argc, char** argv) {
         return 2;
     }
 
+    for (const auto& library : libraries) {
+        std::error_code ec;
+        if (std::filesystem::equivalent(library, output, ec) && !ec) {
+            std::cerr << "tellc: output must differ from library " << library << '\n'; return 2;
+        }
+    }
     std::error_code same_error;
     if (std::filesystem::equivalent(input, output, same_error) && !same_error) {
         std::cerr << "tellc: output must differ from input\n";
@@ -323,7 +423,7 @@ int main(int argc, char** argv) {
 #ifdef TELL_STANDALONE_MACOS
         llvm::SmallVector<char, 0> object;
         tell::generate_object(program, object);
-        link_macos(llvm::StringRef(object.data(), object.size()), output);
+        link_macos(llvm::StringRef(object.data(), object.size()), output, libraries);
 #else
         TempFile ir_file;
         TempFile object_file;
@@ -363,7 +463,15 @@ int main(int argc, char** argv) {
             throw std::runtime_error("LLVM machine code generation failed");
         }
 
-        if (run("clang", {"clang", object_file.path.c_str(), "-o", output.c_str()}) != 0) {
+        std::vector<const char*> link_args = {"clang", object_file.path.c_str()};
+        for (const auto& library : libraries) link_args.push_back(library.c_str());
+#ifdef __APPLE__
+        if (!libraries.empty()) link_args.push_back("-lc++");
+#else
+        if (!libraries.empty()) link_args.push_back("-lstdc++");
+#endif
+        link_args.push_back("-o"); link_args.push_back(output.c_str());
+        if (run("clang", link_args) != 0) {
             throw std::runtime_error("linking failed");
         }
 #endif

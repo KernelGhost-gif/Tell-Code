@@ -88,6 +88,12 @@ if(BUILD_TESTING)
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/standalone_macos.py"
         "$<TARGET_FILE:tellc>"
         "${CMAKE_CURRENT_SOURCE_DIR}/examples/objects.tell")
+    add_library(tell_test_cpp_static STATIC tests/cpp_library.cpp)
+    add_library(tell_test_cpp_dynamic SHARED tests/cpp_library.cpp)
+    set_target_properties(tell_test_cpp_dynamic PROPERTIES BUILD_WITH_INSTALL_NAME_DIR ON INSTALL_NAME_DIR "${CMAKE_CURRENT_BINARY_DIR}")
+    add_test(NAME cpp_integration COMMAND "${Python3_EXECUTABLE}"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/cpp_integration.py" "$<TARGET_FILE:tellc>"
+      "$<TARGET_FILE:tell_test_cpp_static>" "$<TARGET_FILE:tell_test_cpp_dynamic>")
   endif()
 
   add_executable(tell_parser_recursion_test tests/recursion.cpp)

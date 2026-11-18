@@ -13,7 +13,7 @@ say name
 
 Newlines terminate statements; semicolons separate statements on the same line. Keywords and built-in type names are case insensitive. Object type names are case sensitive.
 
-The parser recognizes typed declarations, assignment statements, output, returns, functions, if/otherwise, while, literals, lists, calls, member and index access, and common symbolic and word operators. The executable backend intentionally implements a smaller subset. Syntax outside the parser subset is reported as a parse error; syntax represented by the parser but not yet implemented by the backend is rejected during compilation with a source-located diagnostic. Natural-language comparison phrases, classes, imports, and named call arguments are not currently supported. Strings support basic escapes; source columns count bytes.
+The parser recognizes typed declarations, assignment statements, output, returns, functions, if/otherwise, while, repeat, for each, literals, lists, calls, member and index access, and common symbolic and word operators. The executable backend intentionally implements a smaller subset. Syntax outside the parser subset is reported as a parse error; syntax represented by the parser but not yet implemented by the backend is rejected during compilation with a source-located diagnostic. Natural-language comparison phrases, classes, imports, and named call arguments are not currently supported. Strings support basic escapes; source columns count bytes.
 
 **Compiled functions and methods are strongly typed.** Parameters must use `type: name` and every function must declare its result with `out type` (use `out void` for no result). For example:
 
@@ -60,23 +60,58 @@ Run parser and compiler integration tests with `ctest --test-dir <build-director
 
 The integration test compiles and runs the factorial and object examples, and verifies that invalid private access, parameter types, return types, and incomplete return paths fail compilation. The LLVM-backed test job runs on Linux in GitHub Actions.
 
-## Foreign function declarations
+## Calling C++ libraries
 
-TellC can represent declarations for functions supplied by C or Swift libraries:
+Tell can call functions exported with the C ABI by a prebuilt C or C++ library.
+For example, wrap the C++ function in an `extern "C"` entry point:
 
-```tell
-extern c function add(int32 left, int32 right) returns int32 as "c_add"
-extern swift function double_value(float64 value) returns float64 as "swift_double_value"
-let number result be add(2, 3)
+```cpp
+#include <cstdint>
+
+extern "C" int64_t library_double(int64_t value) {
+    return value * 2;
+}
 ```
 
-The optional `as` string gives the exact external symbol; without it, the Tell name is used. Both forms describe a **C ABI** function: a Swift implementation needs an explicitly exported C-compatible entry point. Accepted ABI types are `int32`, `int64`, `float32`, and `float64`, with `void` allowed as a return type. These represent C `int32_t`, `int64_t`, `float`, and `double`. Pointers, strings, structures, callbacks, variadic functions, ownership, and Swift-native calling conventions are not supported by these declarations.
+Declare the entry point in Tell and pass the library to `tellc`:
 
-This is parser and AST support only. There is no foreign function type checking, conversion policy between Tell and ABI types, foreign library linking, or foreign call code generation yet; declaring a function does not make calls executable. Those pieces must be implemented before C or Swift interoperability works at runtime.
+```tell
+extern cpp function twice(int64 value) returns int64 as "library_double"
+say twice(21)
+```
+
+```sh
+tellc program.tell --link /path/to/library.a -o program
+```
+
+Repeat `--link` for additional libraries. On Apple silicon, the embedded linker
+accepts ARM64 Mach-O object files, static archives (`.a`), and dynamic libraries
+(`.dylib`). The library must already be built for a compatible macOS and CPU;
+tellc does not compile C++ source. Static libraries are incorporated into the
+executable. Dynamic libraries remain runtime dependencies, so their install
+names and any of their own dependencies must be available on the target Mac.
+The linker resolves macOS system and C++ runtime symbols from libraries available
+on the compiling Mac without requiring a separately installed SDK. A library
+or system symbol introduced after macOS 11 can require a newer macOS release.
+
+`extern c`, `extern cpp`, and `extern swift` all declare **C ABI** functions.
+Use a C-compatible exported wrapper for C++ or Swift; C++ name mangling, classes,
+methods, templates, exceptions crossing the boundary, pointers, strings,
+structures, callbacks, and variadic functions are not supported. Catch C++
+exceptions inside the wrapper. The optional `as` string specifies the exact
+symbol name; without it, the Tell name is used.
+
+Arguments and results can be `int32`, `int64`, `float32`, or `float64`; `void`
+is also allowed as a return type. Tell `number` maps to signed integers, and
+`decimal` maps to floating-point values. An `int32` argument outside its range
+terminates the generated program; `float32` arguments are rounded to single
+precision. Returned `int32` and `float32` values are widened to Tell types.
+Tell checks argument counts and Tell types, but the declaration must match the
+actual library's ABI exactly.
 
 ## Executable backend
 
-The backend currently supports typed declarations, output with `{name}` interpolation, typed functions and methods, calls, returns, object construction, field access, equality, signed integer arithmetic, and `if` blocks. `number` is a signed 64-bit integer and `decimal` is a 64-bit floating-point value. Text equality compares contents; object equality compares identity. Assignment, loops, decimal arithmetic, lists/indexing, unary operators, and foreign calls still require code generation support.
+The backend currently supports typed declarations, output with `{name}` interpolation, typed functions and methods, calls, returns, object construction, field access, equality, signed integer arithmetic, `if` blocks, variable reassignment, typed lists and vectors, indexed reads and writes, and `while`, `repeat`, and `for each` loops. `number` is a signed 64-bit integer and `decimal` is a 64-bit floating-point value. Text equality compares contents; object equality compares identity. Decimal arithmetic and unary operators still require code generation support. Dictionaries, tuples, and sets are not yet implemented.
 
 ## Objects and typed function signatures
 
@@ -103,3 +138,89 @@ say laptop.check password("wrong")
 This program prints `true` and then `false`. `MacBook()` constructs an instance using the field initializers. Initializers run in declaration order without a `self` receiver. Instances live until the process exits. Inside methods, use `self.password` for explicit access or `password` when a local name does not shadow it.
 
 Parameters use `type: name` and are separated by commas. `out` declares the return type, including `out void` for functions without a result. Arguments, initializers, and return values must match the declared types. A function with a result must return a value on every path. The parser still accepts the legacy `to name with parameter:` form for parser compatibility, but the executable backend intentionally rejects untyped function signatures.
+
+## Switch
+
+A switch evaluates its expression once and executes the first matching case.
+Cases use the same type and equality rules as `=`, and their values may be
+expressions. If no case matches, execution continues after the switch.
+Indent cases beneath the switch; case bodies may be inline or indented on
+following lines. An `end switch` at the switch's indentation is optional.
+
+```tell
+let number water_amount be 50
+switch water_amount:
+    if it is 0: say "tank is empty"
+    if it is 25: say "Quarter of the tank is full"
+    if it is 50: say "Half the tank is full"
+    if it is 75: say "3/4 of the tank is full"
+    if it is 100: say "Tank is full"
+```
+
+## Lists, vectors, and for each
+
+Lists and vectors are names for the same fixed-length, homogeneous collection type.
+Use `list of TYPE` or `vector of TYPE` anywhere a type is accepted, including
+function signatures and object fields. They may be nested, and element types may
+be primitive types or objects. Literals evaluate their elements from left to right.
+An empty literal needs a collection type from its declaration, argument, return,
+or enclosing literal. Collection values are references and remain allocated
+until the process exits; equality compares identity.
+
+```tell
+let vector of number scores be [10, 20, 30]
+say scores[0]                    # 10, indices start at zero
+for each score in scores:
+    say score
+end for
+let list of text names be []
+```
+
+An out-of-bounds index raises an error. `for each` evaluates its
+collection expression once, visits elements in order, and runs zero times for an
+empty collection. Its iteration variable is local to the loop; `break` exits the
+innermost loop and `continue` advances it. An iteration variable cannot reuse an
+existing local name. Collections cannot currently be resized, and
+collection values cannot be printed directly.
+
+## Reassignment and loops
+
+Use `set name to expression` to reassign a local variable or parameter; types must match and constant bindings cannot be reassigned. List elements can be updated with `set values[index] to expression`, including nested indexes. Indexes are checked at runtime.
+
+`while condition:` repeats while a Boolean condition is true. `repeat count times:` evaluates its numeric count once and runs the body that many times (zero times for a nonpositive count). End them with `end while` and `end repeat`. `break` and `continue` operate on the innermost loop. Variables declared inside a loop body are local to that body.
+
+## Input, conversion, files, and errors
+
+`input()` reads one line as `text`, removing its line ending. An optional text
+argument prints a prompt without a newline and flushes output before reading.
+Convert the text explicitly with `number(text)` for a signed 64-bit integer or
+`decimal(text)` for a 64-bit floating-point value:
+
+```tell
+try:
+    let text answer be input("Age: ")
+    let number age be number(answer)
+    say age
+if something goes wrong:
+    say error_message
+end try
+```
+
+Conversion rejects empty input, trailing characters and out-of-range values.
+It follows the C library's numeric parsing rules, including leading whitespace;
+`decimal` also accepts the C library's infinity and NaN forms. End of input is an
+error. `input` rejects NUL bytes. Returned text lives for the process lifetime.
+
+`write_file(path, text)` creates or truncates a text file, and
+`append_file(path, text)` creates or appends to one. `read_file(path)` returns
+its contents as `text`. Paths are relative to the program's working directory.
+Reads require a seekable file and reject NUL bytes; these operations are for
+text, not arbitrary binary data. File errors can be caught using `try`.
+
+`raise an error saying expression` raises a text message. A `try` block's
+optional `if something goes wrong` handler receives it as `error_message`.
+Errors propagate through compiled functions and methods to the nearest handler;
+without one, the program writes an error to stderr and exits with status 1.
+Conversions, input, file operations, and list index bounds produce catchable
+errors. Memory allocation failures and errors from foreign libraries are not
+caught. Typed catches, `finally`, and exception objects are not implemented.
