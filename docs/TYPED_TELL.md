@@ -57,6 +57,20 @@ traits, interfaces, and typed FFI are not part of this initial slice.
 
 A runnable native example is available at [native/examples/native-typed.tell](../native/examples/native-typed.tell).
 
+## Performance status
+
+This first Go typed-dialect increment adds validation and runtime contract
+checks; it does not yet specialize the VM's dynamic value representation.
+Go execution still uses the existing general-purpose runtime and bytecode
+operations. Do not treat this change as a measured speedup in execution,
+memory use, or compilation time.
+
+The next performance phase should use typed semantic information to lower
+verified functions to specialized bytecode operations and compact value
+representations where benchmarks justify them. Any such change should retain
+a dynamic compatibility path and be measured against representative Tell
+programs before performance claims are made.
+
 ## Migration
 
 For new programs, prefer the typed form. Existing programs can migrate one
