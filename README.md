@@ -385,9 +385,9 @@ Tagging a version as `v*` runs both test suites, cross-builds the six native tar
 
 - **0.2:** Native runtime and multi-platform standalone binaries.
 - **0.3:** Stronger grammar, better diagnostics, more consistent standard-library behavior.
-- **0.4:** Extend the initial class model with access controls, static members, and richer object behavior.
+- **0.4:** Deliver a fully working LLVM based compiler that runs Tell programs with just in time (JIT) compilation and builds standalone executables with ahead of time (AOT) compilation.
 - **0.5:** Package manager and debugger.
-- **1.0:** Stable language specification and compatibility suite.
+- **0.6:** Extend the class model with access controls and static members, and expand the compatibility suite.
 
 Tell is designed to make programming more approachable without making the language depend on guesswork. Its syntax is intentionally sentence-like, but constrained enough that every instruction has a predictable meaning.
 
