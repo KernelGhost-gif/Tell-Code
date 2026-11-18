@@ -5,15 +5,15 @@ A C++17 compiler for an explicitly typed variant of Tell. It parses source into 
 Platform setup, build requirements, and test coverage are documented in [the documentation index](docs/README.md), [the build guide](docs/BUILDING.md), [the testing guide](docs/TESTING.md), and [the architecture guide](docs/ARCHITECTURE.md).
 
 ```tell
-let text name be "Steve Jobs"; let number age be 56
-let decimal height be 1.88
-let bool alive be false
-say name
+let text service_name be "Customer Portal"; let number active_users be 250
+let decimal availability_target be 99.95
+let bool release_approved be false
+say service_name
 ```
 
 Newlines terminate statements; semicolons separate statements on the same line. Keywords and built-in type names are case insensitive. Object type names are case sensitive.
 
-The parser recognizes typed declarations, assignment statements, output, returns, functions, if/otherwise, while, repeat, for each, literals, lists, calls, member and index access, and common symbolic and word operators. The executable backend intentionally implements a smaller subset. Syntax outside the parser subset is reported as a parse error; syntax represented by the parser but not yet implemented by the backend is rejected during compilation with a source-located diagnostic. Natural-language comparison phrases, classes, imports, and named call arguments are not currently supported. Strings support basic escapes; source columns count bytes.
+The parser recognizes typed declarations, assignment statements, output, returns, functions, if/otherwise, while, repeat, for each, literals, lists, calls, member and index access, and common symbolic and word operators. The executable backend intentionally implements a smaller subset. Syntax outside the parser subset is reported as a parse error; syntax represented by the parser but not yet implemented by the backend is rejected during compilation with a source-located diagnostic. The parser also accepts the equality phrases listed below. Classes, imports, and named call arguments are not currently supported. Strings support basic escapes; source columns count bytes.
 
 **Compiled functions and methods are strongly typed.** Parameters must use `type: name` and every function must declare its result with `out type` (use `out void` for no result). For example:
 
@@ -32,7 +32,7 @@ On Apple silicon, build the standalone compiler from the repository root:
 
 ```sh
 LLVM_SOURCE=/path/to/llvm-project ./scripts/build-tellc-macos.sh
-build/tellc-macos-arm64/tellc/tellc TellC/examples/objects.tell -o macbook
+build/tellc-macos-arm64/tellc/tellc TellC/examples/objects.tell -o release-policy
 ```
 
 The script needs CMake, Ninja, Xcode command-line tools and the matching LLVM
@@ -115,31 +115,37 @@ actual library's ABI exactly.
 
 ## Executable backend
 
-The backend currently supports typed declarations, output with `{name}` interpolation, typed functions and methods, calls, returns, object construction, field access, equality, signed integer arithmetic, `if` blocks, variable reassignment, typed lists and vectors, indexed reads and writes, and `while`, `repeat`, and `for each` loops. `number` is a signed 64-bit integer and `decimal` is a 64-bit floating-point value. Text equality compares contents; object equality compares identity. Decimal arithmetic and unary operators still require code generation support. Dictionaries, tuples, and sets are not yet implemented.
+The backend supports typed declarations, functions and methods, objects,
+output and interpolation, integer arithmetic, comparisons, Boolean and
+bitwise operators, control flow, resizable typed lists, and basic console
+and file I/O. `number` is a signed 64-bit integer and `decimal` is a 64-bit
+floating-point value. Text equality compares contents and object equality
+compares identity. Unary `+` and `-` work on both numeric types. Binary
+decimal arithmetic, dictionaries, tuples, and sets are unsupported.
 
 ## Objects and typed function signatures
 
 Declare fields with `let TYPE self NAME be VALUE`. Members in `own` are private to methods of that object type. Members in `others` are public.
 
 ```tell
-object MacBook:
+object ReleasePolicy:
     own:
-        let text self password be "12345678"
+        let text self approved_environment be "production"
     others:
-        to check password(text: Password) out bool:
-            if Password = password:
+        to approve_environment(text: candidate_environment) out bool:
+            if candidate_environment = self.approved_environment:
                 give back true
             end if
             give back false
         end function
 end object
 
-let MacBook laptop be MacBook()
-say laptop.check password("12345678")
-say laptop.check password("wrong")
+let ReleasePolicy policy be ReleasePolicy()
+say policy.approve_environment("production")
+say policy.approve_environment("staging")
 ```
 
-This program prints `true` and then `false`. `MacBook()` constructs an instance using the field initializers. Initializers run in declaration order without a `self` receiver. Instances live until the process exits. Inside methods, use `self.password` for explicit access or `password` when a local name does not shadow it.
+This program prints `true` and then `false`. `ReleasePolicy()` constructs an instance using the field initializers. Initializers run in declaration order without a `self` receiver. Instances live until the process exits. Methods can read private fields with `self.field_name` or with the field name when a local name does not shadow it.
 
 Parameters use `type: name` and are separated by commas. `out` declares the return type, including `out void` for functions without a result. Arguments, initializers, and return values must match the declared types. A function with a result must return a value on every path. The parser still accepts the legacy `to name with parameter:` form for parser compatibility, but the executable backend intentionally rejects untyped function signatures.
 
@@ -163,7 +169,7 @@ switch water_amount:
 
 ## Lists, vectors, and for each
 
-Lists and vectors are names for the same fixed-length, homogeneous collection type.
+Lists and vectors are names for the same resizable, homogeneous collection type.
 Use `list of TYPE` or `vector of TYPE` anywhere a type is accepted, including
 function signatures and object fields. They may be nested, and element types may
 be primitive types or objects. Literals evaluate their elements from left to right.
@@ -178,14 +184,26 @@ for each score in scores:
     say score
 end for
 let list of text names be []
+add "Ada" to names
+set names[0] to "Grace"
+say len(names)                   # 1
+remove "Grace" from names
 ```
 
-An out-of-bounds index raises an error. `for each` evaluates its
-collection expression once, visits elements in order, and runs zero times for an
-empty collection. Its iteration variable is local to the loop; `break` exits the
-innermost loop and `continue` advances it. An iteration variable cannot reuse an
-existing local name. Collections cannot currently be resized, and
-collection values cannot be printed directly.
+`add VALUE to COLLECTION` appends a value. `remove VALUE from COLLECTION`
+removes its first equal element, or raises a catchable error when it is absent.
+`len(COLLECTION)` returns the current length. Values must match the element type;
+an empty nested list passed to `add` must first be assigned to a typed variable.
+Aliases and function parameters refer to the same collection, so mutations are
+visible through each reference. A constant binding cannot be reassigned, but its
+collection can be mutated. Collection values cannot be printed directly.
+
+Indexing outside the collection raises a catchable error. `for each` evaluates its
+collection expression once, then checks its current length and reads the current
+element at each index. Appending during iteration can extend the loop; removing
+an element shifts later elements left, so a shifted element may be skipped. Its
+iteration variable is local to the loop; `break` exits the innermost loop and
+`continue` advances it. An iteration variable cannot reuse an existing local name.
 
 ## Reassignment and loops
 
@@ -225,6 +243,18 @@ text, not arbitrary binary data. File errors can be caught using `try`.
 optional `if something goes wrong` handler receives it as `error_message`.
 Errors propagate through compiled functions and methods to the nearest handler;
 without one, the program writes an error to stderr and exits with status 1.
-Conversions, input, file operations, and list index bounds produce catchable
-errors. Memory allocation failures and errors from foreign libraries are not
-caught. Typed catches, `finally`, and exception objects are not implemented.
+Conversions, input, file operations, list index bounds, missing list items,
+and list growth failures produce catchable errors. Other allocation failures
+and errors from foreign libraries are not caught. Typed catches, `finally`, and
+exception objects are unsupported.
+
+## Operators shared with the Go runtime
+
+TellC and the Go runtime accept `=`, `==`, `equal to`, and `is equal to`
+for equality. Boolean `and` / `&&` and `or` / `||` evaluate the right
+operand only when needed. Use `not` or `!` for Boolean negation.
+
+The integer bitwise operators are `~`, `&`, `|`, `^`, `<<`, and `>>`.
+Operands and results must stay between −9,007,199,254,740,991 and
+9,007,199,254,740,991, the shared exact integer range. Shift counts
+must be integers from 0 to 63.
