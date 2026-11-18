@@ -78,6 +78,30 @@ tell run examples/hello.tbc
 
 Use `tell build source.tell --output output.tbc` to choose the artifact path. The compiler supports functions, recursion, closures, core control flow, local modules embedded in the artifact, `Try`/`Raise`, and the initial class model with constructors, fields, methods, single inheritance, and overrides. `Finally` and other language features remain unsupported in bytecode; see the [CLI reference](docs/CLI_REFERENCE.md) for its exact subset and limits. [examples/compiled-objects.tell](examples/compiled-objects.tell) demonstrates an object program that can be run by either interpreter or compiled to bytecode by the native runtime.
 
+## Typed Tell on the native Go runtime
+
+The Go runtime supports an opt-in typed dialect with type-first declarations
+and explicit function signatures:
+
+~~~tell
+to factorial(number: n) out number:
+    if n <= 1:
+        give back 1
+    end if
+    give back n * factorial(n - 1)
+end function
+
+let number answer be factorial(5)
+say answer
+~~~
+
+Use `tell --typed native/examples/native-typed.tell` to require explicit
+types for variables, function parameters, and return values. The same strict
+validation is available through `tell check --typed` and `tell build --typed`.
+Typed parameter and return contracts are enforced during normal execution
+and preserved in bytecode. Existing dynamic Tell programs remain supported
+without `--typed`; see the [typed Go dialect guide](docs/TYPED_TELL.md).
+
 ## Compile native executables with TellC
 
 TellC is an experimental C++ compiler that translates its typed dialect through LLVM into a native executable. Its dialect is separate from the dynamically typed language used by the Go and Python runtimes; programs are not necessarily interchangeable. For example:
