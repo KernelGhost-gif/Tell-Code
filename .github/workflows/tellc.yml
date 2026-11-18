@@ -1,10 +1,6 @@
 name: TellC LLVM compiler
 
 on:
-  push:
-    paths:
-      - "TellC/**"
-      - ".github/workflows/tellc.yml"
   pull_request:
     paths:
       - "TellC/**"

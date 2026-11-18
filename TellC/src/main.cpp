@@ -80,6 +80,22 @@ void link_macos(llvm::StringRef object, const std::string& output) {
 }
 int main(int argc,char** argv) {
     if(argc==2 && std::string(argv[1])=="--llvm-version") { std::cout << "LLVM " << LLVM_VERSION_STRING << " (host " << llvm::sys::getDefaultTargetTriple() << ")\n"; return 0; }
+    // The language server sends unsaved buffers on stdin. This path performs
+    // compiler checks without writing output, linking, or executing code.
+    if (argc == 2 && std::string(argv[1]) == "--check-stdin") {
+        std::string source((std::istreambuf_iterator<char>(std::cin)), {});
+        try {
+            auto program = tell::parse(source);
+            tell::check_program(program);
+            return 0;
+        } catch (const tell::Error& e) {
+            std::cerr << "<stdin>:" << e.location.line << ':' << e.location.column << ": " << e.what() << '\n';
+            return 1;
+        } catch (const std::exception& e) {
+            std::cerr << "tellc: " << e.what() << '\n';
+            return 2;
+        }
+    }
     std::string input, output="a.out";
     for(int i=1;i<argc;++i){std::string arg=argv[i];if(arg=="-o"){if(++i==argc){std::cerr<<"tellc: -o requires a filename\n";return 2;}output=argv[i];}else if(!arg.empty()&&arg[0]=='-'){std::cerr<<"tellc: unknown option "<<arg<<'\n';return 2;}else if(input.empty())input=arg;else{std::cerr<<"tellc: expected one input file\n";return 2;}}
     if(input.empty()){std::cerr<<"usage: tellc <file.tell> [-o executable]\n";return 2;}
