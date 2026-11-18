@@ -9,7 +9,6 @@ import (
 	"unicode/utf8"
 )
 
-
 const maxLoopIterations = 1_000_000
 const maxFunctionCallDepth = 64
 
@@ -24,11 +23,11 @@ func DefaultExecutionLimits() ExecutionLimits {
 }
 
 type Error struct {
-	Kind string
-	Message string
+	Kind     string
+	Message  string
 	Filename string
-	Line int
-	Column int
+	Line     int
+	Column   int
 }
 
 // tupleValue is an immutable, ordered Tell sequence distinct from mutable lists.
@@ -50,12 +49,16 @@ func fail(format string, args ...any) error {
 // Nested expression errors keep their more precise location.
 
 func ioFailure(err error) error {
-	if err == nil { return nil }
-	return &Error{Kind:"IOError", Message:err.Error()}
+	if err == nil {
+		return nil
+	}
+	return &Error{Kind: "IOError", Message: err.Error()}
 }
 
 func ioFailureAt(err error, filename string, expression expression) error {
-	if err == nil { return nil }
+	if err == nil {
+		return nil
+	}
 	line, column := expressionPosition(expression)
 	if line > 0 && column > 0 {
 		return withSourceLocation(ioFailure(err), filename, line, column)
@@ -77,13 +80,13 @@ func withSourceLocation(err error, filename string, line, column int) error {
 			return err
 		}
 	}
-	return &Error{Kind:kind, Message:message, Filename:filename, Line:line, Column:column}
+	return &Error{Kind: kind, Message: message, Filename: filename, Line: line, Column: column}
 }
 
 type node struct {
 	kind, text               string
 	line, column             int
-	conditionColumnOffset   int
+	conditionColumnOffset    int
 	condition, name, base    string
 	conditionExpr            expression
 	params                   []string
@@ -340,18 +343,26 @@ func parseSimpleStatement(source string, line, column int) *simpleStatement {
 				{"key ", " in "},
 			} {
 				argument, isPhrase := prefixFold(name, phrase.prefix)
-				if !isPhrase { continue }
+				if !isPhrase {
+					continue
+				}
 				indexText, collectionName, hasIn := splitFoldOnce(argument, phrase.delimiter)
-				if !hasIn || !identifier(collectionName) { continue }
+				if !hasIn || !identifier(collectionName) {
+					continue
+				}
 				parsedIndex, validIndex := parseExpression(indexText)
 				parsedValue, validValue := parseExpression(expressionText)
-				if !validIndex || !validValue { continue }
+				if !validIndex || !validValue {
+					continue
+				}
 				containerOffset := strings.LastIndex(source, collectionName)
-				if containerOffset < 0 { containerOffset = 0 }
+				if containerOffset < 0 {
+					containerOffset = 0
+				}
 				targetColumn := column + utf8.RuneCountInString(source[:containerOffset])
-				containerExpr := nameExpression{name:collectionName, line:line, column:targetColumn}
-				target := indexExpression{value:containerExpr, index:parsedIndex, line:line, column:targetColumn}
-				return &simpleStatement{kind:"set_index", source:name, target:target, expression:parsedValue, hasExpression:true}
+				containerExpr := nameExpression{name: collectionName, line: line, column: targetColumn}
+				target := indexExpression{value: containerExpr, index: parsedIndex, line: line, column: targetColumn}
+				return &simpleStatement{kind: "set_index", source: name, target: target, expression: parsedValue, hasExpression: true}
 			}
 			if strings.Contains(name, ",") {
 				if names, valid := parseLoopNames(name); valid && len(names) > 1 {
@@ -379,9 +390,13 @@ func parseSimpleStatement(source string, line, column int) *simpleStatement {
 	}
 	for _, prefix := range []string{"call ", "run "} {
 		rest, ok := prefixFold(source, prefix)
-		if !ok { continue }
+		if !ok {
+			continue
+		}
 		name, tail := firstWord(rest)
-		if !identifier(name) { continue }
+		if !identifier(name) {
+			continue
+		}
 		arguments := []callArgument{}
 		valid := true
 		if strings.TrimSpace(tail) != "" {
@@ -391,26 +406,33 @@ func parseSimpleStatement(source string, line, column int) *simpleStatement {
 			} else {
 				for _, argument := range splitAnd(argumentText) {
 					parsed, parsedOK := parseExpression(argument)
-					if !parsedOK { valid = false; break }
-					arguments = append(arguments, callArgument{value:parsed})
+					if !parsedOK {
+						valid = false
+						break
+					}
+					arguments = append(arguments, callArgument{value: parsed})
 				}
 			}
 		}
 		if valid {
 			nameOffset := strings.Index(source, name)
-			if nameOffset < 0 { nameOffset = len(prefix) }
-			callee := nameExpression{name:name, line:line, column:column+utf8.RuneCountInString(source[:nameOffset])}
+			if nameOffset < 0 {
+				nameOffset = len(prefix)
+			}
+			callee := nameExpression{name: name, line: line, column: column + utf8.RuneCountInString(source[:nameOffset])}
 			callOffset := strings.Index(strings.ToLower(source), strings.TrimSpace(prefix))
-			if callOffset < 0 { callOffset = 0 }
-			call := callExpression{callee:callee, args:arguments, line:line, column:column+utf8.RuneCountInString(source[:callOffset])}
-			return &simpleStatement{kind:"call", source:source, expression:call, hasExpression:true}
+			if callOffset < 0 {
+				callOffset = 0
+			}
+			call := callExpression{callee: callee, args: arguments, line: line, column: column + utf8.RuneCountInString(source[:callOffset])}
+			return &simpleStatement{kind: "call", source: source, expression: call, hasExpression: true}
 		}
 	}
 	if rest, ok := prefixFold(source, "remember "); ok {
 		expressionText, field, separated := splitFoldOnce(rest, " as this.")
 		if separated && identifier(field) {
 			if parsed, valid := parseExpression(expressionText); valid {
-				return &simpleStatement{kind:"remember_field", source:expressionText, names:[]string{field}, expression:parsed, hasExpression:true}
+				return &simpleStatement{kind: "remember_field", source: expressionText, names: []string{field}, expression: parsed, hasExpression: true}
 			}
 		}
 	}
@@ -450,7 +472,6 @@ func parseSimpleStatement(source string, line, column int) *simpleStatement {
 		return statement
 	}
 
-
 	for _, operation := range []struct{ prefix, delimiter, kind string }{
 		{"add ", " to ", "add"},
 		{"remove ", " from ", "remove"},
@@ -459,7 +480,7 @@ func parseSimpleStatement(source string, line, column int) *simpleStatement {
 			valueText, targetName, separated := splitFoldOnce(rest, operation.delimiter)
 			if separated && identifier(targetName) {
 				if parsed, valid := parseExpression(valueText); valid {
-					return &simpleStatement{kind:operation.kind, names:[]string{targetName}, expression:parsed, hasExpression:true}
+					return &simpleStatement{kind: operation.kind, names: []string{targetName}, expression: parsed, hasExpression: true}
 				}
 			}
 		}
@@ -468,7 +489,7 @@ func parseSimpleStatement(source string, line, column int) *simpleStatement {
 		pathText, alias, separated := splitFoldOnce(rest, " as ")
 		if separated && identifier(alias) {
 			if parsed, valid := parseExpression(pathText); valid {
-				return &simpleStatement{kind:"import_module", names:[]string{alias}, expression:parsed, hasExpression:true}
+				return &simpleStatement{kind: "import_module", names: []string{alias}, expression: parsed, hasExpression: true}
 			}
 		}
 	}
@@ -477,9 +498,11 @@ func parseSimpleStatement(source string, line, column int) *simpleStatement {
 		moduleName, alias, hasAlias := splitFoldOnce(rest, " as ")
 		moduleName = strings.TrimSpace(moduleName)
 		if _, err := newPythonModule(moduleName); err == nil {
-			if !hasAlias { alias = moduleName[strings.LastIndex(moduleName, ".")+1:] }
+			if !hasAlias {
+				alias = moduleName[strings.LastIndex(moduleName, ".")+1:]
+			}
 			if identifier(alias) {
-				return &simpleStatement{kind:"import_python", source:moduleName, names:[]string{alias}}
+				return &simpleStatement{kind: "import_python", source: moduleName, names: []string{alias}}
 			}
 		}
 	}
@@ -487,9 +510,11 @@ func parseSimpleStatement(source string, line, column int) *simpleStatement {
 		moduleName, alias, hasAlias := splitFoldOnce(rest, " as ")
 		moduleName = strings.TrimSpace(moduleName)
 		if module, err := newJavaScriptModule(moduleName); err == nil {
-			if !hasAlias { alias = defaultJavaScriptAlias(moduleName) }
+			if !hasAlias {
+				alias = defaultJavaScriptAlias(moduleName)
+			}
 			if identifier(alias) {
-				return &simpleStatement{kind:"import_javascript", source:module.name, names:[]string{alias}}
+				return &simpleStatement{kind: "import_javascript", source: module.name, names: []string{alias}}
 			}
 		}
 	}
@@ -505,12 +530,14 @@ func parseSimpleStatement(source string, line, column int) *simpleStatement {
 			}
 			library := strings.ToLower(strings.ReplaceAll(requested, " ", ""))
 			switch library {
-			case "mathematics": library = "math"
-			case "dateandtime", "dates": library = "datetime"
+			case "mathematics":
+				library = "math"
+			case "dateandtime", "dates":
+				library = "datetime"
 			}
 			if requested != "" && aliasOK && identifier(strings.ReplaceAll(requested, " ", "")) {
 				if _, err := moduleValue(library); err == nil {
-					return &simpleStatement{kind:"import_library", source:library, names:[]string{alias}}
+					return &simpleStatement{kind: "import_library", source: library, names: []string{alias}}
 				}
 			}
 		}
@@ -520,7 +547,7 @@ func parseSimpleStatement(source string, line, column int) *simpleStatement {
 			prompt, name, separated := splitFoldOnce(rest, delimiter)
 			if separated && identifier(name) {
 				if parsed, valid := parseExpression(prompt); valid {
-					return &simpleStatement{kind:"ask", names:[]string{name}, expression:parsed, hasExpression:true}
+					return &simpleStatement{kind: "ask", names: []string{name}, expression: parsed, hasExpression: true}
 				}
 			}
 		}
@@ -529,7 +556,7 @@ func parseSimpleStatement(source string, line, column int) *simpleStatement {
 		pathText, name, separated := splitFoldOnce(rest, " into ")
 		if separated && identifier(name) {
 			if parsed, valid := parseExpression(pathText); valid {
-				return &simpleStatement{kind:"read_file", names:[]string{name}, expression:parsed, hasExpression:true}
+				return &simpleStatement{kind: "read_file", names: []string{name}, expression: parsed, hasExpression: true}
 			}
 		}
 	}
@@ -543,7 +570,7 @@ func parseSimpleStatement(source string, line, column int) *simpleStatement {
 				valueExpr, validValue := parseExpression(valueText)
 				pathExpr, validPath := parseExpression(pathText)
 				if validValue && validPath {
-					return &simpleStatement{kind:operation.kind, expression:valueExpr, target:pathExpr, hasExpression:true, hasTarget:true}
+					return &simpleStatement{kind: operation.kind, expression: valueExpr, target: pathExpr, hasExpression: true, hasTarget: true}
 				}
 			}
 		}
@@ -577,10 +604,10 @@ func parseSimpleStatement(source string, line, column int) *simpleStatement {
 			}
 		}
 	}
-	if strings.EqualFold(source, "stop this loop") || strings.EqualFold(source, "break out of this loop") {
+	if strings.EqualFold(source, "break") || strings.EqualFold(source, "stop this loop") || strings.EqualFold(source, "break out of this loop") {
 		return &simpleStatement{kind: "break"}
 	}
-	if strings.EqualFold(source, "skip to the next repetition") || strings.EqualFold(source, "continue to the next repetition") {
+	if strings.EqualFold(source, "continue") || strings.EqualFold(source, "skip to the next repetition") || strings.EqualFold(source, "continue to the next repetition") {
 		return &simpleStatement{kind: "continue"}
 	}
 	if source != "" {
@@ -802,6 +829,9 @@ func stripOptionalThen(condition string) string {
 
 func normalizeBlockLine(line string) string {
 	normalized := strings.ToLower(strings.TrimSpace(line))
+	if normalized == "end for" || normalized == "end for." {
+		return "end loop."
+	}
 	if normalized == "else:" {
 		return "otherwise:"
 	}
@@ -1170,4 +1200,3 @@ func splitTop(s, sep string) []string {
 	}
 	return append(out, strings.TrimSpace(s[start:]))
 }
-

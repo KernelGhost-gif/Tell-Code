@@ -134,6 +134,7 @@ func (p *expressionParser) parsePrecedence(min int) (expression, error) {
 			break
 		}
 		operatorToken := p.take()
+		if op == "=" { op = "==" }
 		next := prec + 1
 		if op == "**" {
 			next = prec
@@ -169,8 +170,8 @@ func (p *expressionParser) parsePrefix() (expression, error) {
 	switch t.kind {
 	case "number", "string", "true", "false", "nothing":
 		value = literalExpression{token: t}
-	case "-", "+", "not":
-		operand, err := p.parsePrecedence(7)
+	case "-", "+", "not", "~":
+		operand, err := p.parsePrecedence(10)
 		if err != nil {
 			return nil, err
 		}
@@ -453,6 +454,11 @@ func (r *runtime) evalExpression(expr expression, e *env) (any, error) {
 		if x.operator == "not" {
 			return !truthy(value), nil
 		}
+		if x.operator == "~" {
+			result, err := bitwiseNot(value)
+			if err != nil { return nil, withSourceLocation(err, r.filename, x.line, x.column) }
+			return result, nil
+		}
 		n, err := numberValue(value)
 		if err != nil {
 			return nil, withSourceLocation(err, r.filename, x.line, x.column)
@@ -718,7 +724,38 @@ func indexValue(value, index any) (any, error) {
 	}
 }
 
+func bitwiseInteger(value any) (int64, error) {
+	n, err := numberValue(value)
+	if err != nil || math.IsNaN(n) || math.IsInf(n, 0) || math.Trunc(n) != n || n < -9007199254740991 || n > 9007199254740991 {
+		return 0, fail("bitwise operators require integers within the exact numeric range")
+	}
+	return int64(n), nil
+}
+
+func bitwiseNot(value any) (any, error) {
+	n, err := bitwiseInteger(value)
+	if err != nil { return nil, err }
+	result := ^n
+	if result < -9007199254740991 || result > 9007199254740991 { return nil, fail("bitwise result exceeds exact numeric range") }
+	return float64(result), nil
+}
+
 func applyBinary(op string, a, b any) (any, error) {
+	if op == "&" || op == "|" || op == "^" || op == "<<" || op == ">>" {
+		left, err := bitwiseInteger(a); if err != nil { return nil, err }
+		right, err := bitwiseInteger(b); if err != nil { return nil, err }
+		var result int64
+		switch op {
+		case "&": result = left & right
+		case "|": result = left | right
+		case "^": result = left ^ right
+		case "<<", ">>":
+			if right < 0 || right >= 64 { return nil, fail("shift count must be between 0 and 63") }
+			if op == "<<" { result = left << uint(right); if (result >> uint(right)) != left { return nil, fail("bitwise shift overflow") } } else { result = left >> uint(right) }
+		}
+		if result < -9007199254740991 || result > 9007199254740991 { return nil, fail("bitwise result exceeds exact numeric range") }
+		return float64(result), nil
+	}
 	if op == "and" || op == "or" {
 		return truthy(b), nil
 	}
