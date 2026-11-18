@@ -18,19 +18,18 @@ compiler on the editor's PATH or set `TELL_LSP_COMPILER` to its executable
 path. An unavailable or incompatible checker is shown as an editor diagnostic.
 The server never executes the program or writes a compiled output file.
 
-For Neovim 0.11 or newer, add this to `init.lua`:
+For Neovim 0.11 or newer, run the setup script from the repository root.
+It installs file detection, syntax highlighting, diagnostics, and automatic
+keyword completion for `.tell` files.
 
-```lua
-vim.filetype.add({ extension = { tell = 'tell' } })
-vim.lsp.config.tell = {
-  cmd = { 'tell-lsp' },
-  -- Set this if tellc is not on Neovim's PATH:
-  -- cmd_env = { TELL_LSP_COMPILER = '/absolute/path/to/tellc' },
-  filetypes = { 'tell' },
-  root_markers = { '.git' },
-}
-vim.lsp.enable('tell')
+```sh
+./scripts/setup-nvim.sh
 ```
+
+The script looks for `tell-lsp` in the checkout's usual build directories and
+on your PATH. You can also pass the executable path as the first argument.
+Restart Neovim and open a `.tell` file. The script leaves your `init.lua`
+in place and refuses to overwrite existing Tell files it did not install.
 
 From a checkout without installing, run `python3 -m tell_lsp` with the `lsp`
 directory on `PYTHONPATH`.
