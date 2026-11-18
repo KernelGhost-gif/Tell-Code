@@ -404,7 +404,7 @@ public:
         printf_fn = module.getOrInsertFunction("printf", signature);
     }
 
-    void generate(const Program& program, const std::string& path
+    void generate(const Program& program, const std::string& path, bool check_only = false
 #ifdef TELL_STANDALONE_MACOS
                   , llvm::SmallVectorImpl<char>* object = nullptr
 #endif
@@ -426,6 +426,7 @@ public:
         }
         ir.CreateRet(ir.getInt32(0));
         if(llvm::verifyModule(module,&llvm::errs())) throw std::runtime_error("generated invalid LLVM IR");
+        if (check_only) return;
 #ifdef TELL_STANDALONE_MACOS
         if (object) {
             llvm::InitializeNativeTarget();
@@ -455,9 +456,12 @@ public:
 
 #ifdef TELL_STANDALONE_MACOS
 void generate_object(const Program& program, llvm::SmallVectorImpl<char>& object) {
-    Generator{}.generate(program, "", &object);
+    Generator{}.generate(program, "", false, &object);
 }
 #endif
+void check_program(const Program& program) {
+    Generator{}.generate(program, "", true);
+}
 void generate_ir(const Program& program, const std::string& path) {
     Generator{}.generate(program, path);
 }

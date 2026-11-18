@@ -234,6 +234,22 @@ void link_macos(llvm::StringRef object, const std::string& output) {
 } // namespace
 
 int main(int argc, char** argv) {
+    // The language server sends unsaved buffers on stdin. This path performs
+    // compiler checks without writing output, linking, or executing code.
+    if (argc == 2 && std::string(argv[1]) == "--check-stdin") {
+        std::string source((std::istreambuf_iterator<char>(std::cin)), {});
+        try {
+            auto program = tell::parse(source);
+            tell::check_program(program);
+            return 0;
+        } catch (const tell::Error& e) {
+            std::cerr << "<stdin>:" << e.location.line << ':' << e.location.column << ": " << e.what() << '\n';
+            return 1;
+        } catch (const std::exception& e) {
+            std::cerr << "tellc: " << e.what() << '\n';
+            return 2;
+        }
+    }
     if (argc == 2) {
         const std::string option = argv[1];
         if (option == "--help" || option == "-h") {

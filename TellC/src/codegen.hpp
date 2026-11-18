@@ -8,5 +8,6 @@ namespace tell {
 #ifdef TELL_STANDALONE_MACOS
 void generate_object(const Program& program, llvm::SmallVectorImpl<char>& object);
 #endif
+void check_program(const Program& program);
 void generate_ir(const Program& program, const std::string& path);
 }

@@ -30,3 +30,6 @@ The UI requires Python 3.10 or newer and Tkinter. Windows Python installers norm
 - Run and check can execute the current unsaved buffer as a temporary source file in the same directory, preserving relative module lookup. Temporary files are removed when the command exits.
 
 The IDE is an editor and runtime console, not a debugger or language server. Highlighting is lexical and provides no static diagnostics while typing. Bytecode building requires the native Go runtime; ordinary run/check operations can use either runtime.
+
+
+For editor integration with the typed TellC language, see the separate [language server](../lsp/README.md).

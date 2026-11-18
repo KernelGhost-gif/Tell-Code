@@ -1,12 +1,6 @@
 name: TellC LLVM compiler
 
 on:
-  push:
-    paths:
-      - "TellC/**"
-      - "scripts/build-tellc-macos.sh"
-      - "README.md"
-      - ".github/workflows/tellc.yml"
   pull_request:
     paths:
       - "TellC/**"

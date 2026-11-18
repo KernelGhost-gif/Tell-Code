@@ -54,7 +54,7 @@ On Linux, build with CMake and a compatible LLVM installation. Set `LLVM_DIR` to
 the directory containing `LLVMConfig.cmake`. TellC uses `llc` from that LLVM
 build and Clang on `PATH` to link. For cross-built compilers, set
 `-DTELL_LLC_PATH=llc-21` (or the matching tool) to find it on the target's
-`PATH`. The public parser API is `tell::parse` in `include/tell/parser.hpp`.
+`PATH`. The public parser API is `tell::parse` in `include/tell/parser.hpp`. The separate [TellC language server](../lsp/README.md) provides editor diagnostics for this dialect.
 
 Run parser and compiler integration tests with `ctest --test-dir <build-directory> --output-on-failure`.
 
