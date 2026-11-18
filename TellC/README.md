@@ -50,7 +50,11 @@ be needed to avoid Gatekeeper warnings. A build made with newer LLVM libraries
 or a newer deployment target may not run on macOS 11; use the script above to
 build the dependencies and compiler together.
 
-On Linux, build with CMake and a compatible LLVM installation. Set `LLVM_DIR` to
+The [standalone Linux build](docs/BUILDING.md#standalone-linux) embeds LLVM,
+LLD, and the static runtimes for x86-64 and ARM64. Each compiler can generate
+Linux executables for both architectures.
+
+To use an installed LLVM and Clang on Linux, build with CMake. Set `LLVM_DIR` to
 the directory containing `LLVMConfig.cmake`. TellC uses `llc` from that LLVM
 build and Clang on `PATH` to link. For cross-built compilers, set
 `-DTELL_LLC_PATH=llc-21` (or the matching tool) to find it on the target's

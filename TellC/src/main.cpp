@@ -4,6 +4,9 @@
 #endif
 #include "tell/parser.hpp"
 #include "codegen.hpp"
+#ifdef TELL_STANDALONE_LINUX
+#include "linux_linker.hpp"
+#endif
 
 #include <llvm/Config/llvm-config.h>
 #include <llvm/TargetParser/Host.h>
@@ -49,13 +52,17 @@ namespace {
 void print_usage(std::ostream& out) {
     out << "TellC - experimental strongly typed Tell compiler\n"
            "Usage:\n"
-           "  tellc <file.tell> [-o executable] [--link library]...\n"
+           "  tellc <file.tell> [-o executable] [--link library]..."
+#ifdef TELL_STANDALONE_LINUX
+           " [--target x86_64|aarch64]"
+#endif
+           "\n"
            "  tellc --help\n"
            "  tellc --version\n"
            "  tellc --llvm-version\n";
 }
 
-#ifndef TELL_STANDALONE_MACOS
+#ifndef TELL_EMBEDDED_CODEGEN
 struct TempFile {
     std::string path;
 
@@ -122,7 +129,7 @@ int run(const char* executable, const std::vector<const char*>& arguments) {
     }
     return 1;
 }
-#else
+#elif defined(TELL_STANDALONE_MACOS)
 // Build small import stubs for system symbols actually referenced by inputs.
 // dlsym checks the running macOS system instead of depending on an installed SDK.
 void collect_system_symbols(llvm::object::ObjectFile& object, void* system, void* cpp,
@@ -361,6 +368,9 @@ int main(int argc, char** argv) {
     std::string output = "a.out";
     bool output_option_seen = false;
     std::vector<std::string> libraries;
+#ifdef TELL_STANDALONE_LINUX
+    std::string target = TELL_LINUX_ARCH;
+#endif
 
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
@@ -378,6 +388,19 @@ int main(int argc, char** argv) {
             }
             output_option_seen = true;
             output = argv[i];
+#ifdef TELL_STANDALONE_LINUX
+        } else if (arg == "--target") {
+            if (++i == argc) {
+                std::cerr << "tellc: --target requires an architecture\n";
+                return 2;
+            }
+            target = argv[i];
+            if (target != "x86_64" && target != "aarch64") {
+                std::cerr << "tellc: unsupported Linux target " << target
+                          << " (expected x86_64 or aarch64)\n";
+                return 2;
+            }
+#endif
         } else if (!arg.empty() && arg[0] == '-') {
             std::cerr << "tellc: unknown option " << arg << '\n';
             return 2;
@@ -422,8 +445,12 @@ int main(int argc, char** argv) {
         const auto program = tell::parse(source);
 #ifdef TELL_STANDALONE_MACOS
         llvm::SmallVector<char, 0> object;
-        tell::generate_object(program, object);
+        tell::generate_object(program, object, "arm64-apple-macosx11.0.0");
         link_macos(llvm::StringRef(object.data(), object.size()), output, libraries);
+#elif defined(TELL_STANDALONE_LINUX)
+        llvm::SmallVector<char, 0> object;
+        tell::generate_object(program, object, target + "-unknown-linux-musl");
+        tell::link_linux(llvm::StringRef(object.data(), object.size()), target, output, libraries);
 #else
         TempFile ir_file;
         TempFile object_file;

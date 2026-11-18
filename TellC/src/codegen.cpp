@@ -4,7 +4,7 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/raw_ostream.h>
-#ifdef TELL_STANDALONE_MACOS
+#ifdef TELL_EMBEDDED_CODEGEN
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/TargetParser/Host.h>
@@ -883,8 +883,8 @@ public:
     }
 
     void generate(const Program& program, const std::string& path, bool check_only = false
-#ifdef TELL_STANDALONE_MACOS
-                  , llvm::SmallVectorImpl<char>* object = nullptr
+#ifdef TELL_EMBEDDED_CODEGEN
+                  , llvm::SmallVectorImpl<char>* object = nullptr, const std::string& target_triple = {}
 #endif
                   ) {
         declare(program);
@@ -906,11 +906,18 @@ public:
         ir.CreateRet(ir.getInt32(0));
         if(llvm::verifyModule(module,&llvm::errs())) throw std::runtime_error("generated invalid LLVM IR");
         if (check_only) return;
-#ifdef TELL_STANDALONE_MACOS
+#ifdef TELL_EMBEDDED_CODEGEN
         if (object) {
+#ifdef TELL_STANDALONE_LINUX
+            llvm::InitializeAllTargetInfos();
+            llvm::InitializeAllTargets();
+            llvm::InitializeAllTargetMCs();
+            llvm::InitializeAllAsmPrinters();
+#else
             llvm::InitializeNativeTarget();
             llvm::InitializeNativeTargetAsmPrinter();
-            llvm::Triple triple("arm64-apple-macosx11.0.0");
+#endif
+            llvm::Triple triple(target_triple);
             std::string error;
             const auto* target = llvm::TargetRegistry::lookupTarget(triple, error);
             if (!target) throw std::runtime_error("cannot select LLVM target: " + error);
@@ -933,9 +940,9 @@ public:
 };
 } // namespace
 
-#ifdef TELL_STANDALONE_MACOS
-void generate_object(const Program& program, llvm::SmallVectorImpl<char>& object) {
-    Generator{}.generate(program, "", false, &object);
+#ifdef TELL_EMBEDDED_CODEGEN
+void generate_object(const Program& program, llvm::SmallVectorImpl<char>& object, const std::string& target_triple) {
+    Generator{}.generate(program, "", false, &object, target_triple);
 }
 #endif
 void check_program(const Program& program) {

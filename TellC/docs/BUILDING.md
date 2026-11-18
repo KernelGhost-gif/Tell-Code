@@ -1,8 +1,8 @@
 # Building TellC
 
-TellC has two build modes. The Apple silicon standalone build embeds LLVM code
-generation and LLD. Linux and Intel macOS use an installed LLVM toolchain plus
-Clang. Standalone mode is enabled by default only on Apple silicon.
+The standalone macOS and Linux builds embed LLVM code generation and LLD.
+The external-toolchain build uses an installed LLVM and Clang. Standalone mode
+is enabled by default only on Apple silicon macOS.
 
 ## Requirements
 
@@ -24,7 +24,7 @@ revision. The build script disables optional compression and documentation
 dependencies to keep the build smaller and avoid runtime shared-library
 dependencies.
 
-## Linux and Intel macOS
+## External toolchain on Linux and macOS
 
 Install LLVM and Clang for your platform, then configure and build:
 
@@ -39,6 +39,50 @@ ctest --test-dir build/tellc --output-on-failure
 On Intel macOS, TELL_STANDALONE_MACOS defaults to OFF and the compiler uses the
 external-toolchain path. Set -DTELL_STANDALONE_MACOS=OFF explicitly when
 configuring an Intel Mac if the option was previously cached as ON.
+
+## Standalone Linux
+
+Build from macOS or Linux with [Zig 0.16.0](https://ziglang.org/download/),
+CMake 3.31 or later, Ninja, Python 3, a native C++ compiler, and an LLVM 24
+source tree. The builds here used LLVM revision
+`7090701baa47d03b1e9877eff3b4e8f032b99946`. The script builds TableGen for
+the build host and cross-compiles LLVM, LLD, and TellC directly for Linux.
+
+```sh
+LLVM_SOURCE=/path/to/llvm-project ./scripts/build-tellc-linux.sh
+```
+
+This writes `build/tellc-linux/tellc-linux-x86_64` and
+`build/tellc-linux/tellc-linux-aarch64`. Pass `x86_64` or `aarch64` to build
+one binary. Set `ZIG` to the Zig executable, `TELL_BUILD_ROOT` to change the
+output directory, or `JOBS` to control parallelism. If you already have
+`llvm-tblgen` and `llvm-min-tblgen` built on the host from the same LLVM
+revision, set `LLVM_NATIVE_TOOL_DIR` to their directory.
+
+Copy the compiler for the machine's architecture to Linux and run it directly.
+Both compilers embed LLVM, LLD, and static musl and C++ runtime inputs for both
+targets. The compiler defaults to its own architecture. Use `--target` to
+select the other architecture:
+
+```sh
+./tellc-linux-x86_64 TellC/examples/factorial.tell -o factorial
+./tellc-linux-x86_64 TellC/examples/factorial.tell --target aarch64 -o factorial-arm64
+```
+
+The compiler and its outputs are static ELF executables. Compiling uses
+anonymous files through `memfd_create` (available since Linux 3.17) and
+`/proc/self/fd`, which requires procfs mounted. Compilation requires no installed
+LLVM, Clang, system libraries, SDK, or writable temporary directory.
+With `--link`, supply ELF objects or static archives built for the selected
+architecture and musl ABI. C++ archives should use Zig's libc++ ABI.
+When redistributing the compiler, include Tell's license, LLVM's
+`LICENSE.TXT`, and the license notices for the Zig and musl runtimes.
+
+Run the standalone smoke test on matching Linux hardware:
+
+```sh
+python3 TellC/tests/standalone_linux.py ./tellc-linux-x86_64 x86_64
+```
 
 ## Apple silicon standalone compiler
 

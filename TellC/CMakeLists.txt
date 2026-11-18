@@ -16,7 +16,20 @@ endif()
 option(TELL_STANDALONE_MACOS "Embed LLVM code generation and LLD for Apple silicon macOS" ${_tell_standalone_default})
 unset(_tell_standalone_default)
 
-if(TELL_STANDALONE_MACOS)
+option(TELL_STANDALONE_LINUX "Embed LLVM, LLD and static runtimes for Linux" OFF)
+if(TELL_STANDALONE_LINUX)
+  if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR
+     NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|aarch64)$" OR
+     TELL_STANDALONE_MACOS)
+    message(FATAL_ERROR "Standalone Linux TellC requires an x86_64 or aarch64 Linux target")
+  endif()
+  if(NOT TELL_ZIG OR NOT TELL_ZIG_CACHE_DIR)
+    message(FATAL_ERROR "Use scripts/build-tellc-linux.sh to configure the Zig cross-toolchain")
+  endif()
+  find_package(LLD REQUIRED CONFIG)
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  set(TELL_LLVM_LIBS lldELF)
+elseif(TELL_STANDALONE_MACOS)
   if(NOT APPLE)
     message(FATAL_ERROR "TELL_STANDALONE_MACOS requires macOS")
   endif()
@@ -50,8 +63,26 @@ target_compile_features(tellc PRIVATE cxx_std_17)
 target_include_directories(tellc SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS})
 target_compile_definitions(tellc PRIVATE ${LLVM_DEFINITIONS} TELL_LLC_PATH="${TELL_LLC_PATH}")
 
-if(TELL_STANDALONE_MACOS)
-  target_compile_definitions(tellc PRIVATE TELL_STANDALONE_MACOS)
+if(TELL_STANDALONE_LINUX)
+  enable_language(ASM)
+  set(runtime_dir "${CMAKE_CURRENT_BINARY_DIR}/linux-runtime")
+  add_custom_command(
+    OUTPUT "${runtime_dir}/runtime.S" "${runtime_dir}/linux_runtime.hpp"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed-linux-runtime.py"
+      "${TELL_ZIG}" "${TELL_ZIG_CACHE_DIR}" "${runtime_dir}"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed-linux-runtime.py" "${TELL_ZIG}"
+    VERBATIM
+  )
+  target_sources(tellc PRIVATE src/linux_linker.cpp
+    "${runtime_dir}/runtime.S" "${runtime_dir}/linux_runtime.hpp")
+  target_compile_definitions(tellc PRIVATE TELL_STANDALONE_LINUX TELL_EMBEDDED_CODEGEN
+    TELL_LINUX_ARCH="${CMAKE_SYSTEM_PROCESSOR}")
+  target_include_directories(tellc SYSTEM PRIVATE ${LLD_INCLUDE_DIRS})
+  target_include_directories(tellc PRIVATE "${runtime_dir}")
+  target_link_options(tellc PRIVATE -s)
+  target_link_libraries(tellc PRIVATE tell_parser ${TELL_LLVM_LIBS})
+elseif(TELL_STANDALONE_MACOS)
+  target_compile_definitions(tellc PRIVATE TELL_STANDALONE_MACOS TELL_EMBEDDED_CODEGEN)
   target_include_directories(tellc SYSTEM PRIVATE "${LLD_SOURCE_DIR}/include")
 
   # Keep an escape hatch for custom LLVM builds that still expose shared zstd.
