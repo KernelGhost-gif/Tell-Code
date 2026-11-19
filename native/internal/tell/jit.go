@@ -71,19 +71,19 @@ func (r *runtime) runJITFunction(function BytecodeFunction, local *env) (any, bo
 		key = sha256.Sum256(keyData)
 	}
 
-	if r.executionEngine == "auto" {
-		r.jitCalls[key]++
-		if r.jitCalls[key] < r.jitHotThreshold {
-			r.jitStats.InterpretedCalls++
-			return nil, false, nil
-		}
-	}
 	if r.jitUnsupported[key] {
 		r.jitStats.InterpretedCalls++
 		return nil, false, nil
 	}
 
 	code, exists := r.jitCache[key]
+	if r.executionEngine == "auto" && !exists {
+		r.jitCalls[key]++
+		if r.jitCalls[key] < r.jitHotThreshold {
+			r.jitStats.InterpretedCalls++
+			return nil, false, nil
+		}
+	}
 	if !exists {
 		code, err = compileNativeJIT(function)
 		if err != nil {
