@@ -30,7 +30,7 @@ jobs:
           chmod +x llvm.sh
           sudo ./llvm.sh 21
           sudo apt-get update
-          sudo apt-get install -y llvm-21-dev clang-21
+          sudo apt-get install -y llvm-21-dev clang-21 valgrind
           echo "/usr/lib/llvm-21/bin" >> "$GITHUB_PATH"
 
       - name: Configure TellC
@@ -44,6 +44,29 @@ jobs:
 
       - name: Run compiler and language server tests
         run: ctest --test-dir build/tellc --output-on-failure
+
+  macos-arm64-external:
+    name: Apple silicon / external LLVM toolchain (PR validation)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install LLVM and Ninja
+        run: brew install llvm ninja
+
+      - name: Configure TellC with external LLVM on Apple silicon
+        run: |
+          LLVM_PREFIX="$(brew --prefix llvm)"
+          cmake -S TellC -B build/tellc-arm64-external -G Ninja \
+            -DLLVM_DIR="$LLVM_PREFIX/lib/cmake/llvm" \
+            -DTELL_LLC_PATH="$LLVM_PREFIX/bin/llc" \
+            -DTELL_STANDALONE_MACOS=OFF
+          grep -q '^TELL_STANDALONE_MACOS:BOOL=OFF$' build/tellc-arm64-external/CMakeCache.txt
+
+      - name: Build and test the Apple silicon compiler
+        run: |
+          cmake --build build/tellc-arm64-external --parallel 2
+          ctest --test-dir build/tellc-arm64-external --output-on-failure
 
   macos-standalone:
     if: github.event_name != 'pull_request'
@@ -74,7 +97,6 @@ jobs:
           if-no-files-found: error
 
   macos-intel:
-    if: github.event_name != 'pull_request'
     name: Intel macOS / external LLVM toolchain
     runs-on: macos-15-intel
     steps:
