@@ -68,6 +68,17 @@ target_link_libraries(tellc PRIVATE tell_codegen)
 target_compile_features(tellc PRIVATE cxx_std_17)
 target_include_directories(tellc SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS})
 target_compile_definitions(tellc PRIVATE ${LLVM_DEFINITIONS} TELL_LLC_PATH="${TELL_LLC_PATH}")
+if(NOT TELL_STANDALONE_LINUX)
+  set(TELL_JIT_COMPONENTS OrcJIT)
+  if(NOT TELL_STANDALONE_MACOS)
+    list(APPEND TELL_JIT_COMPONENTS nativecodegen)
+  endif()
+  llvm_map_components_to_libnames(TELL_JIT_LIBS ${TELL_JIT_COMPONENTS})
+  target_sources(tellc PRIVATE jit/jit.cpp)
+  target_include_directories(tellc PRIVATE src jit)
+  target_compile_definitions(tellc PRIVATE TELL_ENABLE_JIT)
+  target_link_libraries(tellc PRIVATE ${TELL_JIT_LIBS})
+endif()
 
 if(TELL_STANDALONE_LINUX)
   enable_language(ASM)
@@ -159,4 +170,11 @@ if(BUILD_TESTING)
       "-DTELL_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
       "-DTELL_WORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/integration"
       -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/compiler_integration.cmake")
+  if(NOT TELL_STANDALONE_LINUX)
+    add_test(NAME jit_integration COMMAND ${CMAKE_COMMAND}
+      "-DTELL_COMPILER=$<TARGET_FILE:tellc>"
+      "-DTELL_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
+      "-DTELL_WORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/jit-integration"
+      -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/jit_integration.cmake")
+  endif()
 endif()

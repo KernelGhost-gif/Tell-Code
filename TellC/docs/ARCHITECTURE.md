@@ -7,11 +7,13 @@ the parser is not automatically guaranteed to have backend support.
 ## Compilation pipeline
 
 1. The source file is read as UTF-8 bytes by the command-line driver.
-2. tell::parse in src/parser.cpp produces the Program and expression/statement
-   AST declared in include/tell/parser.hpp.
+2. `tell::parse` in `src/parser.cpp` tokenizes the source and builds the
+   `Program` and AST declared in `include/tell/parser.hpp`.
 3. The LLVM generator in src/codegen.cpp validates supported operations and
    declared types while building an LLVM module.
-4. The selected platform path turns that module into a native executable:
+4. The selected mode compiles the module to native code.
+   - `--jit` hands the module to LLVM ORC `LLJIT`, which compiles for the host
+     and invokes the generated `main` in the `tellc` process.
    - Apple silicon standalone mode emits an AArch64 Mach-O object in memory
      and invokes the embedded LLD Mach-O driver with in-memory inputs.
    - Standalone Linux emits x86-64 or AArch64 ELF object code and uses the

@@ -15,6 +15,7 @@ The suite is split by responsibility:
 | object_ast | Object declarations, access sections, and members |
 | cli_smoke | Help/version output, argument validation, and factorial compilation |
 | compiler_integration | Executable output plus expected compile-time diagnostics |
+| jit_integration | In-memory execution, source diagnostics, and exit status |
 | standalone_macos | Embedded linker, executable permissions, no external tools, and no temp artifacts |
 
 The standalone_macos test is registered only when

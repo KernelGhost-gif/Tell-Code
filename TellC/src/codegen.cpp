@@ -40,8 +40,8 @@ struct Object {
 };
 
 class Generator {
-    llvm::LLVMContext context;
-    llvm::Module module{"tell", context};
+    llvm::Module& module;
+    llvm::LLVMContext& context;
 #if LLVM_VERSION_MAJOR >= 24
     llvm::IRBuilder<> ir{module};
 #else
@@ -1121,18 +1121,14 @@ class Generator {
     }
 
 public:
-    Generator() {
+    explicit Generator(llvm::Module& module) : module(module), context(module.getContext()) {
         auto signature = llvm::FunctionType::get(ir.getInt32Ty(), {ir.getPtrTy()}, true);
         printf_fn = module.getOrInsertFunction("printf", signature);
         pending_error = new llvm::GlobalVariable(module, ir.getPtrTy(), false, llvm::GlobalValue::InternalLinkage, llvm::ConstantPointerNull::get(ir.getPtrTy()), "tell.error");
         input_stream = new llvm::GlobalVariable(module, ir.getPtrTy(), false, llvm::GlobalValue::InternalLinkage, llvm::ConstantPointerNull::get(ir.getPtrTy()), "tell.input");
     }
 
-    void generate(const Program& program, const std::string& path, bool check_only = false
-#ifdef TELL_EMBEDDED_CODEGEN
-                  , llvm::SmallVectorImpl<char>* object = nullptr, const std::string& target_triple = {}
-#endif
-                  ) {
+    void generate(const Program& program) {
         declare(program);
         for (const auto& stmt : program.statements) {
             if (stmt.kind != Stmt::Kind::Object) continue;
@@ -1150,51 +1146,60 @@ public:
                 emit_statement(stmt);
         }
         ir.CreateRet(ir.getInt32(0));
-        if(llvm::verifyModule(module,&llvm::errs())) throw std::runtime_error("generated invalid LLVM IR");
-        if (check_only) return;
-#ifdef TELL_EMBEDDED_CODEGEN
-        if (object) {
-#ifdef TELL_STANDALONE_LINUX
-            llvm::InitializeAllTargetInfos();
-            llvm::InitializeAllTargets();
-            llvm::InitializeAllTargetMCs();
-            llvm::InitializeAllAsmPrinters();
-#else
-            llvm::InitializeNativeTarget();
-            llvm::InitializeNativeTargetAsmPrinter();
-#endif
-            llvm::Triple triple(target_triple);
-            std::string error;
-            const auto* target = llvm::TargetRegistry::lookupTarget(triple, error);
-            if (!target) throw std::runtime_error("cannot select LLVM target: " + error);
-            llvm::TargetOptions options;
-            std::unique_ptr<llvm::TargetMachine> machine(target->createTargetMachine(
-                triple, "generic", "", options, llvm::Reloc::PIC_));
-            if (!machine) throw std::runtime_error("cannot create LLVM target machine");
-            module.setTargetTriple(triple);
-            module.setDataLayout(machine->createDataLayout());
-            llvm::raw_svector_ostream out(*object);
-            llvm::legacy::PassManager passes;
-            if (machine->addPassesToEmitFile(passes, out, nullptr, llvm::CodeGenFileType::ObjectFile))
-                throw std::runtime_error("LLVM cannot emit object code for this target");
-            passes.run(module);
-            return;
-        }
-#endif
-        std::error_code ec;llvm::raw_fd_ostream out(path,ec);if(ec) throw std::runtime_error("cannot write temporary LLVM IR: "+ec.message());module.print(out,nullptr);out.flush();if(out.has_error()) throw std::runtime_error("cannot write temporary LLVM IR");
+        if (llvm::verifyModule(module, &llvm::errs()))
+            throw std::runtime_error("generated invalid LLVM IR");
     }
 };
 } // namespace
 
+std::unique_ptr<llvm::Module> generate_module(const Program& program, llvm::LLVMContext& context) {
+    auto module = std::make_unique<llvm::Module>("tell", context);
+    Generator(*module).generate(program);
+    return module;
+}
+
 #ifdef TELL_EMBEDDED_CODEGEN
 void generate_object(const Program& program, llvm::SmallVectorImpl<char>& object, const std::string& target_triple) {
-    Generator{}.generate(program, "", false, &object, target_triple);
+    llvm::LLVMContext context;
+    auto module = generate_module(program, context);
+#ifdef TELL_STANDALONE_LINUX
+    llvm::InitializeAllTargetInfos();
+    llvm::InitializeAllTargets();
+    llvm::InitializeAllTargetMCs();
+    llvm::InitializeAllAsmPrinters();
+#else
+    llvm::InitializeNativeTarget();
+    llvm::InitializeNativeTargetAsmPrinter();
+#endif
+    llvm::Triple triple(target_triple);
+    std::string error;
+    const auto* target = llvm::TargetRegistry::lookupTarget(triple, error);
+    if (!target) throw std::runtime_error("cannot select LLVM target: " + error);
+    llvm::TargetOptions options;
+    std::unique_ptr<llvm::TargetMachine> machine(target->createTargetMachine(
+        triple, "generic", "", options, llvm::Reloc::PIC_));
+    if (!machine) throw std::runtime_error("cannot create LLVM target machine");
+    module->setTargetTriple(triple);
+    module->setDataLayout(machine->createDataLayout());
+    llvm::raw_svector_ostream out(object);
+    llvm::legacy::PassManager passes;
+    if (machine->addPassesToEmitFile(passes, out, nullptr, llvm::CodeGenFileType::ObjectFile))
+        throw std::runtime_error("LLVM cannot emit object code for this target");
+    passes.run(*module);
 }
 #endif
 void check_program(const Program& program) {
-    Generator{}.generate(program, "", true);
+    llvm::LLVMContext context;
+    generate_module(program, context);
 }
 void generate_ir(const Program& program, const std::string& path) {
-    Generator{}.generate(program, path);
+    llvm::LLVMContext context;
+    auto module = generate_module(program, context);
+    std::error_code error;
+    llvm::raw_fd_ostream out(path, error);
+    if (error) throw std::runtime_error("cannot write temporary LLVM IR: " + error.message());
+    module->print(out, nullptr);
+    out.flush();
+    if (out.has_error()) throw std::runtime_error("cannot write temporary LLVM IR");
 }
 } // namespace tell

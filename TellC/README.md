@@ -1,6 +1,6 @@
 # TellC
 
-A C++17 compiler for an explicitly typed variant of Tell. It parses source into an AST and generates LLVM IR and native executables for the supported subset.
+A C++17 compiler for an explicitly typed variant of Tell. It parses source into an AST and generates LLVM IR for native executables and just-in-time execution.
 
 Platform setup, build requirements, and test coverage are documented in [the documentation index](docs/README.md), [the build guide](docs/BUILDING.md), [the testing guide](docs/TESTING.md), and [the architecture guide](docs/ARCHITECTURE.md).
 
@@ -63,6 +63,14 @@ build and Clang on `PATH` to link. For cross-built compilers, set
 Run parser and compiler integration tests with `ctest --test-dir <build-directory> --output-on-failure`.
 
 The integration test compiles and runs the factorial and object examples, and verifies that invalid private access, parameter types, return types, and incomplete return paths fail compilation. The LLVM-backed test job runs on Linux in GitHub Actions.
+
+## Just-in-time execution
+
+```sh
+tellc --jit TellC/examples/factorial.tell
+```
+
+`--jit` uses the same tokenizer, parser, type checks, and IR generation as executable compilation. LLVM ORC compiles that IR for the host and runs the program in the `tellc` process, returning the program's exit status. JIT mode is available in the installed-LLVM and standalone macOS builds. The static Linux build and the `-o` and `--link` options are for executable compilation.
 
 ## Calling C++ libraries
 

@@ -77,7 +77,7 @@ cmake -S "$LLVM_SOURCE/llvm" -B "$BUILD_ROOT/llvm" -G Ninja \
 
 cmake --build "$BUILD_ROOT/llvm" --parallel "$JOBS" --target \
   lldMachO lldCommon LLVMAArch64CodeGen LLVMAArch64AsmParser \
-  LLVMLTO LLVMPasses
+  LLVMLTO LLVMPasses LLVMOrcJIT
 
 cmake -S "$ROOT/TellC" -B "$BUILD_ROOT/tellc" -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \

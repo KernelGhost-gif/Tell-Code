@@ -4,6 +4,9 @@
 #endif
 #include "tell/parser.hpp"
 #include "codegen.hpp"
+#ifdef TELL_ENABLE_JIT
+#include "jit.hpp"
+#endif
 #ifdef TELL_STANDALONE_LINUX
 #include "linux_linker.hpp"
 #endif
@@ -57,6 +60,9 @@ void print_usage(std::ostream& out) {
            " [--target x86_64|aarch64]"
 #endif
            "\n"
+#ifdef TELL_ENABLE_JIT
+           "  tellc --jit <file.tell>\n"
+#endif
            "  tellc --help\n"
            "  tellc --version\n"
            "  tellc --llvm-version\n";
@@ -367,6 +373,7 @@ int main(int argc, char** argv) {
     std::string input;
     std::string output = "a.out";
     bool output_option_seen = false;
+    bool jit = false;
     std::vector<std::string> libraries;
 #ifdef TELL_STANDALONE_LINUX
     std::string target = TELL_LINUX_ARCH;
@@ -374,7 +381,9 @@ int main(int argc, char** argv) {
 
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
-        if (arg == "--link") {
+        if (arg == "--jit") {
+            jit = true;
+        } else if (arg == "--link") {
             if (++i == argc || std::string(argv[i]).empty()) { std::cerr << "tellc: --link requires a library filename\n"; return 2; }
             libraries.emplace_back(argv[i]);
         } else if (arg == "-o") {
@@ -417,16 +426,29 @@ int main(int argc, char** argv) {
         return 2;
     }
 
-    for (const auto& library : libraries) {
-        std::error_code ec;
-        if (std::filesystem::equivalent(library, output, ec) && !ec) {
-            std::cerr << "tellc: output must differ from library " << library << '\n'; return 2;
-        }
-    }
-    std::error_code same_error;
-    if (std::filesystem::equivalent(input, output, same_error) && !same_error) {
-        std::cerr << "tellc: output must differ from input\n";
+#ifndef TELL_ENABLE_JIT
+    if (jit) {
+        std::cerr << "tellc: --jit is unavailable in the static Linux build\n";
         return 2;
+    }
+#endif
+    if (jit && (output_option_seen || !libraries.empty())) {
+        std::cerr << "tellc: --jit cannot be combined with -o or --link\n";
+        return 2;
+    }
+
+    if (!jit) {
+        for (const auto& library : libraries) {
+            std::error_code ec;
+            if (std::filesystem::equivalent(library, output, ec) && !ec) {
+                std::cerr << "tellc: output must differ from library " << library << '\n'; return 2;
+            }
+        }
+        std::error_code same_error;
+        if (std::filesystem::equivalent(input, output, same_error) && !same_error) {
+            std::cerr << "tellc: output must differ from input\n";
+            return 2;
+        }
     }
 
     std::ifstream file(input, std::ios::binary);
@@ -443,6 +465,9 @@ int main(int argc, char** argv) {
 
     try {
         const auto program = tell::parse(source);
+#ifdef TELL_ENABLE_JIT
+        if (jit) return tell::run_jit(program);
+#endif
 #ifdef TELL_STANDALONE_MACOS
         llvm::SmallVector<char, 0> object;
         tell::generate_object(program, object, "arm64-apple-macosx11.0.0");
