@@ -1,0 +1,52 @@
+Use the module "math.tell" as math.
+Use the module "lists.tell" as lists.
+Use the module "text.tell" as texts.
+Use the module "statistics.tell" as stats.
+
+Check that math.clamp(-1, 0, 10) is equal to 0.
+Check that math.clamp(5, 0, 10) is equal to 5.
+Check that math.clamp(11, 0, 10) is equal to 10.
+Check that math.lerp(10, 20, 0.5) is equal to 15.
+Check that [math.sign(-5), math.sign(0), math.sign(5)] is equal to [-1, 0, 1].
+
+Let items be [1, 2, 3].
+Let chunks be lists.chunked(items, 2).
+Check that chunks is equal to [[1, 2], [3]].
+Set items[0] to 99.
+Check that chunks[0][0] is equal to 1.
+Check that lists.chunked([], 2) is equal to [].
+Check that lists.chunked([1, 2], 100000000000000000000) is equal to [[1, 2]].
+Check that lists.flatten([[1], [], [2, 3]]) is equal to [1, 2, 3].
+Check that lists.zip(["a", "b"], [1]) is equal to [["a", 1]].
+Check that lists.zip([], [1]) is equal to [].
+
+Check that texts.starts_with("東京🙂", "東").
+Check that texts.ends_with("東京🙂", "京🙂").
+Check that texts.starts_with("", "").
+Check that texts.ends_with("東京🙂", "").
+Check that not texts.ends_with("🙂", "京🙂").
+Check that not texts.starts_with("Tell", "tell").
+Check that texts.join(["", "東京", ""], "|") is equal to "|東京|".
+Check that texts.join([], "|") is equal to "".
+
+Let scores be [11, 3, 9].
+Check that stats.median(scores) is equal to 9.
+Check that scores is equal to [11, 3, 9].
+Check that stats.median([9, 3, 5, 7]) is equal to 6.
+Check that stats.median([-10, 4]) is equal to -3.
+
+Let caught be false.
+Try:
+    lists.chunked([1], 1.5).
+If something goes wrong:
+    Set caught to true.
+End try.
+Check that caught.
+
+Set caught to false.
+Try:
+    stats.median([]).
+If something goes wrong:
+    Set caught to true.
+End try.
+Check that caught.

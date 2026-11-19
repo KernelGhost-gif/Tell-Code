@@ -463,6 +463,9 @@ func TestBytecodeConstantFoldingPreservesRuntimeErrorsAndShortCircuit(t *testing
 	if got, want := runCompiled(t, "Say false and missing_value."), "false\n"; got != want {
 		t.Fatalf("short-circuit output = %q, want %q", got, want)
 	}
+	if got, want := runCompiled(t, "Let ready be true.\nSay ready or missing_value.\nSet ready to false.\nSay ready or true."), "true\ntrue\n"; got != want {
+		t.Fatalf("or output = %q, want %q", got, want)
+	}
 }
 
 func TestBytecodePreservesRuntimeTypeAndConstantRules(t *testing.T) {
