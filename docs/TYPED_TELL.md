@@ -59,17 +59,25 @@ A runnable native example is available at [native/examples/native-typed.tell](..
 
 ## Performance status
 
-This first Go typed-dialect increment adds validation and runtime contract
-checks; it does not yet specialize the VM's dynamic value representation.
-Go execution still uses the existing general-purpose runtime and bytecode
-operations. Do not treat this change as a measured speedup in execution,
-memory use, or compilation time.
+The production .tbc VM now has an initial native JIT tier for a narrow subset
+of typed numeric functions on Linux/amd64. Eligible straight-line functions
+with number/decimal parameters and return values can be emitted as native
+x86-64 floating-point instructions. The runtime caches compiled functions;
+auto mode waits for a hot-call threshold before compiling. Unsupported
+functions continue through the existing interpreter.
 
-The next performance phase should use typed semantic information to lower
-verified functions to specialized bytecode operations and compact value
-representations where benchmarks justify them. Any such change should retain
-a dynamic compatibility path and be measured against representative Tell
-programs before performance claims are made.
+This JIT does not yet specialize the VM's general dynamic value representation
+or compile control flow, recursion, collections, I/O, or dynamic calls. It is
+a small native-code backend, not LLVM ORC. Division remains interpreted so the
+JIT preserves Tell's division-by-zero error semantics. Do not assume a speedup
+until the benchmark is run on representative workloads. See
+[Execution Engines](EXECUTION_ENGINES.md) for supported instructions and
+benchmark instructions.
+
+Future work includes a typed IR, broader native code generation, register
+allocation, deoptimization, additional CPU backends, and true standalone
+native AOT output. The portable .tbc build remains ahead-of-time compilation
+to VM bytecode, not a native executable.
 
 ## Migration
 
