@@ -463,8 +463,41 @@ func TestBytecodeConstantFoldingPreservesRuntimeErrorsAndShortCircuit(t *testing
 	if got, want := runCompiled(t, "Say false and missing_value."), "false\n"; got != want {
 		t.Fatalf("short-circuit output = %q, want %q", got, want)
 	}
-	if got, want := runCompiled(t, "Let ready be true.\nSay ready or missing_value.\nSet ready to false.\nSay ready or true."), "true\ntrue\n"; got != want {
-		t.Fatalf("or output = %q, want %q", got, want)
+}
+
+func TestBytecodeShortCircuitOrAcrossEngines(t *testing.T) {
+	const source = `To ready() out bool:
+    Say "right operand".
+    Give back true.
+End function.
+To choose(number: value) out number:
+    If value > 0 or ready():
+        Give back value.
+    End if.
+    Give back -1.
+End function.
+Say choose(1).
+Say choose(0).`
+
+	artifact, err := Compile(source, "short-circuit.tell")
+	if err != nil {
+		t.Fatal(err)
+	}
+	engines := []string{"interp", "auto"}
+	if NativeJITAvailable() {
+		engines = append(engines, "jit")
+	}
+	for _, engine := range engines {
+		t.Run(engine, func(t *testing.T) {
+			var output bytes.Buffer
+			_, err := RunBytecodeWithEngine(artifact, "short-circuit.tbc", bytes.NewReader(nil), &output, DefaultExecutionLimits(), engine, 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got, want := output.String(), "1\nright operand\n0\n"; got != want {
+				t.Fatalf("short-circuit output = %q, want %q", got, want)
+			}
+		})
 	}
 }
 
