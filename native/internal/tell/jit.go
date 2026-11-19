@@ -64,6 +64,7 @@ func (r *runtime) runJITFunction(function BytecodeFunction, local *env) (any, bo
 		return nil, false, nil
 	}
 	key := function.jitKey
+	var err error
 	if key == ([32]byte{}) {
 		keyData, err := json.Marshal(function)
 		if err != nil {
