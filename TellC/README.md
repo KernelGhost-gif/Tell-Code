@@ -233,7 +233,7 @@ end for
 
 Indexed assignment inserts a new key or replaces its value. Literals evaluate pairs from left to right, and the last value for a duplicate key wins. Text keys compare by exact contents and are case-sensitive. Reading or removing an absent key raises a catchable error. Use `key in table` to test for presence and `keys(table)` to get a snapshot list in unspecified order.
 
-Hashmaps are mutable references. Aliases, parameters, and fields share the same entries, and `=` compares hashmap identity. A constant binding can still refer to a mutable hashmap.
+Hashmaps are mutable references. Aliases, parameters, and fields share the same entries, and `=` compares hashmap identity. A constant binding can still refer to a mutable hashmap. Each allocated hashmap is registered once by the generated program and its table, bucket array, and remaining entries are freed on normal process exit or an uncaught Tell runtime error. Aliases and nested maps do not trigger duplicate frees. Text key storage and other objects referenced by values retain their separate ownership rules.
 
 ## Reassignment and loops
 

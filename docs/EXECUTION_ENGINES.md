@@ -97,25 +97,27 @@ eligible; the body must match the supported numeric subset.
 
 The Go test suite compares native and interpreted results, verifies the
 automatic hot threshold, and verifies interpreter fallback for control flow
-and division-by-zero semantics. A benchmark is available:
+and division-by-zero semantics. Run the focused benchmark with:
 
 ~~~sh
 cd native
-go test ./internal/tell -run '^
- -bench BenchmarkTypedNumericFunctionEngines -benchmem
+go test ./internal/tell -run '^$' -bench '^BenchmarkTypedNumericFunctionEngines$' -benchmem -benchtime=250ms -count=1
 ~~~
 
-### Initial CI benchmark sample
+### Latest successful CI benchmark sample
 
-One Linux amd64 CI run (Ubuntu 24.04, Go 1.23.x, 250 ms per sub-benchmark)
-measured the warmed-up execution of the same typed function containing 159
-numeric arithmetic operations:
+The latest successful PR validation run measured the warmed-up execution of
+the same typed function containing 159 numeric arithmetic operations on
+Ubuntu 24.04 with Go 1.23.12 and an AMD EPYC 7763 64-Core Processor. Each
+sub-benchmark ran for 250 ms:
 
 | Engine | Time per call | Allocations per call |
 | --- | ---: | ---: |
-| Interpreter | 6,362 ns | 167 |
-| Native JIT | 608 ns | 9 |
-| Auto (after warm-up) | 623 ns | 9 |
+| Interpreter | 8,994 ns | 167 |
+| Native JIT | 916.5 ns | 9 |
+| Auto (after warm-up) | 939.8 ns | 9 |
+
+Source: [Native JIT validation and benchmark, PR #22](https://github.com/KernelGhost-gif/Tell-Code/actions/runs/44456809768).
 
 This is a synthetic, compute-heavy function benchmark. The harness excludes
 one-time JIT compilation from the timed section and calls the compiled

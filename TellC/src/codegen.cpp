@@ -110,6 +110,7 @@ class Generator {
             auto message = ir.CreateLoad(ir.getPtrTy(), pending_error);
             auto dprintf_type = llvm::FunctionType::get(ir.getInt32Ty(), {ir.getInt32Ty(), ir.getPtrTy()}, true);
             ir.CreateCall(module.getOrInsertFunction("dprintf", dprintf_type), {ir.getInt32(2), text("Error: %s\n"), message});
+            hashmaps.cleanup();
             ir.CreateRet(ir.getInt32(1));
         } else if (fn->getReturnType()->isVoidTy()) ir.CreateRetVoid();
         else ir.CreateRet(llvm::Constant::getNullValue(fn->getReturnType()));
@@ -1145,7 +1146,11 @@ public:
                 stmt.kind != Stmt::Kind::ForeignFunction)
                 emit_statement(stmt);
         }
-        ir.CreateRet(ir.getInt32(0));
+        // A terminating top-level statement already emitted its own epilogue.
+        if (ir.GetInsertBlock()) {
+            hashmaps.cleanup();
+            ir.CreateRet(ir.getInt32(0));
+        }
         if (llvm::verifyModule(module, &llvm::errs()))
             throw std::runtime_error("generated invalid LLVM IR");
     }

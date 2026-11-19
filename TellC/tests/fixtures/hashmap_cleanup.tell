@@ -1,0 +1,12 @@
+let number index be 0
+while index < 2048:
+    let hashmap of number to number transient be {}
+    set transient[index] to index
+    set transient[index] to transient[index] + 1
+    set index to index + 1
+end while
+let hashmap of text to hashmap of number to number nested be {"branch": {}}
+let hashmap of number to number child be nested["branch"]
+set child[7] to 21
+say index
+say child[7]

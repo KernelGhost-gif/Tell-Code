@@ -4,15 +4,19 @@
 
 namespace tell {
 namespace {
-enum TableField { Length, Capacity, Buckets };
+enum TableField { Length, Capacity, Buckets, TrackedNext };
 enum EntryField { Hash, Key, Value, Next };
 constexpr uint64_t initial_capacity = 8;
 }
 
 HashmapCodegen::HashmapCodegen(llvm::Module& module, llvm::IRBuilder<>& ir)
     : module(module), ir(ir), context(module.getContext()),
-      table_type(llvm::StructType::get(context, {ir.getInt64Ty(), ir.getInt64Ty(), ir.getPtrTy()})),
-      entry_type(llvm::StructType::get(context, {ir.getInt64Ty(), ir.getInt64Ty(), ir.getInt64Ty(), ir.getPtrTy()})) {}
+      table_type(llvm::StructType::get(context, {ir.getInt64Ty(), ir.getInt64Ty(), ir.getPtrTy(), ir.getPtrTy()})),
+      entry_type(llvm::StructType::get(context, {ir.getInt64Ty(), ir.getInt64Ty(), ir.getInt64Ty(), ir.getPtrTy()})) {
+    registry_head = new llvm::GlobalVariable(
+        module, ir.getPtrTy(), false, llvm::GlobalValue::InternalLinkage,
+        llvm::ConstantPointerNull::get(ir.getPtrTy()), "tell.hashmap.registry");
+}
 
 llvm::Function* HashmapCodegen::helper(llvm::StringRef name, llvm::Type* result,
                                        llvm::ArrayRef<llvm::Type*> args) {
@@ -60,6 +64,11 @@ llvm::Value* HashmapCodegen::create() {
         ir.CreateStore(ir.getInt64(0), ir.CreateStructGEP(table_type, table, Length));
         ir.CreateStore(capacity, ir.CreateStructGEP(table_type, table, Capacity));
         ir.CreateStore(buckets, ir.CreateStructGEP(table_type, table, Buckets));
+        // The table itself is the registry node, so aliases and nested maps
+        // register exactly once without a second allocation.
+        ir.CreateStore(ir.CreateLoad(ir.getPtrTy(), registry_head),
+                       ir.CreateStructGEP(table_type, table, TrackedNext));
+        ir.CreateStore(table, registry_head);
         ir.CreateRet(table);
         ir.SetInsertPoint(release_table);
         release(table);
@@ -72,6 +81,46 @@ llvm::Value* HashmapCodegen::create() {
 
 llvm::Value* HashmapCodegen::length(llvm::Value* table) {
     return ir.CreateLoad(ir.getInt64Ty(), ir.CreateStructGEP(table_type, table, Length));
+}
+
+void HashmapCodegen::cleanup() {
+    if (!cleanup_fn) {
+        llvm::IRBuilderBase::InsertPointGuard guard(ir);
+        auto ptr = ir.getPtrTy();
+        auto fn = cleanup_fn = helper("tell.hashmap.cleanup", ir.getVoidTy(), {});
+        auto start = ir.GetInsertBlock();
+        auto loop = llvm::BasicBlock::Create(context, "hashmap.cleanup.loop", fn);
+        auto release_map = llvm::BasicBlock::Create(context, "hashmap.cleanup.map", fn);
+        auto done = llvm::BasicBlock::Create(context, "hashmap.cleanup.done", fn);
+
+        auto first_table = ir.CreateLoad(ptr, registry_head);
+        ir.CreateBr(loop);
+        ir.SetInsertPoint(loop);
+        auto table = ir.CreatePHI(ptr, 2, "current.map");
+        table->addIncoming(first_table, start);
+        ir.CreateCondBr(ir.CreateIsNull(table), done, release_map);
+
+        ir.SetInsertPoint(release_map);
+        // Capture the next registry node before freeing this table.
+        auto next_table = ir.CreateLoad(ptr, ir.CreateStructGEP(table_type, table, TrackedNext));
+        auto capacity = ir.CreateLoad(ir.getInt64Ty(), ir.CreateStructGEP(table_type, table, Capacity));
+        auto buckets = ir.CreateLoad(ptr, ir.CreateStructGEP(table_type, table, Buckets));
+
+        // scan_entries loads each next pointer before freeing the current entry.
+        scan_entries(buckets, capacity, [&](llvm::Value* entry, llvm::Value*) {
+            release(entry);
+        });
+        auto cleanup_block = ir.GetInsertBlock();
+        release(buckets);
+        release(table);
+        ir.CreateBr(loop);
+        table->addIncoming(next_table, cleanup_block);
+
+        ir.SetInsertPoint(done);
+        ir.CreateStore(llvm::ConstantPointerNull::get(ptr), registry_head);
+        ir.CreateRetVoid();
+    }
+    ir.CreateCall(cleanup_fn);
 }
 
 llvm::Value* HashmapCodegen::value_address(llvm::Value* entry) {

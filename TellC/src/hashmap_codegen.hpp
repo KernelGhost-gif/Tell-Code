@@ -13,6 +13,7 @@ public:
     HashmapCodegen(llvm::Module& module, llvm::IRBuilder<>& ir);
 
     llvm::Value* create();
+    void cleanup();
     llvm::Value* length(llvm::Value* table);
     llvm::Value* find(llvm::Value* table, llvm::Value* key, bool text_key);
     llvm::Value* insert(llvm::Value* table, llvm::Value* key, bool text_key);
@@ -26,7 +27,9 @@ private:
     llvm::LLVMContext& context;
     llvm::StructType* table_type;
     llvm::StructType* entry_type;
+    llvm::GlobalVariable* registry_head = nullptr;
     llvm::Function* create_fn = nullptr;
+    llvm::Function* cleanup_fn = nullptr;
     llvm::Function* text_hash_fn = nullptr;
     llvm::Function* find_link_fn = nullptr;
     llvm::Function* grow_fn = nullptr;

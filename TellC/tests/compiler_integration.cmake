@@ -115,3 +115,73 @@ compile_and_run(hashmaps tests/fixtures/hashmaps.tell "5\n2\ntrue\nfalse\n7\nfal
   INPUT_FILE "${TELL_WORK_DIR}/hashmap_input.txt")
 expect_compile_failure(hashmap_key_type tests/fixtures/hashmap_key_type.tell "expected 'text', got 'number'")
 expect_compile_failure(hashmap_value_type tests/fixtures/hashmap_value_type.tell "expected 'number', got 'bool'")
+# Exercise cleanup when a map variable is repeatedly overwritten and when
+# nested maps are shared through aliases.
+compile_and_run(hashmap_cleanup tests/fixtures/hashmap_cleanup.tell "2048\n21\n")
+
+set(hashmap_cleanup_error_executable "${TELL_WORK_DIR}/hashmap_cleanup_error")
+execute_process(
+  COMMAND "${TELL_COMPILER}" "${TELL_SOURCE_DIR}/tests/fixtures/hashmap_cleanup_error.tell"
+    -o "${hashmap_cleanup_error_executable}"
+  RESULT_VARIABLE error_compile_result
+  ERROR_VARIABLE error_compile_stderr
+)
+if(NOT error_compile_result EQUAL 0)
+  message(FATAL_ERROR "Could not compile hashmap cleanup error fixture: ${error_compile_stderr}")
+endif()
+execute_process(
+  COMMAND "${hashmap_cleanup_error_executable}"
+  RESULT_VARIABLE hashmap_error_status
+  OUTPUT_VARIABLE hashmap_error_stdout
+  ERROR_VARIABLE hashmap_error_stderr
+)
+if(NOT "${hashmap_error_status}" STREQUAL "1"
+   OR NOT "${hashmap_error_stdout}" STREQUAL ""
+   OR NOT "${hashmap_error_stderr}" STREQUAL "Error: intentional hashmap cleanup error\n")
+  message(FATAL_ERROR
+    "Unexpected hashmap error result (exit ${hashmap_error_status}).\nstdout:\n${hashmap_error_stdout}\nstderr:\n${hashmap_error_stderr}")
+endif()
+
+# Linux CI installs Valgrind and runs these map-only fixtures through Memcheck.
+# It checks that tables, bucket arrays, and remaining entries are reclaimed.
+find_program(TELL_VALGRIND_EXECUTABLE NAMES valgrind)
+if(TELL_VALGRIND_EXECUTABLE)
+  set(hashmap_cleanup_executable "${TELL_WORK_DIR}/hashmap_cleanup")
+  execute_process(
+    COMMAND "${TELL_VALGRIND_EXECUTABLE}"
+      --quiet
+      --leak-check=full
+      --show-leak-kinds=definite,indirect
+      --errors-for-leak-kinds=definite,indirect
+      --error-exitcode=99
+      "${hashmap_cleanup_executable}"
+    RESULT_VARIABLE valgrind_result
+    OUTPUT_VARIABLE valgrind_stdout
+    ERROR_VARIABLE valgrind_stderr
+  )
+  if(NOT valgrind_result EQUAL 0 OR NOT "${valgrind_stdout}" STREQUAL "2048\n21\n")
+    message(FATAL_ERROR
+      "Hashmap cleanup failed Memcheck (exit ${valgrind_result}).\nstdout:\n${valgrind_stdout}\nstderr:\n${valgrind_stderr}")
+  endif()
+  message(STATUS "PASS: hashmap allocations released at process exit (Valgrind)")
+
+  execute_process(
+    COMMAND "${TELL_VALGRIND_EXECUTABLE}"
+      --quiet
+      --leak-check=full
+      --show-leak-kinds=definite,indirect
+      --errors-for-leak-kinds=definite,indirect
+      --error-exitcode=99
+      "${hashmap_cleanup_error_executable}"
+    RESULT_VARIABLE error_valgrind_result
+    OUTPUT_VARIABLE error_valgrind_stdout
+    ERROR_VARIABLE error_valgrind_stderr
+  )
+  if(NOT error_valgrind_result EQUAL 1
+     OR NOT "${error_valgrind_stdout}" STREQUAL ""
+     OR NOT "${error_valgrind_stderr}" MATCHES "Error: intentional hashmap cleanup error")
+    message(FATAL_ERROR
+      "Hashmap cleanup on uncaught error failed Memcheck (exit ${error_valgrind_result}).\nstdout:\n${error_valgrind_stdout}\nstderr:\n${error_valgrind_stderr}")
+  endif()
+  message(STATUS "PASS: hashmap allocations released on uncaught errors (Valgrind)")
+endif()

@@ -1,0 +1,3 @@
+let hashmap of text to number active be {"answer": 42}
+set active["answer"] to 43
+raise an error saying "intentional hashmap cleanup error"
