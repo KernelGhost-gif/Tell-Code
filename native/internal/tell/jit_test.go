@@ -271,9 +271,10 @@ func BenchmarkTypedNumericFunctionEngines(b *testing.B) {
 		b.Fatal(err)
 	}
 	var function BytecodeFunction
-	for _, candidate := range program.Functions {
-		if candidate.Name == "weighted" {
-			function = candidate
+	for index := range program.Functions {
+		if program.Functions[index].Name == "weighted" {
+			assignJITFunctionKey(&program.Functions[index], "jit-benchmark", index)
+			function = program.Functions[index]
 			break
 		}
 	}
