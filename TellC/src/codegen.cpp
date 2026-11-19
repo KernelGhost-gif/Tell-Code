@@ -1,4 +1,5 @@
 #include "codegen.hpp"
+#include "hashmap_codegen.hpp"
 #include <llvm/Config/llvm-config.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Module.h>
@@ -46,6 +47,7 @@ class Generator {
 #else
     llvm::IRBuilder<> ir{context};
 #endif
+    HashmapCodegen hashmaps{module, ir};
     std::map<std::string, Value> variables;
     llvm::FunctionCallee printf_fn;
     std::map<std::string, Object> objects;
@@ -55,6 +57,12 @@ class Generator {
     std::vector<std::pair<llvm::BasicBlock*, llvm::BasicBlock*>> loops;
     bool is_list(const std::string& type) { return type.rfind("list of ", 0) == 0; }
     llvm::StructType* list_layout() { return llvm::StructType::get(context, {ir.getInt64Ty(), ir.getPtrTy(), ir.getInt64Ty()}); }
+    static constexpr llvm::StringLiteral hashmap_prefix = "hashmap of ";
+    bool is_hashmap(const std::string& type) { return llvm::StringRef(type).starts_with(hashmap_prefix); }
+    std::pair<std::string, std::string> hashmap_types(const std::string& type) {
+        auto types = llvm::StringRef(type).drop_front(hashmap_prefix.size()).split(" to ");
+        return {types.first.str(), types.second.str()};
+    }
     llvm::AllocaInst* entry_alloca(llvm::Type* type) {
         auto& entry = ir.GetInsertBlock()->getParent()->getEntryBlock();
 #if LLVM_VERSION_MAJOR >= 24
@@ -76,6 +84,19 @@ class Generator {
         ir.CreateUnreachable();
         ir.SetInsertPoint(ok);
         return ptr;
+    }
+    std::pair<llvm::Value*, llvm::Value*> allocate_list(llvm::Type* element, llvm::Value* length) {
+        auto null = llvm::ConstantPointerNull::get(ir.getPtrTy());
+        auto capacity = ir.CreateSelect(ir.CreateICmpEQ(length, ir.getInt64(0)), ir.getInt64(1), length);
+        auto data_size = ir.CreatePtrToInt(ir.CreateGEP(element, null, capacity), ir.getInt64Ty());
+        auto data = allocate(data_size);
+        auto layout = list_layout();
+        auto header_size = ir.CreatePtrToInt(ir.CreateGEP(layout, null, ir.getInt64(1)), ir.getInt64Ty());
+        auto header = allocate(header_size);
+        ir.CreateStore(length, ir.CreateStructGEP(layout, header, 0));
+        ir.CreateStore(data, ir.CreateStructGEP(layout, header, 1));
+        ir.CreateStore(capacity, ir.CreateStructGEP(layout, header, 2));
+        return {header, data};
     }
     const Routine* current_routine = nullptr;
     llvm::GlobalVariable* pending_error = nullptr;
@@ -248,6 +269,7 @@ class Generator {
 
     llvm::Type* llvm_type(const std::string& type, Location loc) {
         if (is_list(type)) { llvm_type(type.substr(8), loc); return ir.getPtrTy(); }
+        if (is_hashmap(type)) { llvm_type(hashmap_types(type).second, loc); return ir.getPtrTy(); }
         if (type == "text" || objects.count(type)) return ir.getPtrTy();
         if (type == "number") return ir.getInt64Ty();
         if (type == "decimal") return ir.getDoubleTy();
@@ -306,7 +328,8 @@ class Generator {
             if (callee.value == "len") {
                 if (expr.children.size() != 2) fail(expr.location, "len requires one argument");
                 auto collection = expression(*expr.children[1]);
-                if (!is_list(collection.type)) fail(expr.location, "len requires a list or vector");
+                if (is_hashmap(collection.type)) return {hashmaps.length(collection.value), "number"};
+                if (!is_list(collection.type)) fail(expr.location, "len requires a list, vector, or hashmap");
                 return {ir.CreateLoad(ir.getInt64Ty(), ir.CreateStructGEP(list_layout(), collection.value, 0)), "number"};
             }
             if (callee.value == "input") return builtin_input(expr);
@@ -333,7 +356,10 @@ class Generator {
                 auto foreign = foreign_functions.find(callee.value);
                 if (foreign != foreign_functions.end()) return call_foreign(expr, *foreign->second);
                 auto function = functions.find(callee.value);
-                if (function == functions.end()) fail(callee.location, "unknown function '" + callee.value + "'");
+                if (function == functions.end()) {
+                    if (callee.value == "keys") return hashmap_keys(expr);
+                    fail(callee.location, "unknown function '" + callee.value + "'");
+                }
                 routine = &function->second;
             }
         } else {
@@ -409,7 +435,7 @@ class Generator {
         return ir.CreateICmpEQ(lhs.value, rhs.value);
     }
     Value index_address(const Expr& e, Value list, Value index) {
-        if (!is_list(list.type)) fail(e.location, "indexing requires a list or vector");
+        if (!is_list(list.type)) fail(e.location, "indexing requires a list, vector, or hashmap");
         require_type(index, "number", e.children[1]->location);
         auto layout = list_layout();
         auto length = ir.CreateLoad(ir.getInt64Ty(), ir.CreateStructGEP(layout, list.value, 0));
@@ -418,6 +444,56 @@ class Generator {
         auto type = list.type.substr(8);
         return {ir.CreateGEP(llvm_type(type, e.location), data, index.value), type};
     }
+
+    llvm::Value* hashmap_key(Value key) {
+        if (key.type == "text") return ir.CreatePtrToInt(key.value, ir.getInt64Ty());
+        return ir.CreateZExtOrTrunc(key.value, ir.getInt64Ty());
+    }
+
+    Value hashmap_keys(const Expr& expr) {
+        if (expr.children.size() != 2) fail(expr.location, "keys requires one argument");
+        auto table = expression(*expr.children[1]);
+        if (!is_hashmap(table.type)) fail(expr.children[1]->location, "keys requires a hashmap");
+        auto key_type = hashmap_types(table.type).first;
+        auto element = llvm_type(key_type, expr.location);
+        auto [list, data] = allocate_list(element, hashmaps.length(table.value));
+        hashmaps.copy_keys(table.value, data, element);
+        return {list, "list of " + key_type};
+    }
+
+    void hashmap_store(llvm::Value* table, Value key, Value value) {
+        auto entry = hashmaps.insert(table, hashmap_key(key), key.type == "text");
+        raise_if(ir.CreateIsNull(entry), "cannot insert into hashmap");
+        ir.CreateStore(value.value, hashmaps.value_address(entry));
+    }
+
+    Value hashmap_literal(const Expr& expr, const std::string& expected) {
+        auto types = is_hashmap(expected) ? hashmap_types(expected) : std::pair<std::string, std::string>{};
+        auto& [key_type, value_type] = types;
+        if (expr.children.empty() && key_type.empty())
+            fail(expr.location, "empty hashmap requires an explicit hashmap type");
+
+        auto table = hashmaps.create();
+        raise_if(ir.CreateIsNull(table), "cannot allocate hashmap");
+        for (size_t i = 0; i < expr.children.size(); i += 2) {
+            const auto& key_expr = *expr.children[i];
+            const auto& value_expr = *expr.children[i + 1];
+            auto key = expression(key_expr);
+            if (key_type.empty()) {
+                if (key.type != "text" && key.type != "number" && key.type != "bool")
+                    fail(key_expr.location, "hashmap key type must be text, number, or bool");
+                key_type = key.type;
+            }
+            require_type(key, key_type, key_expr.location);
+            auto value = expression(value_expr, value_type);
+            if (value_type.empty()) value_type = value.type;
+            if (value_type == "void") fail(value_expr.location, "hashmap value type cannot be void");
+            require_type(value, value_type, value_expr.location);
+            hashmap_store(table, key, value);
+        }
+        return {table, hashmap_prefix.str() + key_type + " to " + value_type};
+    }
+
     Value expression(const tell::Expr& e, const std::string& expected = "") {
         using K = tell::Expr::Kind;
         if(e.kind==K::String) {
@@ -443,23 +519,23 @@ class Generator {
             }
             if (element.empty()) fail(e.location, "empty list requires an explicit collection type");
             auto element_type = llvm_type(element, e.location);
-            auto null = llvm::ConstantPointerNull::get(ir.getPtrTy());
-            auto size = ir.CreatePtrToInt(ir.CreateGEP(element_type, null, ir.getInt64(values.empty() ? 1 : values.size())), ir.getInt64Ty());
-            auto data = allocate(size);
+            auto [header, data] = allocate_list(element_type, ir.getInt64(values.size()));
             for (size_t i = 0; i < values.size(); ++i)
                 ir.CreateStore(values[i].value, ir.CreateGEP(element_type, data, ir.getInt64(i)));
-            auto layout = list_layout();
-            auto header_size = ir.CreatePtrToInt(ir.CreateGEP(layout, null, ir.getInt64(1)), ir.getInt64Ty());
-            auto header = allocate(header_size);
-            ir.CreateStore(ir.getInt64(values.size()), ir.CreateStructGEP(layout, header, 0));
-            ir.CreateStore(data, ir.CreateStructGEP(layout, header, 1));
-            ir.CreateStore(ir.getInt64(values.empty() ? 1 : values.size()), ir.CreateStructGEP(layout, header, 2));
             return {header, "list of " + element};
         }
+        if (e.kind == K::Hashmap) return hashmap_literal(e, expected);
         if (e.kind == K::Index) {
-            auto list = expression(*e.children[0]);
+            auto collection = expression(*e.children[0]);
             auto index = expression(*e.children[1]);
-            auto address = index_address(e, list, index);
+            if (is_hashmap(collection.type)) {
+                auto [key_type, value_type] = hashmap_types(collection.type);
+                require_type(index, key_type, e.children[1]->location);
+                auto entry = hashmaps.find(collection.value, hashmap_key(index), key_type == "text");
+                raise_if(ir.CreateIsNull(entry), "key not found in hashmap");
+                return {ir.CreateLoad(llvm_type(value_type, e.location), hashmaps.value_address(entry)), value_type};
+            }
+            auto address = index_address(e, collection, index);
             return {ir.CreateLoad(llvm_type(address.type, e.location), address.value), address.type};
         }
         if (e.kind == K::Name) return lookup(e.value, e.location);
@@ -516,6 +592,13 @@ class Generator {
                 return {result, "bool"};
             }
             auto rhs = expression(*e.children[1]);
+            if (op == "in") {
+                if (!is_hashmap(rhs.type)) fail(e.children[1]->location, "'in' requires a hashmap on the right");
+                auto key_type = hashmap_types(rhs.type).first;
+                require_type(lhs, key_type, e.children[0]->location);
+                auto entry = hashmaps.find(rhs.value, hashmap_key(lhs), key_type == "text");
+                return {ir.CreateIsNotNull(entry), "bool"};
+            }
             require_type(rhs, lhs.type, e.children[1]->location);
             if (e.value == "=" || e.value == "==" || e.value == "!=") {
                 auto equal = equal_values(lhs, rhs, e.children[1]->location);
@@ -591,7 +674,7 @@ class Generator {
         for (const auto& stmt : program.statements) {
             if (stmt.kind != Stmt::Kind::Object) continue;
             if (objects.count(stmt.name) || stmt.name == "text" || stmt.name == "number" ||
-                stmt.name == "decimal" || stmt.name == "bool" || stmt.name == "void")
+                stmt.name == "decimal" || stmt.name == "bool" || stmt.name == "void" || stmt.name == "hashmap")
                 fail(stmt.location, "invalid or duplicate object type '" + stmt.name + "'");
             objects.emplace(stmt.name, Object{llvm::StructType::create(context, stmt.name)});
         }
@@ -607,6 +690,7 @@ class Generator {
                 if (stmt.foreign_symbol == "main" || stmt.foreign_symbol == "malloc" ||
                     stmt.foreign_symbol == "strcmp" || stmt.foreign_symbol == "abort" ||
                     stmt.foreign_symbol == "realloc" || stmt.foreign_symbol == "memmove" ||
+                    stmt.foreign_symbol == "calloc" || stmt.foreign_symbol == "free" ||
                     module.getNamedValue(stmt.foreign_symbol))
                     fail(stmt.location, "duplicate or reserved external symbol '" + stmt.foreign_symbol + "'");
                 std::vector<llvm::Type*> args;
@@ -788,13 +872,23 @@ class Generator {
         case Stmt::Kind::Set: {
             if (stmt.target) {
                 const auto& target = *stmt.target;
-                auto list = expression(*target.children[0]);
-                if (!is_list(list.type)) fail(target.location, "indexing requires a list or vector");
+                auto collection = expression(*target.children[0]);
+                if (!is_list(collection.type) && !is_hashmap(collection.type))
+                    fail(target.location, "indexing requires a list, vector, or hashmap");
                 auto index = expression(*target.children[1]);
+                if (is_hashmap(collection.type)) {
+                    auto [key_type, value_type] = hashmap_types(collection.type);
+                    require_type(index, key_type, target.children[1]->location);
+                    auto value = expression(*stmt.expression, value_type);
+                    require_type(value, value_type, stmt.expression->location);
+                    hashmap_store(collection.value, index, value);
+                    break;
+                }
                 require_type(index, "number", target.children[1]->location);
-                auto value = expression(*stmt.expression, list.type.substr(8));
-                require_type(value, list.type.substr(8), stmt.expression->location);
-                auto address = index_address(target, list, index);
+                auto type = collection.type.substr(8);
+                auto value = expression(*stmt.expression, type);
+                require_type(value, type, stmt.expression->location);
+                auto address = index_address(target, collection, index);
                 ir.CreateStore(value.value, address.value);
                 break;
             }
@@ -811,6 +905,13 @@ class Generator {
         case Stmt::Kind::Remove: {
             auto value = expression(*stmt.expression);
             auto list = expression(*stmt.target);
+            if (stmt.kind == Stmt::Kind::Remove && is_hashmap(list.type)) {
+                auto key_type = hashmap_types(list.type).first;
+                require_type(value, key_type, stmt.expression->location);
+                auto removed = hashmaps.remove(list.value, hashmap_key(value), key_type == "text");
+                raise_if(ir.CreateNot(removed), "key not found in hashmap");
+                break;
+            }
             if (!is_list(list.type)) fail(stmt.target->location, "add and remove require a list or vector");
             auto type = list.type.substr(8);
             require_type(value, type, stmt.expression->location);

@@ -18,7 +18,7 @@ using llvm::StringRef;
 namespace json = llvm::json;
 
 constexpr StringRef keywords[] = {
-    "let", "let number", "let decimal", "let text", "let bool", "object",
+    "let", "let number", "let decimal", "let text", "let bool", "hashmap of", "object",
     "own", "others", "end object", "to", "out", "end function", "self", "if",
     "otherwise", "end if", "while", "end while", "return", "give back",
     "say", "true", "false", "extern cpp function", "extern c function",
