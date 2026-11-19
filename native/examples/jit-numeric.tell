@@ -1,0 +1,6 @@
+to weighted(number: left, number: right) out number:
+    give back left * 3 + right * 2
+end function
+
+let number result be weighted(4, 6)
+say result

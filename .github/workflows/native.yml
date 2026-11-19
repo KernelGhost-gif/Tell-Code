@@ -43,6 +43,38 @@ jobs:
           go test ./...
           go test -race ./...
           go vet ./...
+      - name: Benchmark interpreter, JIT, and automatic bytecode execution
+        working-directory: native
+        run: |
+          go test ./internal/tell -run '^
+        run: ./scripts/build-all.sh
+      - name: Verify process-level runtime conformance
+        run: |
+          python scripts/conformance.py --runtime both --fixtures conformance/smoke-v1.json --native-bin releases/tell-linux-amd64
+          python scripts/conformance.py --runtime both --fixtures conformance/runtime-v1.json --native-bin releases/tell-linux-amd64
+      - name: Run Tell source examples as tests
+        run: ./releases/tell-linux-amd64 test examples
+      - name: Upload native binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: tell-native-binaries
+          path: releases/
+          if-no-files-found: error
+ -bench '^BenchmarkTypedNumericFunctionEngines
+        run: ./scripts/build-all.sh
+      - name: Verify process-level runtime conformance
+        run: |
+          python scripts/conformance.py --runtime both --fixtures conformance/smoke-v1.json --native-bin releases/tell-linux-amd64
+          python scripts/conformance.py --runtime both --fixtures conformance/runtime-v1.json --native-bin releases/tell-linux-amd64
+      - name: Run Tell source examples as tests
+        run: ./releases/tell-linux-amd64 test examples
+      - name: Upload native binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: tell-native-binaries
+          path: releases/
+          if-no-files-found: error
+ -benchmem -benchtime=250ms -count=1
       - name: Build Linux, macOS and Windows binaries
         run: ./scripts/build-all.sh
       - name: Verify process-level runtime conformance

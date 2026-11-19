@@ -52,6 +52,7 @@ type BytecodeFunction struct {
 	HasVariadic  bool                  `json:"has_variadic,omitempty"`
 	Receiver     bool                  `json:"receiver,omitempty"`
 	Instructions []BytecodeInstruction `json:"instructions"`
+	jitKey       [32]byte
 }
 
 // BytecodeClass describes the constructor and methods for a compiled Tell class.
@@ -1148,43 +1149,71 @@ func RunBytecode(data []byte, filename string, input io.Reader, output io.Writer
 	return RunBytecodeWithLimits(data, filename, input, output, DefaultExecutionLimits())
 }
 
-// RunBytecodeWithLimits executes an artifact under the same resource limits as source execution.
+// RunBytecodeWithLimits executes an artifact with the portable bytecode interpreter.
 func RunBytecodeWithLimits(data []byte, filename string, input io.Reader, output io.Writer, limits ExecutionLimits) error {
+	_, err := RunBytecodeWithEngine(data, filename, input, output, limits, "interp", 24)
+	return err
+}
+
+// RunBytecodeWithEngine executes a .tbc artifact using the requested engine.
+// "jit" compiles eligible functions on first call; "auto" compiles them after
+// the hot threshold; unsupported functions continue through the interpreter.
+func RunBytecodeWithEngine(data []byte, filename string, input io.Reader, output io.Writer, limits ExecutionLimits, engine string, hotThreshold int) (EngineStats, error) {
+	var stats EngineStats
+	engine = strings.ToLower(strings.TrimSpace(engine))
+	if !validExecutionEngine(engine) {
+		return stats, fail("unknown execution engine %q (expected interp, jit, or auto)", engine)
+	}
+	if engine == "jit" && !NativeJITAvailable() {
+		return stats, fail("native JIT is unavailable on this platform; use --engine interp or --engine auto")
+	}
+	if hotThreshold < 1 {
+		hotThreshold = 24
+	}
 	var program BytecodeProgram
 	if err := json.Unmarshal(data, &program); err != nil {
-		return fail("invalid bytecode: %v", err)
+		return stats, fail("invalid bytecode: %v", err)
 	}
 	if program.Format != bytecodeFormat || len(program.Instructions) == 0 {
-		return fail("unsupported or empty Tell bytecode artifact")
+		return stats, fail("unsupported or empty Tell bytecode artifact")
 	}
 	compiledModules := make(map[string]BytecodeProgram, len(program.Modules))
 	for _, module := range program.Modules {
 		if module.Path == "" || module.Program.Format != bytecodeFormat || len(module.Program.Instructions) == 0 {
-			return fail("invalid embedded bytecode module")
+			return stats, fail("invalid embedded bytecode module")
 		}
 		if _, duplicate := compiledModules[module.Path]; duplicate {
-			return fail("duplicate embedded bytecode module %q", module.Path)
+			return stats, fail("duplicate embedded bytecode module %q", module.Path)
 		}
 		if len(module.Program.Modules) != 0 {
-			return fail("nested module tables are not valid in embedded bytecode")
+			return stats, fail("nested module tables are not valid in embedded bytecode")
 		}
 		compiledModules[module.Path] = module.Program
 	}
 	if err := validateModuleReferences(program, compiledModules); err != nil {
-		return err
+		return stats, err
 	}
 	if err := validateExecutableBytecode(program); err != nil {
-		return err
+		return stats, err
 	}
 	for path, module := range compiledModules {
 		if err := validateExecutableBytecode(module); err != nil {
-			return fail("invalid embedded module %q: %v", path, err)
+			return stats, fail("invalid embedded module %q: %v", path, err)
 		}
+	}
+	assignBytecodeJITKeys(&program, filename)
+	for path, module := range compiledModules {
+		assignBytecodeJITKeys(&module, filename+"::"+path)
+		compiledModules[path] = module
 	}
 	r := newRuntime(filename, input, output, limits)
 	r.bytecodeModules = compiledModules
-	_, err := executeBytecodeCode(r, program.Instructions, program.Functions, program.Classes)
-	return err
+	r.executionEngine = engine
+	r.jitHotThreshold = hotThreshold
+	_, executionErr := executeBytecodeCode(r, program.Instructions, program.Functions, program.Classes)
+	stats = r.jitStats
+	r.closeJIT()
+	return stats, executionErr
 }
 
 func validateExecutableBytecode(program BytecodeProgram) error {
@@ -2092,9 +2121,15 @@ func callBytecodeFunction(r *runtime, function BytecodeFunction, closure *env, f
 	previous := r.global
 	r.global = local
 	defer func() { r.global = previous }()
-	result, err := executeBytecodeCode(r, function.Instructions, functions, classes)
-	if err != nil {
-		return nil, err
+	result, ranNative, jitErr := r.runJITFunction(function, local)
+	if jitErr != nil {
+		return nil, jitErr
+	}
+	if !ranNative {
+		result, err = executeBytecodeCode(r, function.Instructions, functions, classes)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if function.ReturnType != "" {
 		if strings.EqualFold(function.ReturnType, "void") {

@@ -21,6 +21,9 @@ func main() {
 	check := flag.Bool("check", false, "parse the program without running it")
 	typeCheck := flag.Bool("types", false, "check statically knowable type annotations")
 	typedMode := flag.Bool("typed", false, "require explicit variable, parameter, and return types")
+	engine := flag.String("engine", "interp", "execution engine: interp, jit, or auto")
+	jitThreshold := flag.Int("jit-threshold", 24, "calls per function before auto mode compiles it")
+	jitStats := flag.Bool("jit-stats", false, "print native JIT compilation and fallback counts")
 	showVersion := flag.Bool("version", false, "print the Tell version")
 	quietREPL := flag.Bool("quiet-repl", false, "omit terminal prompts and banner (for IDE integrations)")
 	buildOutput := flag.String("output", "", "write compiled bytecode to this path")
@@ -84,8 +87,11 @@ func main() {
 		fmt.Printf("Tell %s (native Go runtime)\n", version)
 		return
 	}
-	if *maxCallDepth < 1 || *maxLoopIterations < 1 {
-		exitWithDiagnostic(fmt.Errorf("execution limits must be positive integers"), "<command-line>", diagnostic.UsageError)
+	if *maxCallDepth < 1 || *maxLoopIterations < 1 || *jitThreshold < 1 {
+		exitWithDiagnostic(fmt.Errorf("execution limits and JIT threshold must be positive integers"), "<command-line>", diagnostic.UsageError)
+	}
+	if !tell.ValidExecutionEngine(*engine) {
+		exitWithDiagnostic(fmt.Errorf("unknown execution engine %q (expected interp, jit, or auto)", *engine), "<command-line>", diagnostic.UsageError)
 	}
 	limits := tell.ExecutionLimits{MaxFunctionCallDepth: *maxCallDepth, MaxLoopIterations: *maxLoopIterations}
 	if projectMode != "" {
@@ -186,6 +192,9 @@ func main() {
 		return
 	}
 	if buildMode {
+		if *engine != "interp" || *jitStats {
+			exitWithDiagnostic(fmt.Errorf("tell build creates portable AOT bytecode; --engine and --jit-stats apply to execution"), "<command-line>", diagnostic.UsageError)
+		}
 		if filename == "-" && *buildOutput == "" {
 			exitWithDiagnostic(fmt.Errorf("tell build - requires --output"), "<command-line>", diagnostic.UsageError)
 		}
@@ -209,8 +218,12 @@ func main() {
 		return
 	}
 	if strings.EqualFold(filepath.Ext(filename), ".tbc") {
-		if err := tell.RunBytecodeWithLimits(data, filename, os.Stdin, os.Stdout, limits); err != nil {
+		stats, err := tell.RunBytecodeWithEngine(data, filename, os.Stdin, os.Stdout, limits, *engine, *jitThreshold)
+		if err != nil {
 			exitWithDiagnostic(err, filename, diagnostic.RuntimeError)
+		}
+		if *jitStats {
+			printJITStats(stats)
 		}
 		return
 	}
@@ -248,9 +261,33 @@ func main() {
 			exitWithDiagnostic(err, runName, diagnostic.TypeError)
 		}
 	}
+	if *engine != "interp" {
+		compiled, compileErr := tell.Compile(string(data), runName)
+		if compileErr != nil {
+			if *engine == "jit" {
+				exitWithDiagnostic(fmt.Errorf("cannot prepare source for JIT execution: %w (this source may be outside the current bytecode compiler subset)", compileErr), runName, diagnostic.SyntaxError)
+			}
+		} else {
+			stats, runErr := tell.RunBytecodeWithEngine(compiled, runName, os.Stdin, os.Stdout, limits, *engine, *jitThreshold)
+			if runErr != nil {
+				exitWithDiagnostic(runErr, runName, diagnostic.RuntimeError)
+			}
+			if *jitStats {
+				printJITStats(stats)
+			}
+			return
+		}
+	}
 	if err := tell.NewSessionWithLimits(os.Stdin, os.Stdout, limits).Exec(string(data), runName); err != nil {
 		exitWithDiagnostic(err, runName, diagnostic.RuntimeError)
 	}
+}
+
+func printJITStats(stats tell.EngineStats) {
+	fmt.Fprintf(os.Stderr,
+		"execution engines: JIT compiled %d function(s), executed %d native call(s), interpreted %d call(s)\n",
+		stats.JITCompiledFunctions, stats.JITInvocations, stats.InterpretedCalls,
+	)
 }
 
 func exitWithDiagnostic(err error, filename string, kind diagnostic.Kind) {

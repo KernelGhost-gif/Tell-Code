@@ -95,6 +95,24 @@ Typed parameter and return contracts are enforced during normal execution
 and preserved in bytecode. Existing dynamic Tell programs remain supported
 without `--typed`; see the [typed Go dialect guide](docs/TYPED_TELL.md).
 
+## Native Go execution engines
+
+The Go runtime offers direct interpretation, AOT compilation to portable
+`.tbc` bytecode, and an initial native JIT tier for hot typed numeric
+functions:
+
+~~~sh
+tell program.tell
+tell build program.tell
+tell --engine jit program.tell
+tell --engine auto --jit-threshold 24 --jit-stats program.tell
+~~~
+
+The JIT currently targets Linux x86-64 and a restricted typed numeric
+function subset; everything else keeps running in the interpreter. The
+portable `.tbc` build is not a standalone native executable. See the
+[execution engine guide](docs/EXECUTION_ENGINES.md) for details and benchmarks.
+
 ## Compile native executables with TellC
 
 TellC is an experimental C++ compiler that translates its typed dialect through LLVM into a native executable. Its dialect is separate from the dynamically typed language used by the Go and Python runtimes; programs are not necessarily interchangeable. For example:
