@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -211,8 +212,57 @@ func TestRunBytecodeWithEngineReportsJITUse(t *testing.T) {
 	}
 }
 
+func jitBenchmarkSource() string {
+	terms := make([]string, 0, 80)
+	for index := 1; index <= 40; index++ {
+		terms = append(terms, "left * "+strconv.Itoa(index*2-1))
+		terms = append(terms, "right * "+strconv.Itoa(index*2))
+	}
+	return "to weighted(number: left, number: right) out number:\n    give back " +
+		strings.Join(terms, " + ") + "\nend function\n"
+}
+
+func TestNativeJITMatchesInterpreterForLongNumericExpression(t *testing.T) {
+	if !NativeJITAvailable() {
+		t.Skip("native JIT backend is available only on linux/amd64")
+	}
+	artifact, err := Compile(jitBenchmarkSource(), "jit-long-expression.tell")
+	if err != nil {
+		t.Fatalf("compile long numeric expression: %v", err)
+	}
+	var program BytecodeProgram
+	if err := json.Unmarshal(artifact, &program); err != nil {
+		t.Fatal(err)
+	}
+	var function BytecodeFunction
+	found := false
+	for index := range program.Functions {
+		if program.Functions[index].Name == "weighted" {
+			assignJITFunctionKey(&program.Functions[index], "jit-long-expression", index)
+			function, found = program.Functions[index], true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("compiled bytecode did not contain weighted")
+	}
+	for _, engine := range []string{"interp", "jit"} {
+		r := newRuntime("jit-long-expression.tell", bytes.NewReader(nil), io.Discard, DefaultExecutionLimits())
+		r.executionEngine = engine
+		result, err := callBytecodeFunction(r, function, r.global, program.Functions, nil, []any{4.0, 6.0}, nil, nil)
+		if err != nil {
+			t.Fatalf("%s failed: %v", engine, err)
+		}
+		number, err := numberValue(result)
+		if err != nil || number != 16240 {
+			t.Fatalf("%s returned %v (%v), want 16240", engine, number, err)
+		}
+		r.closeJIT()
+	}
+}
+
 func BenchmarkTypedNumericFunctionEngines(b *testing.B) {
-	artifact, err := Compile(jitNumericSource, "jit-benchmark.tell")
+	artifact, err := Compile(jitBenchmarkSource(), "jit-benchmark.tell")
 	if err != nil {
 		b.Fatal(err)
 	}
