@@ -415,7 +415,7 @@ func (a *semanticAnalyzer) infer(expr expression, bindings map[string]semanticBi
 				return "any", nil
 			}
 			return "", fail("operator + requires compatible operands, got %s and %s", left, right)
-		case "-", "*", "/", "//", "%", "**":
+		case "-", "*", "/", "//", "%", "**", "&", "|", "^", "<<", ">>":
 			if left == "number" && right == "number" {
 				return "number", nil
 			}
