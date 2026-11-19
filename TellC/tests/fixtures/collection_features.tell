@@ -1,0 +1,107 @@
+to pair(number: n) out tuple of (number, text):
+    return (n, "label")
+end function
+
+let count, label be pair(7)
+say count
+say label
+let tuple of (number, tuple of (text, bool)) nested be (3, ("inner", true))
+say nested[1][0]
+say len(())
+let tuple of (text, number) flipped be pair(8)[::-1]
+say flipped[0]
+say flipped[-1]
+
+let list of number numbers be [1, 2, 3, 4, 5]
+let number step be -2
+let list of number backwards be numbers[4:-6:step]
+for each item in backwards:
+    say item
+end for
+say len(numbers[90:])
+say last(numbers[:-2])
+say first(reversed(numbers))
+try:
+    say len(numbers[::0])
+if something goes wrong:
+    say error_message
+end try
+
+let a, b be [10, 20]
+set a, b to (b, a)
+try:
+    set a, b to [99]
+if something goes wrong:
+    say error_message
+end try
+say a
+say b
+for each n, word in [(2, "two"), (3, "three")]:
+    say n
+    say word
+end for
+
+let set of text names be {"Ada", "Grace", "Ada"}
+add "Lin" to names
+add "Lin" to names
+remove "Grace" from names
+say len(names)
+say "Ada" in names
+say "Grace" in names
+let set of text empty be set()
+say len(empty)
+let set of text other be set(["Lin", "Kay", "Lin"])
+for each word in union(names, other):
+    say word
+end for
+say len(intersection(names, other))
+say len(difference(names, other))
+
+to double(number: n) out number:
+    return n * 2
+end function
+to positive(number: n) out bool:
+    return n > 0
+end function
+to accumulate(number: total, number: n) out number:
+    return total + n
+end function
+to reject(number: n) out number:
+    raise an error saying "callback failed"
+end function
+say map(double, [1, 2])
+say filter(positive, [-1, 2, 0, 3])
+say reduce(accumulate, [2, 3], 10)
+say reduce(accumulate, numbers[:0], 10)
+try:
+    say map(reject, [1])
+if something goes wrong:
+    say error_message
+end try
+for each index, item in enumerate(["a", "b"]):
+    say (index, item)
+end for
+say (1, "a") = (1, "a")
+say "a" in (1, "a")
+say {1, 2} = {2, 1}
+say {1, 2} = {2, 3}
+say ({1, 2}, [3], (4,))
+let tuple of (number, number) uniform be (8, 9)
+say uniform[step + 1]
+for each item in uniform:
+    say item
+end for
+let hashmap of decimal to text decimals be {1.5: "one and a half"}
+set decimals[-0.0] to "zero"
+say decimals[0.0]
+say decimals[1.5]
+for each key in keys(decimals):
+    if key = 1.5:
+        say key
+    end if
+end for
+try:
+    say decimal("nan") in decimals
+if something goes wrong:
+    say error_message
+end try

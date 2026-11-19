@@ -1,0 +1,24 @@
+# Descriptive statistics.
+To median(values):
+    If type_of(values) is not equal to "list" or len(values) is equal to 0:
+        Raise an error saying "median requires a nonempty list of numbers".
+    End if.
+    For each value in values:
+        If type_of(value) is not equal to "number":
+            Raise an error saying "median requires a nonempty list of numbers".
+        End if.
+    End loop.
+    Let ordered be sorted(values).
+    Let count be len(ordered).
+    Let middle be floor(count divided by 2).
+    If count modulo 2 is equal to 1:
+        Give back ordered[middle].
+    End if.
+    Let lower be ordered[middle minus 1].
+    Let upper be ordered[middle].
+    If lower < 0 and upper > 0:
+        Give back (lower plus upper) divided by 2.
+    End if.
+    # The difference avoids overflow when both values have the same sign.
+    Give back lower plus (upper minus lower) divided by 2.
+End function.

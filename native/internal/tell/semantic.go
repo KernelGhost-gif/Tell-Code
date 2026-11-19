@@ -23,7 +23,7 @@ var semanticBuiltins = map[string]string{
 }
 
 var semanticBuiltinTypes = map[string]bool{
-	"any": true, "nothing": true, "boolean": true, "number": true,
+	"any": true, "nothing": true, "boolean": true, "bool": true, "number": true, "decimal": true,
 	"text": true, "list": true, "tuple": true, "set": true,
 	"dictionary": true, "function": true, "class": true,
 }
@@ -207,6 +207,7 @@ func (a *semanticAnalyzer) at(statement node, err error) error {
 func (a *semanticAnalyzer) checkAnnotation(name, annotation, inferred string) error {
 	typeName := strings.TrimSpace(annotation)
 	normalized := strings.ToLower(typeName)
+	if normalized == "bool" { normalized = "boolean" }; if normalized == "decimal" { normalized = "number" }
 	if !semanticBuiltinTypes[normalized] {
 		if _, exists := a.classes[typeName]; !exists {
 			return fail("unknown type annotation %q", typeName)
@@ -327,7 +328,7 @@ func (a *semanticAnalyzer) infer(expr expression, bindings map[string]semanticBi
 				return "any", nil
 			}
 			return "", fail("operator + requires compatible operands, got %s and %s", left, right)
-		case "-", "*", "/", "//", "%", "**":
+		case "-", "*", "/", "//", "%", "**", "&", "|", "^", "<<", ">>":
 			if left == "number" && right == "number" {
 				return "number", nil
 			}

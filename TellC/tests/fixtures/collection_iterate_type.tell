@@ -1,0 +1,3 @@
+for each item in 1:
+    say item
+end for

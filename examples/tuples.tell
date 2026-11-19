@@ -1,12 +1,15 @@
-Let first, second be ("Ada", 42).
-Say [first, second].
+# Tuples keep related release metadata together in a fixed order.
+Let change_id, owning_team, priority be ("CHG-2048", "Data Services", 2).
+Say "Change {change_id} is owned by {owning_team} at priority {priority}.".
 
-Let values be (1, 2, 3).
-Say values.
-Say values[::-1].
-For each value in values:
-    Say value.
+Let release_stages be ("draft", "review", "approved").
+Say "Planned stages: {release_stages}.".
+Say "Reverse audit view: {release_stages[::-1]}.".
+
+For each stage in release_stages:
+    Say "Release stage: {stage}.".
 End loop.
 
-Let label as tuple be tuple(["readable", "portable"]).
-Say label plus ("language",).
+Let sign_off_roles as tuple be tuple(["Security", "Operations", "Service owner"]).
+Let complete_sign_off be sign_off_roles plus ("Release manager",).
+Say "Required sign-offs: {complete_sign_off}.".

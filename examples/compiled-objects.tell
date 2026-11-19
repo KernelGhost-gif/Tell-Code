@@ -1,20 +1,22 @@
-Create a class called Animal:
-    When creating an Animal with name:
-        Remember name as this.name.
+# Inheritance and field updates in a service-request workflow.
+Create a class called ServiceRequest:
+    When creating a ServiceRequest with reference and summary:
+        Remember reference as this.reference.
+        Remember summary as this.summary.
     End constructor.
 
-    To speak:
-        Say "{this.name} makes a sound.".
+    To describe:
+        Say "Request {this.reference}: {this.summary}.".
     End function.
 End class.
 
-Create a class called Dog based on Animal:
-    To speak:
-        Say "Woof, {this.name}!".
+Create a class called EscalatedRequest based on ServiceRequest:
+    To describe:
+        Say "Escalated request {this.reference}: {this.summary}.".
     End function.
 End class.
 
-Let pet as Animal be a new Dog with "Rex".
-Tell pet to speak.
-Set pet.name to "Milo".
-Tell pet to speak.
+Let request as ServiceRequest be new EscalatedRequest with "SR-2048" and "Investigate delayed nightly reconciliation".
+Tell request to describe.
+Set request.summary to "Nightly reconciliation delay assigned to the data platform team".
+Tell request to describe.

@@ -1,0 +1,48 @@
+# Ordered list transformations.
+To chunked(items, size):
+    If type_of(items) is not equal to "list":
+        Raise an error saying "chunked requires a list".
+    End if.
+    If type_of(size) is not equal to "number" or size <= 0 or size modulo 1 is not equal to 0:
+        Raise an error saying "chunked requires a positive whole-number size".
+    End if.
+    Let chunks be [].
+    Let length be len(items).
+    Let offset be 0.
+    While offset < length:
+        Let next_offset be offset plus min(size, length minus offset).
+        Add items[offset:next_offset] to chunks.
+        Set offset to next_offset.
+    End while.
+    Give back chunks.
+End function.
+
+To flatten(rows):
+    If type_of(rows) is not equal to "list":
+        Raise an error saying "flatten requires a list of lists".
+    End if.
+    Let items be [].
+    For each row in rows:
+        If type_of(row) is not equal to "list":
+            Raise an error saying "flatten requires a list of lists".
+        End if.
+        For each item in row:
+            Add item to items.
+        End loop.
+    End loop.
+    Give back items.
+End function.
+
+To zip(left, right):
+    If type_of(left) is not equal to "list" or type_of(right) is not equal to "list":
+        Raise an error saying "zip requires two lists".
+    End if.
+    Let pairs be [].
+    Let count be min(len(left), len(right)).
+    Let index be 0.
+    While index < count:
+        Add [left[index], right[index]] to pairs.
+        Set index to index plus 1.
+    End while.
+    Give back pairs.
+End function.

@@ -1,4 +1,4 @@
-Note: Your first Tell program.
-
-Let name be "world".
-Say "Hello, {name}!".
+# A concise welcome message for a new project workspace.
+Let colleague be "Avery".
+Let workspace be "Customer Operations".
+Say "Welcome, {colleague}. Your {workspace} workspace is ready.".

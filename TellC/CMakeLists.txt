@@ -5,7 +5,20 @@ message(STATUS "Using LLVM ${LLVM_PACKAGE_VERSION} from ${LLVM_DIR}")
 set(TELL_LLC_PATH "${LLVM_TOOLS_BINARY_DIR}/llc" CACHE STRING
     "Path or command name for the llc matching the configured LLVM version")
 option(TELL_STANDALONE_MACOS "Embed LLVM code generation and LLD for macOS" ${APPLE})
-if(TELL_STANDALONE_MACOS)
+option(TELL_STANDALONE_LINUX "Embed LLVM, LLD and static runtimes for Linux" OFF)
+if(TELL_STANDALONE_LINUX)
+  if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR
+     NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|aarch64)$" OR
+     TELL_STANDALONE_MACOS)
+    message(FATAL_ERROR "Standalone Linux TellC requires an x86_64 or aarch64 Linux target")
+  endif()
+  if(NOT TELL_ZIG OR NOT TELL_ZIG_CACHE_DIR)
+    message(FATAL_ERROR "Use scripts/build-tellc-linux.sh to configure the Zig cross-toolchain")
+  endif()
+  find_package(LLD REQUIRED CONFIG)
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  set(TELL_LLVM_LIBS lldELF)
+elseif(TELL_STANDALONE_MACOS)
   if(NOT APPLE)
     message(FATAL_ERROR "TELL_STANDALONE_MACOS requires macOS")
   endif()
@@ -24,11 +37,47 @@ endif()
 add_library(tell_parser src/parser.cpp)
 target_include_directories(tell_parser PUBLIC include)
 target_compile_features(tell_parser PUBLIC cxx_std_17)
-add_executable(tellc src/main.cpp src/codegen.cpp)
+add_library(tell_codegen STATIC src/codegen.cpp src/hashmap_codegen.cpp)
+target_include_directories(tell_codegen SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS})
+target_compile_definitions(tell_codegen PRIVATE ${LLVM_DEFINITIONS})
+target_link_libraries(tell_codegen PUBLIC tell_parser PRIVATE ${TELL_LLVM_LIBS})
+
+add_executable(tellc src/main.cpp)
 target_include_directories(tellc SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS})
 target_compile_definitions(tellc PRIVATE ${LLVM_DEFINITIONS} TELL_LLC_PATH="${TELL_LLC_PATH}")
-if(TELL_STANDALONE_MACOS)
-  target_compile_definitions(tellc PRIVATE TELL_STANDALONE_MACOS)
+if(NOT TELL_STANDALONE_LINUX)
+  set(TELL_JIT_COMPONENTS OrcJIT)
+  if(NOT TELL_STANDALONE_MACOS)
+    list(APPEND TELL_JIT_COMPONENTS nativecodegen)
+  endif()
+  llvm_map_components_to_libnames(TELL_JIT_LIBS ${TELL_JIT_COMPONENTS})
+  target_sources(tellc PRIVATE jit/jit.cpp)
+  target_include_directories(tellc PRIVATE src jit)
+  target_compile_definitions(tellc PRIVATE TELL_ENABLE_JIT)
+  target_link_libraries(tellc PRIVATE ${TELL_JIT_LIBS})
+endif()
+if(TELL_STANDALONE_LINUX)
+  enable_language(ASM)
+  set(runtime_dir "${CMAKE_CURRENT_BINARY_DIR}/linux-runtime")
+  add_custom_command(
+    OUTPUT "${runtime_dir}/runtime.S" "${runtime_dir}/linux_runtime.hpp"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed-linux-runtime.py"
+      "${TELL_ZIG}" "${TELL_ZIG_CACHE_DIR}" "${runtime_dir}"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed-linux-runtime.py" "${TELL_ZIG}"
+    VERBATIM
+  )
+  target_sources(tellc PRIVATE src/linux_linker.cpp
+    "${runtime_dir}/runtime.S" "${runtime_dir}/linux_runtime.hpp")
+  target_compile_definitions(tell_codegen PRIVATE TELL_STANDALONE_LINUX TELL_EMBEDDED_CODEGEN)
+  target_compile_definitions(tellc PRIVATE TELL_STANDALONE_LINUX TELL_EMBEDDED_CODEGEN
+    TELL_LINUX_ARCH="${CMAKE_SYSTEM_PROCESSOR}")
+  target_include_directories(tellc SYSTEM PRIVATE ${LLD_INCLUDE_DIRS})
+  target_include_directories(tellc PRIVATE "${runtime_dir}")
+  target_link_options(tellc PRIVATE -s)
+  target_link_libraries(tellc PRIVATE tell_codegen)
+elseif(TELL_STANDALONE_MACOS)
+  target_compile_definitions(tell_codegen PRIVATE TELL_STANDALONE_MACOS TELL_EMBEDDED_CODEGEN)
+  target_compile_definitions(tellc PRIVATE TELL_STANDALONE_MACOS TELL_EMBEDDED_CODEGEN)
   target_include_directories(tellc SYSTEM PRIVATE "${LLD_SOURCE_DIR}/include")
   set(TELL_ZSTD_STATIC_LIBRARY "" CACHE FILEPATH "Static zstd library used by LLVM")
   if(TARGET zstd::libzstd_shared)
@@ -37,10 +86,17 @@ if(TELL_STANDALONE_MACOS)
     endif()
     set_target_properties(zstd::libzstd_shared PROPERTIES IMPORTED_LOCATION "${TELL_ZSTD_STATIC_LIBRARY}")
   endif()
-  target_link_libraries(tellc PRIVATE tell_parser "${LLD_BUILD_DIR}/lib/liblldMachO.a" "${LLD_BUILD_DIR}/lib/liblldCommon.a" ${TELL_LLVM_LIBS})
+  target_link_libraries(tellc PRIVATE tell_codegen "${LLD_BUILD_DIR}/lib/liblldMachO.a" "${LLD_BUILD_DIR}/lib/liblldCommon.a")
 else()
-  target_link_libraries(tellc PRIVATE tell_parser ${TELL_LLVM_LIBS})
+  target_link_libraries(tellc PRIVATE tell_codegen)
 endif()
+
+add_executable(tell-lsp src/lsp.cpp)
+target_include_directories(tell-lsp SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS})
+target_compile_definitions(tell-lsp PRIVATE ${LLVM_DEFINITIONS})
+target_link_libraries(tell-lsp PRIVATE tell_codegen)
+install(TARGETS tell-lsp RUNTIME DESTINATION bin)
+
 include(CTest)
 if(BUILD_TESTING)
   if(TELL_STANDALONE_MACOS)
@@ -48,6 +104,20 @@ if(BUILD_TESTING)
     add_test(NAME standalone_macos COMMAND "${Python3_EXECUTABLE}"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/standalone_macos.py"
       "$<TARGET_FILE:tellc>" "${CMAKE_CURRENT_SOURCE_DIR}/examples/objects.tell")
+    add_library(tell_test_cpp_static STATIC tests/cpp_library.cpp)
+    add_library(tell_test_cpp_dynamic SHARED tests/cpp_library.cpp)
+    set_target_properties(tell_test_cpp_dynamic PROPERTIES
+      BUILD_WITH_INSTALL_NAME_DIR ON INSTALL_NAME_DIR "${CMAKE_CURRENT_BINARY_DIR}")
+    add_test(NAME cpp_integration COMMAND "${Python3_EXECUTABLE}"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/cpp_integration.py" "$<TARGET_FILE:tellc>"
+      "$<TARGET_FILE:tell_test_cpp_static>" "$<TARGET_FILE:tell_test_cpp_dynamic>")
+  else()
+    find_package(Python3 QUIET COMPONENTS Interpreter)
+  endif()
+  if(Python3_Interpreter_FOUND)
+    add_test(NAME language_server COMMAND ${CMAKE_COMMAND} -E env
+      "TELL_LSP_BINARY=$<TARGET_FILE:tell-lsp>" "${Python3_EXECUTABLE}"
+      "${CMAKE_CURRENT_SOURCE_DIR}/../lsp/test_lsp.py")
   endif()
   add_executable(tell_parser_recursion_test tests/recursion.cpp)
   target_link_libraries(tell_parser_recursion_test PRIVATE tell_parser)
@@ -66,4 +136,11 @@ if(BUILD_TESTING)
       "-DTELL_WORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/integration"
       -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/compiler_integration.cmake"
   )
+  if(NOT TELL_STANDALONE_LINUX)
+    add_test(NAME jit_integration COMMAND ${CMAKE_COMMAND}
+      "-DTELL_COMPILER=$<TARGET_FILE:tellc>"
+      "-DTELL_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
+      "-DTELL_WORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/jit-integration"
+      -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/jit_integration.cmake")
+  endif()
 endif()

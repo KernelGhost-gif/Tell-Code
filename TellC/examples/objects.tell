@@ -1,15 +1,16 @@
-object MacBook:
+# A private release policy exposed through a strongly typed public method.
+object ReleasePolicy:
     own:
-        let text self password be "12345678"
+        let text self approved_environment be "production"
     others:
-        to check password(text: Password) out bool:
-            if Password = password:
+        to approve_environment(text: candidate_environment) out bool:
+            if candidate_environment = self.approved_environment:
                 give back true
             end if
             give back false
         end function
 end object
 
-let MacBook laptop be MacBook()
-say laptop.check password("12345678")
-say laptop.check password("wrong")
+let ReleasePolicy policy be ReleasePolicy()
+say policy.approve_environment("production")
+say policy.approve_environment("staging")

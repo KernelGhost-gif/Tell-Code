@@ -308,6 +308,10 @@ func parseSimpleStatement(source string, line, column int) *simpleStatement {
 			name, annotation, annotated := splitFoldOnce(binding, " as ")
 			if !annotated {
 				name = binding
+				fields := strings.Fields(binding)
+				if len(fields) == 2 && identifier(fields[0]) && identifier(fields[1]) {
+					annotation, name, annotated = fields[0], fields[1], true
+				}
 			}
 			if strings.Contains(binding, ",") && !annotated {
 				if names, valid := parseLoopNames(binding); valid && len(names) > 1 {
@@ -569,10 +573,10 @@ func parseSimpleStatement(source string, line, column int) *simpleStatement {
 			}
 		}
 	}
-	if strings.EqualFold(source, "stop this loop") || strings.EqualFold(source, "break out of this loop") {
+	if strings.EqualFold(source, "break") || strings.EqualFold(source, "stop this loop") || strings.EqualFold(source, "break out of this loop") {
 		return &simpleStatement{kind: "break"}
 	}
-	if strings.EqualFold(source, "skip to the next repetition") || strings.EqualFold(source, "continue to the next repetition") {
+	if strings.EqualFold(source, "continue") || strings.EqualFold(source, "skip to the next repetition") || strings.EqualFold(source, "continue to the next repetition") {
 		return &simpleStatement{kind: "continue"}
 	}
 	if source != "" {
@@ -707,7 +711,14 @@ func parseFunctionHeader(header string) (name string, params []string, ok bool) 
 	if !identifier(name) {
 		return "", nil, false
 	}
-	if strings.HasPrefix(tail, "(") && strings.HasSuffix(tail, ")") {
+	if strings.HasPrefix(tail, "(") && strings.Contains(tail, ")") {
+		close := strings.LastIndex(tail, ")")
+		suffix := strings.TrimSpace(tail[close+1:])
+		if suffix != "" {
+			result, valid := prefixFold(suffix, "out ")
+			if !valid || !identifier(result) { return "", nil, false }
+		}
+		tail = tail[:close+1]
 		inner := strings.TrimSpace(tail[1 : len(tail)-1])
 		if inner != "" {
 			params = splitTop(inner, ",")
@@ -720,6 +731,10 @@ func parseFunctionHeader(header string) (name string, params []string, ok bool) 
 		params = splitAnd(tail)
 	}
 	for index, param := range params {
+		if typeName, paramName, typed := strings.Cut(param, ":"); typed {
+			if !identifier(strings.TrimSpace(typeName)) || !identifier(strings.TrimSpace(paramName)) { return "", nil, false }
+			param = strings.TrimSpace(paramName)
+		}
 		parsed, valid := parseParameterText(param)
 		if !valid {
 			return "", nil, false
@@ -742,6 +757,7 @@ func stripOptionalThen(condition string) string {
 
 func normalizeBlockLine(line string) string {
 	normalized := strings.ToLower(strings.TrimSpace(line))
+	if normalized == "end for" || normalized == "end for." { return "end loop." }
 	if normalized == "else:" {
 		return "otherwise:"
 	}

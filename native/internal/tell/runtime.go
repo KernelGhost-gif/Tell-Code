@@ -95,10 +95,10 @@ func typeMatches(typeName string, value any, e *env) (bool, error) {
 		return true, nil
 	case "nothing":
 		return value == nil, nil
-	case "boolean":
+	case "boolean", "bool":
 		_, ok := value.(bool)
 		return ok, nil
-	case "number":
+	case "number", "decimal":
 		switch value.(type) {
 		case float64, int, int64:
 			return true, nil

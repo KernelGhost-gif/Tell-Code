@@ -1,0 +1,27 @@
+# Scalar numeric helpers.
+To clamp(value, lower, upper):
+    If lower > upper:
+        Raise an error saying "clamp requires lower to be at most upper".
+    End if.
+    If value < lower:
+        Give back lower.
+    End if.
+    If value > upper:
+        Give back upper.
+    End if.
+    Give back value.
+End function.
+
+To lerp(start, finish, weight):
+    Give back (1 minus weight) times start plus weight times finish.
+End function.
+
+To sign(value):
+    If value < 0:
+        Give back -1.
+    End if.
+    If value > 0:
+        Give back 1.
+    End if.
+    Give back 0.
+End function.

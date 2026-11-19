@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "TellC/**"
+      - "lsp/**"
       - ".github/workflows/tellc.yml"
   workflow_dispatch:
 
@@ -38,5 +39,5 @@ jobs:
       - name: Build TellC
         run: cmake --build build/tellc --parallel 2
 
-      - name: Run parser and compiler integration tests
+      - name: Run parser, compiler, and language-server tests
         run: ctest --test-dir build/tellc --output-on-failure

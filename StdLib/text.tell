@@ -1,0 +1,35 @@
+# Case-sensitive text helpers.
+To starts_with(value, prefix):
+    If type_of(value) is not equal to "text" or type_of(prefix) is not equal to "text":
+        Raise an error saying "starts_with requires two text values".
+    End if.
+    Give back value[:len(prefix)] is equal to prefix.
+End function.
+
+To ends_with(value, suffix):
+    If type_of(value) is not equal to "text" or type_of(suffix) is not equal to "text":
+        Raise an error saying "ends_with requires two text values".
+    End if.
+    Let offset be max(0, len(value) minus len(suffix)).
+    Give back value[offset:] is equal to suffix.
+End function.
+
+To join(parts, separator):
+    If type_of(parts) is not equal to "list" or type_of(separator) is not equal to "text":
+        Raise an error saying "join requires a list of text and a text separator".
+    End if.
+    Let result be "".
+    Let first_part be true.
+    For each part in parts:
+        If type_of(part) is not equal to "text":
+            Raise an error saying "join requires a list of text and a text separator".
+        End if.
+        If first_part:
+            Set first_part to false.
+        Otherwise:
+            Set result to result plus separator.
+        End if.
+        Set result to result plus part.
+    End loop.
+    Give back result.
+End function.

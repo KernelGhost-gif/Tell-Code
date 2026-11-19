@@ -1,3 +1,4 @@
+# Compute a factorial recursively and print the result for a reviewable input.
 to factorial(number: n) out number:
     if n <= 1:
         return 1

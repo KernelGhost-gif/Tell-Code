@@ -182,7 +182,7 @@ func TestModuleExampleRuns(t *testing.T) {
 	if err := RunWithIO(string(source), filename, bytes.NewReader(nil), &output); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := output.String(), "42\n"; got != want {
+	if got, want := output.String(), "Estimated service total: $750.\n"; got != want {
 		t.Fatalf("module example output = %q, want %q", got, want)
 	}
 }

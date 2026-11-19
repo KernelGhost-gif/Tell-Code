@@ -1,2 +1,7 @@
-Use the module "module_helpers.tell" as helpers.
-Say helpers.double(21).
+# Reuse a pricing helper from a neighboring Tell module.
+Use the module "module_helpers.tell" as pricing.
+
+Let hourly_rate be 125.
+Let billable_hours be 6.
+Let service_total be pricing.calculate_line_total(hourly_rate, billable_hours).
+Say "Estimated service total: ${service_total}.".

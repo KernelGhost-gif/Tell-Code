@@ -1,0 +1,23 @@
+say 6 & 3
+say 6 | 3
+say 6 ^ 3
+say ~5
+say 1 << 3 + 1
+say -8 >> 2
+say 1 + 2 << 2 & 15 | 1
+say 2 equal to 2
+say 2 is equal to 3
+say true && !false
+say false || true
+say false and (1 << 63 = 0)
+say true or (1 << 63 = 0)
+try:
+    say 1 << -1
+if something goes wrong:
+    say "invalid shift"
+end try
+try:
+    say 1 << 53
+if something goes wrong:
+    say "shift out of range"
+end try

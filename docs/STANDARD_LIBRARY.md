@@ -1,6 +1,8 @@
 # Standard library
 
-Tell exposes a small explicit set of standard-library modules. Each runtime owns its own adapters; only the documented names below are intended to be portable. Library objects expose public operations only and are not a route to the host runtime's other APIs.
+Tell's [source standard library](../StdLib/README.md) provides math, list, text, and statistics utilities through ordinary `.tell` module imports. It works in both interpreters and with Go bytecode builds.
+
+Tell also exposes a small explicit set of built-in library modules. Each runtime owns its own adapters; only the documented names below are intended to be portable. Library objects expose public operations only and are not a route to the host runtime's other APIs.
 
 ## CSV
 

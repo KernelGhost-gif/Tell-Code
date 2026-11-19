@@ -16,22 +16,15 @@ The experimental [TellC compiler](TellC/README.md) uses LLVM to build native exe
 ## A first program
 
 ```tell
-Let name be "Ada".
-Let age be 20.
-
-If age is greater than 18:
-    Say "Hello, {name}!".
-    Say "You are an adult.".
-Otherwise:
-    Say "You are still young!".
-End if.
+Let colleague be "Avery".
+Let workspace be "Customer Operations".
+Say "Welcome, {colleague}. Your {workspace} workspace is ready.".
 ```
 
 Output:
 
 ```text
-Hello, Ada!
-You are an adult.
+Welcome, Avery. Your Customer Operations workspace is ready.
 ```
 
 ## Run Tell natively
@@ -81,6 +74,8 @@ tell run examples/hello.tbc
 
 Use `tell build source.tell --output output.tbc` to choose the artifact path. The compiler supports functions, recursion, closures, core control flow, local modules embedded in the artifact, `Try`/`Raise`, and the initial class model with constructors, fields, methods, single inheritance, and overrides. `Finally` and other language features remain unsupported in bytecode; see the [CLI reference](docs/CLI_REFERENCE.md) for its exact subset and limits. [examples/compiled-objects.tell](examples/compiled-objects.tell) demonstrates an object program that can be run by either interpreter or compiled to bytecode by the native runtime.
 
+The Go runtime also accepts some TellC syntax: declarations such as `let number n be 1`, typed function headers such as `to f(number: n) out number:`, `=` for equality, and `end for`, `break`, and `continue`. Function parameter and return annotations are currently parsed but **not enforced** by the Go runtime. Its `number` and `decimal` types share the runtime's numeric representation. Other TellC features, including `object`, `switch`, collection type annotations, and multiple statements separated by semicolons, are not yet supported; TellC programs are not generally interchangeable with Go runtime programs.
+
 ## Compile native executables with TellC
 
 TellC is an experimental C++ compiler that translates its typed dialect through LLVM into a native executable. Its dialect is separate from the dynamically typed language used by the Go and Python runtimes; programs are not necessarily interchangeable. For example:
@@ -109,7 +104,7 @@ build/tellc-macos-arm64/tellc/tellc TellC/examples/factorial.tell -o factorial
 ./factorial
 ```
 
-The example prints `120`. The standalone compiler embeds LLVM code generation and the Mach-O linker; it and its output target macOS 11 or later. A Linux build uses a compatible LLVM installation, `llc`, and Clang. Build details, dependencies, and tests are in the [TellC guide](TellC/README.md). `tellc source.tell` defaults to `a.out`; use `-o` to choose the output and `tellc --llvm-version` to inspect its LLVM version.
+The example prints `120`. The standalone compiler embeds LLVM code generation and the Mach-O linker; it and its output target macOS 11 or later. The [standalone Linux build](TellC/README.md#standalone-linux) produces static x86-64 and ARM64 compilers that can each emit executables for either architecture. Build details, dependencies, and tests are in the [TellC guide](TellC/README.md). `tellc source.tell` defaults to `a.out`; use `-o` to choose the output and `tellc --llvm-version` to inspect its LLVM version.
 
 ## Run the Python version
 
@@ -369,9 +364,9 @@ Tagging a version as `v*` runs both test suites, cross-builds the six native tar
 
 - **0.2:** Native runtime and multi-platform standalone binaries.
 - **0.3:** Stronger grammar, better diagnostics, more consistent standard-library behavior.
-- **0.4:** Extend the initial class model with access controls, static members, and richer object behavior.
+- **0.4:** Deliver a fully working LLVM based compiler that runs Tell programs with just in time (JIT) compilation and builds standalone executables with ahead of time (AOT) compilation.
 - **0.5:** Package manager and debugger.
-- **1.0:** Stable language specification and compatibility suite.
+- **0.6:** Extend the class model with access controls and static members, and expand the compatibility suite.
 
 Tell is designed to make programming more approachable without making the language depend on guesswork. Its syntax is intentionally sentence-like, but constrained enough that every instruction has a predictable meaning.
 

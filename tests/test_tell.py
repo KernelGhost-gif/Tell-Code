@@ -340,7 +340,7 @@ Say contents.
         output = io.StringIO()
         interpreter = Interpreter(output_fn=lambda text: output.write(text + "\n"))
         interpreter.run(filename.read_text(encoding="utf-8"), str(filename))
-        self.assertEqual(output.getvalue(), "42\n")
+        self.assertEqual(output.getvalue(), "Estimated service total: $750.\n")
 
     def test_check_that_assertion_passes_and_fails(self):
         Interpreter().run("Check that 2 plus 2 is equal to 4.")
