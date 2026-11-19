@@ -227,6 +227,7 @@ func BenchmarkTypedNumericFunctionEngines(b *testing.B) {
 			break
 		}
 	}
+	arguments := []any{4.0, 6.0}
 	for _, engine := range []string{"interp", "jit", "auto"} {
 		b.Run(engine, func(b *testing.B) {
 			r := newRuntime("jit-benchmark.tell", bytes.NewReader(nil), io.Discard, DefaultExecutionLimits())
@@ -234,9 +235,20 @@ func BenchmarkTypedNumericFunctionEngines(b *testing.B) {
 			r.jitHotThreshold = 24
 			defer r.closeJIT()
 			b.ReportAllocs()
+			warmupCalls := 0
+			if engine == "jit" {
+				warmupCalls = 1
+			} else if engine == "auto" {
+				warmupCalls = r.jitHotThreshold
+			}
+			for index := 0; index < warmupCalls; index++ {
+				if _, err := callBytecodeFunction(r, function, r.global, program.Functions, program.Classes, arguments, nil, nil); err != nil {
+					b.Fatal(err)
+				}
+			}
 			b.ResetTimer()
 			for index := 0; index < b.N; index++ {
-				if _, err := callBytecodeFunction(r, function, r.global, program.Functions, program.Classes, []any{4.0, 6.0}, nil, nil); err != nil {
+				if _, err := callBytecodeFunction(r, function, r.global, program.Functions, program.Classes, arguments, nil, nil); err != nil {
 					b.Fatal(err)
 				}
 			}
