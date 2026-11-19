@@ -1,0 +1,47 @@
+name: Native JIT validation and benchmark
+
+on:
+  push:
+    branches:
+      - "feat/**"
+    paths:
+      - "native/internal/tell/jit*.go"
+      - "native/internal/tell/jit*.s"
+      - "native/internal/tell/bytecode.go"
+      - "native/internal/tell/jit_test.go"
+      - ".github/workflows/jit-benchmark.yml"
+  pull_request:
+    paths:
+      - "native/internal/tell/jit*.go"
+      - "native/internal/tell/jit*.s"
+      - "native/internal/tell/bytecode.go"
+      - "native/internal/tell/jit_test.go"
+      - ".github/workflows/jit-benchmark.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tell-jit-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-amd64:
+    name: Linux amd64 / JIT tests and benchmark
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+      - name: Run native Tell tests and race detector
+        working-directory: native
+        run: |
+          go test ./internal/tell
+          go test -race ./internal/tell
+          go vet ./internal/tell
+      - name: Benchmark interpreter, JIT, and auto mode
+        working-directory: native
+        run: |
+          go test ./internal/tell -run '^$' -bench '^BenchmarkTypedNumericFunctionEngines$' -benchmem -benchtime=250ms -count=1
