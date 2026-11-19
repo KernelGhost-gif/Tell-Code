@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"strings"
 	"testing"
 )
 
@@ -87,6 +88,59 @@ func TestAutoEngineCompilesAfterHotThreshold(t *testing.T) {
 		t.Fatalf("unexpected tiering stats: %+v", r.jitStats)
 	}
 	r.closeJIT()
+}
+
+func TestNativeJITPreservesDivisionByZeroSemantics(t *testing.T) {
+	if !NativeJITAvailable() {
+		t.Skip("native JIT backend is available only on linux/amd64")
+	}
+	source := `to divide(number: numerator, number: denominator) out number:
+    give back numerator / denominator
+end function
+`
+	artifact, err := Compile(source, "jit-division.tell")
+	if err != nil {
+		t.Fatalf("compile division function: %v", err)
+	}
+	var program BytecodeProgram
+	if err := json.Unmarshal(artifact, &program); err != nil {
+		t.Fatal(err)
+	}
+	var function BytecodeFunction
+	found := false
+	for index := range program.Functions {
+		if program.Functions[index].Name == "divide" {
+			assignJITFunctionKey(&program.Functions[index], "jit-division", index)
+			function, found = program.Functions[index], true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("compiled bytecode did not contain divide")
+	}
+	r := newRuntime("jit-division.tell", bytes.NewReader(nil), io.Discard, DefaultExecutionLimits())
+	r.executionEngine = "jit"
+	_, err = callBytecodeFunction(r, function, r.global, program.Functions, program.Classes, []any{1.0, 0.0}, nil, nil)
+	if err == nil || !strings.Contains(err.Error(), "division by zero") {
+		t.Fatalf("expected interpreter division-by-zero error, got %v", err)
+	}
+	if r.jitStats.JITCompiledFunctions != 0 || r.jitStats.InterpretedCalls != 1 {
+		t.Fatalf("division function should have used interpreter fallback: %+v", r.jitStats)
+	}
+	r.closeJIT()
+}
+
+func TestExecutionEngineOptionsAreValidated(t *testing.T) {
+	if ValidExecutionEngine("interp") == false || !ValidExecutionEngine("jit") || !ValidExecutionEngine("auto") {
+		t.Fatal("known execution engine names were rejected")
+	}
+	if ValidExecutionEngine("llvm") || ValidExecutionEngine("") {
+		t.Fatal("unknown execution engine name was accepted")
+	}
+	_, err := RunBytecodeWithEngine(nil, "empty.tbc", nil, io.Discard, DefaultExecutionLimits(), "unknown", 24)
+	if err == nil || !strings.Contains(err.Error(), "unknown execution engine") {
+		t.Fatalf("expected unknown execution engine error, got %v", err)
+	}
 }
 
 func TestNativeJITFallsBackForControlFlowFunctions(t *testing.T) {

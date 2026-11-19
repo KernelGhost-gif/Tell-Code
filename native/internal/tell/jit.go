@@ -2,6 +2,7 @@ package tell
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/json"
 	"strings"
 )
@@ -25,6 +26,30 @@ func NativeJITAvailable() bool { return nativeJITAvailable() }
 
 func ValidExecutionEngine(engine string) bool { return validExecutionEngine(engine) }
 
+func assignJITFunctionKey(function *BytecodeFunction, namespace string, index int) {
+	if function == nil {
+		return
+	}
+	name := function.Name
+	buffer := make([]byte, len(namespace)+1+8+len(name))
+	position := copy(buffer, namespace)
+	buffer[position] = 0
+	position++
+	binary.LittleEndian.PutUint64(buffer[position:position+8], uint64(index))
+	position += 8
+	copy(buffer[position:], name)
+	function.jitKey = sha256.Sum256(buffer)
+}
+
+func assignBytecodeJITKeys(program *BytecodeProgram, namespace string) {
+	if program == nil {
+		return
+	}
+	for index := range program.Functions {
+		assignJITFunctionKey(&program.Functions[index], namespace, index)
+	}
+}
+
 func validExecutionEngine(engine string) bool {
 	switch strings.ToLower(strings.TrimSpace(engine)) {
 	case "interp", "jit", "auto":
@@ -38,11 +63,14 @@ func (r *runtime) runJITFunction(function BytecodeFunction, local *env) (any, bo
 	if r.executionEngine == "" || r.executionEngine == "interp" {
 		return nil, false, nil
 	}
-	keyData, err := json.Marshal(function)
-	if err != nil {
-		return nil, false, err
+	key := function.jitKey
+	if key == ([32]byte{}) {
+		keyData, err := json.Marshal(function)
+		if err != nil {
+			return nil, false, err
+		}
+		key = sha256.Sum256(keyData)
 	}
-	key := sha256.Sum256(keyData)
 
 	if r.executionEngine == "auto" {
 		r.jitCalls[key]++
@@ -70,7 +98,7 @@ func (r *runtime) runJITFunction(function BytecodeFunction, local *env) (any, bo
 		r.jitStats.JITCompiledFunctions++
 	}
 
-	arguments := make([]float64, len(function.Parameters))
+	var arguments [7]float64
 	for index, name := range function.Parameters {
 		value, exists := local.values[name]
 		if !exists {
@@ -84,10 +112,7 @@ func (r *runtime) runJITFunction(function BytecodeFunction, local *env) (any, bo
 			return nil, true, fail("native JIT argument %q is not numeric: %v", name, err)
 		}
 	}
-	if len(arguments) == 0 {
-		// The machine-code ABI takes a pointer even for a zero-argument function.
-		arguments = []float64{0}
-	}
+	// The machine-code ABI takes a pointer even for a zero-argument function.
 	result := callNativeJIT(code.entry, &arguments[0])
 	r.jitStats.JITInvocations++
 	return result, true, nil

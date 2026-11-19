@@ -52,6 +52,7 @@ type BytecodeFunction struct {
 	HasVariadic  bool                  `json:"has_variadic,omitempty"`
 	Receiver     bool                  `json:"receiver,omitempty"`
 	Instructions []BytecodeInstruction `json:"instructions"`
+	jitKey       [32]byte
 }
 
 // BytecodeClass describes the constructor and methods for a compiled Tell class.
@@ -1199,6 +1200,11 @@ func RunBytecodeWithEngine(data []byte, filename string, input io.Reader, output
 		if err := validateExecutableBytecode(module); err != nil {
 			return fail("invalid embedded module %q: %v", path, err)
 		}
+	}
+	assignBytecodeJITKeys(&program, filename)
+	for path, module := range compiledModules {
+		assignBytecodeJITKeys(&module, filename+"::"+path)
+		compiledModules[path] = module
 	}
 	r := newRuntime(filename, input, output, limits)
 	r.bytecodeModules = compiledModules
