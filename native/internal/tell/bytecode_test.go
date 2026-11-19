@@ -465,6 +465,42 @@ func TestBytecodeConstantFoldingPreservesRuntimeErrorsAndShortCircuit(t *testing
 	}
 }
 
+func TestBytecodeShortCircuitOrAcrossEngines(t *testing.T) {
+	const source = `To ready() out bool:
+    Say "right operand".
+    Give back true.
+End function.
+To choose(number: value) out number:
+    If value > 0 or ready():
+        Give back value.
+    End if.
+    Give back -1.
+End function.
+Say choose(1).
+Say choose(0).`
+
+	artifact, err := Compile(source, "short-circuit.tell")
+	if err != nil {
+		t.Fatal(err)
+	}
+	engines := []string{"interp", "auto"}
+	if NativeJITAvailable() {
+		engines = append(engines, "jit")
+	}
+	for _, engine := range engines {
+		t.Run(engine, func(t *testing.T) {
+			var output bytes.Buffer
+			_, err := RunBytecodeWithEngine(artifact, "short-circuit.tbc", bytes.NewReader(nil), &output, DefaultExecutionLimits(), engine, 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got, want := output.String(), "1\nright operand\n0\n"; got != want {
+				t.Fatalf("short-circuit output = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
 func TestBytecodePreservesRuntimeTypeAndConstantRules(t *testing.T) {
 	if got, want := runCompiled(t, "Let constant answer as number be 42.\nSay answer."), "42\n"; got != want {
 		t.Fatalf("compiled output = %q, want %q", got, want)

@@ -13,7 +13,7 @@ say service_name
 
 Newlines terminate statements; semicolons separate statements on the same line. Keywords and built-in type names are case insensitive. Object type names are case sensitive.
 
-The parser recognizes typed declarations, assignment statements, output, returns, functions, if/otherwise, while, repeat, for each, literals, lists, calls, member and index access, and common symbolic and word operators. The executable backend intentionally implements a smaller subset. Syntax outside the parser subset is reported as a parse error; syntax represented by the parser but not yet implemented by the backend is rejected during compilation with a source-located diagnostic. The parser also accepts the equality phrases listed below. Classes, imports, and named call arguments are not currently supported. Strings support basic escapes; source columns count bytes.
+The parser recognizes typed declarations, assignment statements, output, returns, functions, if/otherwise, while, repeat, for each, literals, lists, hashmaps, calls, member and index access, and common symbolic and word operators. The executable backend intentionally implements a smaller subset. Syntax outside the parser subset is reported as a parse error; syntax represented by the parser but not yet implemented by the backend is rejected during compilation with a source-located diagnostic. The parser also accepts the equality phrases listed below. Classes, imports, and named call arguments are not currently supported. Strings support basic escapes; source columns count bytes.
 
 **Compiled functions and methods are strongly typed.** Parameters must use `type: name` and every function must declare its result with `out type` (use `out void` for no result). For example:
 
@@ -117,11 +117,11 @@ actual library's ABI exactly.
 
 The backend supports typed declarations, functions and methods, objects,
 output and interpolation, integer arithmetic, comparisons, Boolean and
-bitwise operators, control flow, resizable typed lists, and basic console
-and file I/O. `number` is a signed 64-bit integer and `decimal` is a 64-bit
+bitwise operators, control flow, resizable typed lists and hashmaps,
+and basic console and file I/O. `number` is a signed 64-bit integer and `decimal` is a 64-bit
 floating-point value. Text equality compares contents and object equality
 compares identity. Unary `+` and `-` work on both numeric types. Binary
-decimal arithmetic, dictionaries, tuples, and sets are unsupported.
+decimal arithmetic, tuples, and sets are unsupported.
 
 ## Objects and typed function signatures
 
@@ -205,6 +205,28 @@ an element shifts later elements left, so a shifted element may be skipped. Its
 iteration variable is local to the loop; `break` exits the innermost loop and
 `continue` advances it. An iteration variable cannot reuse an existing local name.
 
+## Hashmaps
+
+Use `hashmap of KEY to VALUE` in a declaration, field, or function signature. Keys can be `text`, `number`, or `bool`. Every value must have the declared type, which can itself be a list, hashmap, or object. An empty literal `{}` gets its type from the surrounding declaration, argument, or return type.
+
+```tell
+let hashmap of text to number scores be {"Ada": 2, "Grace": 3}
+set scores["Ada"] to 5
+set scores["Lin"] to 4
+say "Lin" in scores    # true
+say scores["Ada"]      # 5
+remove "Grace" from scores
+say len(scores)        # 2
+
+for each name in keys(scores):
+    say scores[name]
+end for
+```
+
+Indexed assignment inserts a new key or replaces its value. Literals evaluate pairs from left to right, and the last value for a duplicate key wins. Text keys compare by exact contents and are case-sensitive. Reading or removing an absent key raises a catchable error. Use `key in table` to test for presence and `keys(table)` to get a snapshot list in unspecified order.
+
+Hashmaps are mutable references. Aliases, parameters, and fields share the same entries, and `=` compares hashmap identity. A constant binding can still refer to a mutable hashmap.
+
 ## Reassignment and loops
 
 Use `set name to expression` to reassign a local variable or parameter; types must match and constant bindings cannot be reassigned. List elements can be updated with `set values[index] to expression`, including nested indexes. Indexes are checked at runtime.
@@ -243,8 +265,8 @@ text, not arbitrary binary data. File errors can be caught using `try`.
 optional `if something goes wrong` handler receives it as `error_message`.
 Errors propagate through compiled functions and methods to the nearest handler;
 without one, the program writes an error to stderr and exits with status 1.
-Conversions, input, file operations, list index bounds, missing list items,
-and list growth failures produce catchable errors. Other allocation failures
+Conversions, input, file operations, list index bounds, missing keys or list
+items, and failures to grow lists or insert into hashmaps produce catchable errors. Other allocation failures
 and errors from foreign libraries are not caught. Typed catches, `finally`, and
 exception objects are unsupported.
 

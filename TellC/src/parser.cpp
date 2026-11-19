@@ -31,7 +31,31 @@ class Parser {
     Token get(){return t[p++];}
     void expect(const std::string& s){if(!take(s)) throw Error(peek().loc,"expected '"+s+"'");}
     std::string name(){if(peek().kind!=Token::Word) throw Error(peek().loc,"expected identifier"); return get().text;}
-    std::string type_name(){ auto value=name(); auto canonical=lower(value); if(canonical=="list"||canonical=="vector") { expect("of"); auto element=type_name(); if(element=="void") throw Error(peek().loc,"collection element type cannot be void"); return "list of " + element; } if(canonical=="text"||canonical=="number"||canonical=="decimal"||canonical=="bool"||canonical=="void") return canonical; return value; }
+    std::string type_name() {
+        auto value = name();
+        auto canonical = lower(value);
+        if (canonical == "list" || canonical == "vector") {
+            expect("of");
+            auto element = type_name();
+            if (element == "void") throw Error(peek().loc, "collection element type cannot be void");
+            return "list of " + element;
+        }
+        if (canonical == "hashmap") {
+            expect("of");
+            auto key_location = peek().loc;
+            auto key = lower(name());
+            if (key != "text" && key != "number" && key != "bool")
+                throw Error(key_location, "hashmap key type must be text, number, or bool");
+            expect("to");
+            auto element_location = peek().loc;
+            auto element = type_name();
+            if (element == "void") throw Error(element_location, "hashmap value type cannot be void");
+            return "hashmap of " + key + " to " + element;
+        }
+        if (canonical == "text" || canonical == "number" || canonical == "decimal" ||
+            canonical == "bool" || canonical == "void") return canonical;
+        return value;
+    }
     // A phrase is a name only when followed by a call. Operator words still
     // delimit expressions, for example in "value and ready()".
     std::string call_name(std::string value) {
@@ -56,6 +80,21 @@ class Parser {
         else if(w=="not"||w=="!"||w=="~"||w=="-"||w=="+") {x=node(Expr::Kind::Unary,a);x->children.push_back(expr(10));}
         else if(a.text=="("){x=expr();expect(")");}
         else if(a.text=="["){x=node(Expr::Kind::List,a);if(!take("]")){do{x->children.push_back(expr());}while(take(","));expect("]");}}
+        else if (a.kind == Token::Symbol && a.text == "{") {
+            x = node(Expr::Kind::Hashmap, a);
+            auto skip_newlines = [&] { while (take("\n")) {} };
+            skip_newlines();
+            while (!is("}")) {
+                x->children.push_back(expr());
+                expect(":");
+                skip_newlines();
+                x->children.push_back(expr());
+                skip_newlines();
+                if (!take(",")) break;
+                skip_newlines();
+            }
+            expect("}");
+        }
         else if(a.kind==Token::Word) { a.text=call_name(a.text); x=node(Expr::Kind::Name,a); }
         else throw Error(a.loc,"expected expression");
         for(;;){
@@ -89,9 +128,32 @@ class Parser {
             end();return s;
         }
         if(take("let")){s.kind=Stmt::Kind::Let;s.constant=take("constant");s.type=type_name();if(s.type=="void")throw Error(first.loc,"variable type cannot be void");s.instance_member=take("self");s.name=name();expect("be");s.expression=expr();end();return s;}
-        if(take("set")){s.kind=Stmt::Kind::Set; Token target=peek(); s.name=name();
-            if(is("[")){s.target=node(Expr::Kind::Name,target);while(is("[")){Token op=get();auto index=node(Expr::Kind::Index,op);index->children.push_back(std::move(s.target));index->children.push_back(expr());expect("]");s.target=std::move(index);}}
-            expect("to");s.expression=expr();end();return s;}
+        if (take("set")) {
+            s.kind = Stmt::Kind::Set;
+            auto target = peek();
+            s.name = name();
+            if (is("[") || is(".")) {
+                s.target = node(Expr::Kind::Name, target);
+                while (is("[") || is(".")) {
+                    auto selector = get();
+                    auto access = node(selector.text == "[" ? Expr::Kind::Index : Expr::Kind::Member, selector);
+                    access->children.push_back(std::move(s.target));
+                    if (access->kind == Expr::Kind::Index) {
+                        access->children.push_back(expr());
+                        expect("]");
+                    } else {
+                        access->value = name();
+                    }
+                    s.target = std::move(access);
+                }
+                if (s.target->kind != Expr::Kind::Index)
+                    throw Error(s.target->location, "set requires a variable or indexed collection element");
+            }
+            expect("to");
+            s.expression = expr();
+            end();
+            return s;
+        }
         if(take("add") || take("remove")){s.kind=lower(first.text)=="add"?Stmt::Kind::Add:Stmt::Kind::Remove;s.expression=expr();expect(s.kind==Stmt::Kind::Add?"to":"from");s.target=expr();end();return s;}
         if(take("say")||take("show")||take("print")){s.kind=Stmt::Kind::Say;s.expression=expr();end();return s;}
         if(take("return")||take("give")){s.kind=Stmt::Kind::Return;if(lower(first.text)=="give")expect("back");if(!is("\n")&&!is(";")&&peek().kind!=Token::End)s.expression=expr();end();return s;}

@@ -1,0 +1,82 @@
+to make_scores() out hashmap of text to number:
+    return {
+        "Ada": 2,
+        "Grace": 3,
+        "Ada": 4,
+    }
+end function
+
+to update_score(hashmap of text to number: scores, text: name) out void:
+    set scores[name] to scores[name] + 1
+end function
+
+let constant hashmap of text to number scores be make_scores()
+let hashmap of text to number alias be scores
+let text supplied_name be input()
+update_score(alias, supplied_name)
+say scores["Ada"]
+say len(scores)
+say "Ada" in scores
+say "ada" in scores
+set scores[""] to 7
+say alias[""]
+let list of text snapshot be keys(scores)
+remove "Grace" from alias
+say "Grace" in scores
+say len(scores)
+say len(snapshot)
+
+try:
+    say scores["unknown"]
+if something goes wrong:
+    say error_message
+end try
+try:
+    remove "Grace" from scores
+if something goes wrong:
+    say error_message
+end try
+
+let hashmap of text to hashmap of bool to list of decimal nested be {"inner": {true: [2.5]}}
+set nested["inner"][false] to []
+add 9.5 to nested["inner"][false]
+say nested["inner"][true][0]
+say nested["inner"][false][0]
+let number true_keys be 0
+for each flag in keys(nested["inner"]):
+    if flag:
+        set true_keys to true_keys + 1
+    end if
+end for
+say true_keys
+say len({-12: "text key values", 0: "zero"})
+
+object Bag:
+    own:
+        let hashmap of text to bool self contents be {}
+    others:
+        to pack(text: item) out bool:
+            set self.contents[item] to true
+            return item in self.contents
+        end function
+end object
+let Bag travel_bag be Bag()
+say travel_bag.pack("coat")
+
+let hashmap of number to number entries be {}
+let number index be -256
+while index < 256:
+    set entries[index] to index * 2
+    set index to index + 1
+end while
+say len(entries)
+for each key in keys(entries):
+    if entries[key] != key * 2:
+        raise an error saying "hashmap lost an entry during growth"
+    end if
+    remove key from entries
+end for
+say len(entries)
+say len(keys(entries))
+set entries[13] to 19
+say entries[13]

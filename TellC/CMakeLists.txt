@@ -58,7 +58,7 @@ add_library(tell_parser src/parser.cpp)
 target_include_directories(tell_parser PUBLIC include)
 target_compile_features(tell_parser PUBLIC cxx_std_17)
 
-add_library(tell_codegen STATIC src/codegen.cpp)
+add_library(tell_codegen STATIC src/codegen.cpp src/hashmap_codegen.cpp)
 target_include_directories(tell_codegen SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS})
 target_compile_definitions(tell_codegen PRIVATE ${LLVM_DEFINITIONS})
 target_link_libraries(tell_codegen PUBLIC tell_parser PRIVATE ${TELL_LLVM_LIBS})

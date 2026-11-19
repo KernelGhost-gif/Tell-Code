@@ -19,6 +19,7 @@ function(compile_and_run name source expected_stdout)
 
   execute_process(
     COMMAND "${executable}"
+    ${ARGN}
     RESULT_VARIABLE run_result
     OUTPUT_VARIABLE actual_stdout
     ERROR_VARIABLE run_stderr
@@ -109,3 +110,8 @@ compile_and_run(mutable_collections tests/fixtures/mutable_collections.tell "5\n
 expect_compile_failure(mutable_type tests/fixtures/mutable_type.tell "expected 'number', got 'text'")
 expect_compile_failure(mutable_target tests/fixtures/mutable_target.tell "add and remove require a list or vector")
 compile_and_run(operators tests/fixtures/operators.tell "2\n7\n5\n-6\n16\n-2\n13\ntrue\nfalse\ntrue\ntrue\nfalse\ntrue\ninvalid shift\nshift out of range\n")
+file(WRITE "${TELL_WORK_DIR}/hashmap_input.txt" "Ada\n")
+compile_and_run(hashmaps tests/fixtures/hashmaps.tell "5\n2\ntrue\nfalse\n7\nfalse\n2\n3\nkey not found in hashmap\nkey not found in hashmap\n2.5\n9.5\n1\n2\ntrue\n512\n0\n0\n19\n"
+  INPUT_FILE "${TELL_WORK_DIR}/hashmap_input.txt")
+expect_compile_failure(hashmap_key_type tests/fixtures/hashmap_key_type.tell "expected 'text', got 'number'")
+expect_compile_failure(hashmap_value_type tests/fixtures/hashmap_value_type.tell "expected 'number', got 'bool'")

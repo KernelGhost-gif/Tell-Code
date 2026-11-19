@@ -11,7 +11,7 @@ struct Error : std::runtime_error {
     Error(Location loc, const std::string& message) : std::runtime_error(message), location(loc) {}
 };
 struct Expr {
-    enum class Kind { Number, String, Name, Boolean, Nothing, Unary, Binary, Call, Member, Index, List };
+    enum class Kind { Number, String, Name, Boolean, Nothing, Unary, Binary, Call, Member, Index, List, Hashmap };
     Kind kind;
     Location location;
     std::string value;

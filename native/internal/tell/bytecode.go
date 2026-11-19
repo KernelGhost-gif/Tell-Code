@@ -1015,10 +1015,11 @@ func (c *bytecodeCompiler) compileExpression(expr expression) error {
 				return err
 			}
 			c.emit("BOOL")
-			jump := c.emit("JUMP_IF_FALSE")
+			jumpOp := "JUMP_IF_FALSE"
 			if value.operator == "or" {
-				jump = c.emit("JUMP_IF_TRUE")
+				jumpOp = "JUMP_IF_TRUE"
 			}
+			jump := c.emit(jumpOp)
 			c.emit("POP")
 			if err := c.compileExpression(value.right); err != nil {
 				return err
