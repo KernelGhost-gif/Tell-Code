@@ -1148,8 +1148,27 @@ func RunBytecode(data []byte, filename string, input io.Reader, output io.Writer
 	return RunBytecodeWithLimits(data, filename, input, output, DefaultExecutionLimits())
 }
 
-// RunBytecodeWithLimits executes an artifact under the same resource limits as source execution.
+// RunBytecodeWithLimits executes an artifact with the portable bytecode interpreter.
 func RunBytecodeWithLimits(data []byte, filename string, input io.Reader, output io.Writer, limits ExecutionLimits) error {
+	_, err := RunBytecodeWithEngine(data, filename, input, output, limits, "interp", 24)
+	return err
+}
+
+// RunBytecodeWithEngine executes a .tbc artifact using the requested engine.
+// "jit" compiles eligible functions on first call; "auto" compiles them after
+// the hot threshold; unsupported functions continue through the interpreter.
+func RunBytecodeWithEngine(data []byte, filename string, input io.Reader, output io.Writer, limits ExecutionLimits, engine string, hotThreshold int) (EngineStats, error) {
+	var stats EngineStats
+	engine = strings.ToLower(strings.TrimSpace(engine))
+	if !validExecutionEngine(engine) {
+		return stats, fail("unknown execution engine %q (expected interp, jit, or auto)", engine)
+	}
+	if engine == "jit" && !NativeJITAvailable() {
+		return stats, fail("native JIT is unavailable on this platform; use --engine interp or --engine auto")
+	}
+	if hotThreshold < 1 {
+		hotThreshold = 24
+	}
 	var program BytecodeProgram
 	if err := json.Unmarshal(data, &program); err != nil {
 		return fail("invalid bytecode: %v", err)
@@ -1183,8 +1202,12 @@ func RunBytecodeWithLimits(data []byte, filename string, input io.Reader, output
 	}
 	r := newRuntime(filename, input, output, limits)
 	r.bytecodeModules = compiledModules
-	_, err := executeBytecodeCode(r, program.Instructions, program.Functions, program.Classes)
-	return err
+	r.executionEngine = engine
+	r.jitHotThreshold = hotThreshold
+	_, executionErr := executeBytecodeCode(r, program.Instructions, program.Functions, program.Classes)
+	stats = r.jitStats
+	r.closeJIT()
+	return stats, executionErr
 }
 
 func validateExecutableBytecode(program BytecodeProgram) error {
@@ -2092,9 +2115,15 @@ func callBytecodeFunction(r *runtime, function BytecodeFunction, closure *env, f
 	previous := r.global
 	r.global = local
 	defer func() { r.global = previous }()
-	result, err := executeBytecodeCode(r, function.Instructions, functions, classes)
-	if err != nil {
-		return nil, err
+	result, ranNative, jitErr := r.runJITFunction(function, local)
+	if jitErr != nil {
+		return nil, jitErr
+	}
+	if !ranNative {
+		result, err = executeBytecodeCode(r, function.Instructions, functions, classes)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if function.ReturnType != "" {
 		if strings.EqualFold(function.ReturnType, "void") {

@@ -89,6 +89,13 @@ type runtime struct {
 	modules         map[string]map[string]any
 	bytecodeModules map[string]BytecodeProgram
 	loading         map[string]bool
+
+	executionEngine string
+	jitHotThreshold int
+	jitCalls        map[[32]byte]int
+	jitCache        map[[32]byte]*nativeCode
+	jitUnsupported  map[[32]byte]bool
+	jitStats        EngineStats
 }
 
 func typeMatches(typeName string, value any, e *env) (bool, error) {
@@ -269,7 +276,19 @@ func newRuntime(filename string, input io.Reader, output io.Writer, limits Execu
 	if limits.MaxLoopIterations <= 0 {
 		limits.MaxLoopIterations = defaults.MaxLoopIterations
 	}
-	r := &runtime{filename: filename, reader: reader, output: output, limits: limits, modules: make(map[string]map[string]any), loading: make(map[string]bool)}
+	r := &runtime{
+		filename: filename,
+		reader: reader,
+		output: output,
+		limits: limits,
+		modules: make(map[string]map[string]any),
+		loading: make(map[string]bool),
+		executionEngine: "interp",
+		jitHotThreshold: 24,
+		jitCalls: make(map[[32]byte]int),
+		jitCache: make(map[[32]byte]*nativeCode),
+		jitUnsupported: make(map[[32]byte]bool),
+	}
 	r.global = newEnv(nil)
 	r.installBuiltins(r.global)
 	return r

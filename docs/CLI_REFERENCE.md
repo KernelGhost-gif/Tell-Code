@@ -81,6 +81,19 @@ Both runtimes accept `--version`, `--types`, `--max-call-depth N`, and `--max-lo
 
 Both runtimes support `tell check --types program.tell` (or `tell --types program.tell`) for conservative static type and declaration checks. Known primitive and class annotations are checked when initializer or reassigned value types can be inferred; unresolved dynamic expressions remain checked at runtime. `tell build` performs the native conservative checks automatically.
 
+The native Go CLI also accepts `--engine interp|jit|auto` when running source or
+`.tbc` files. `interp` is the default. `jit` attempts native compilation on
+first function call; `auto` warms functions in the interpreter before
+compiling eligible typed numeric functions. The initial native backend is
+Linux x86-64 only; unsupported functions and other platforms use the
+interpreter. Use `--jit-threshold N` to change auto mode's default 24-call
+threshold and `--jit-stats` to report compiled functions and execution
+counts. See [Execution Engines](EXECUTION_ENGINES.md) for the eligible
+instruction subset and fallback rules.
+
+`tell build` is AOT compilation to portable `.tbc` bytecode. It does not
+currently emit standalone native machine-code executables.
+
 ## Not implemented yet
 
 There is no package-management CLI, debugger, or language server. `tell new` and `tell init` scaffold a runnable project but do not resolve or install dependencies. The initial `build` command compiles only the documented native subset. `tell format` is a source formatter, not a compiler.
