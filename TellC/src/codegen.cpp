@@ -1146,10 +1146,11 @@ public:
                 stmt.kind != Stmt::Kind::ForeignFunction)
                 emit_statement(stmt);
         }
-        // Reclaim hashmap tables, bucket arrays, and remaining entries on normal exit.
-        // The uncaught-error path performs the same cleanup before returning status 1.
-        hashmaps.cleanup();
-        ir.CreateRet(ir.getInt32(0));
+        // A terminating top-level statement already emitted its own epilogue.
+        if (ir.GetInsertBlock()) {
+            hashmaps.cleanup();
+            ir.CreateRet(ir.getInt32(0));
+        }
         if (llvm::verifyModule(module, &llvm::errs()))
             throw std::runtime_error("generated invalid LLVM IR");
     }

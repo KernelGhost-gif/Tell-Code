@@ -119,6 +119,29 @@ expect_compile_failure(hashmap_value_type tests/fixtures/hashmap_value_type.tell
 # nested maps are shared through aliases.
 compile_and_run(hashmap_cleanup tests/fixtures/hashmap_cleanup.tell "2048\n21\n")
 
+set(hashmap_cleanup_error_executable "${TELL_WORK_DIR}/hashmap_cleanup_error")
+execute_process(
+  COMMAND "${TELL_COMPILER}" "${TELL_SOURCE_DIR}/tests/fixtures/hashmap_cleanup_error.tell"
+    -o "${hashmap_cleanup_error_executable}"
+  RESULT_VARIABLE error_compile_result
+  ERROR_VARIABLE error_compile_stderr
+)
+if(NOT error_compile_result EQUAL 0)
+  message(FATAL_ERROR "Could not compile hashmap cleanup error fixture: ${error_compile_stderr}")
+endif()
+execute_process(
+  COMMAND "${hashmap_cleanup_error_executable}"
+  RESULT_VARIABLE hashmap_error_status
+  OUTPUT_VARIABLE hashmap_error_stdout
+  ERROR_VARIABLE hashmap_error_stderr
+)
+if(NOT "${hashmap_error_status}" STREQUAL "1"
+   OR NOT "${hashmap_error_stdout}" STREQUAL ""
+   OR NOT "${hashmap_error_stderr}" STREQUAL "Error: intentional hashmap cleanup error\n")
+  message(FATAL_ERROR
+    "Unexpected hashmap error result (exit ${hashmap_error_status}).\nstdout:\n${hashmap_error_stdout}\nstderr:\n${hashmap_error_stderr}")
+endif()
+
 # Linux CI installs Valgrind and runs these map-only fixtures through Memcheck.
 # It checks that tables, bucket arrays, and remaining entries are reclaimed.
 find_program(TELL_VALGRIND_EXECUTABLE NAMES valgrind)
@@ -142,16 +165,6 @@ if(TELL_VALGRIND_EXECUTABLE)
   endif()
   message(STATUS "PASS: hashmap allocations released at process exit (Valgrind)")
 
-  set(hashmap_cleanup_error_executable "${TELL_WORK_DIR}/hashmap_cleanup_error")
-  execute_process(
-    COMMAND "${TELL_COMPILER}" "${TELL_SOURCE_DIR}/tests/fixtures/hashmap_cleanup_error.tell"
-      -o "${hashmap_cleanup_error_executable}"
-    RESULT_VARIABLE error_compile_result
-    ERROR_VARIABLE error_compile_stderr
-  )
-  if(NOT error_compile_result EQUAL 0)
-    message(FATAL_ERROR "Could not compile hashmap cleanup error fixture: ${error_compile_stderr}")
-  endif()
   execute_process(
     COMMAND "${TELL_VALGRIND_EXECUTABLE}"
       --quiet
