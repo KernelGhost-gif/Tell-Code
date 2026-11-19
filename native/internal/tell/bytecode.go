@@ -1172,33 +1172,33 @@ func RunBytecodeWithEngine(data []byte, filename string, input io.Reader, output
 	}
 	var program BytecodeProgram
 	if err := json.Unmarshal(data, &program); err != nil {
-		return fail("invalid bytecode: %v", err)
+		return stats, fail("invalid bytecode: %v", err)
 	}
 	if program.Format != bytecodeFormat || len(program.Instructions) == 0 {
-		return fail("unsupported or empty Tell bytecode artifact")
+		return stats, fail("unsupported or empty Tell bytecode artifact")
 	}
 	compiledModules := make(map[string]BytecodeProgram, len(program.Modules))
 	for _, module := range program.Modules {
 		if module.Path == "" || module.Program.Format != bytecodeFormat || len(module.Program.Instructions) == 0 {
-			return fail("invalid embedded bytecode module")
+			return stats, fail("invalid embedded bytecode module")
 		}
 		if _, duplicate := compiledModules[module.Path]; duplicate {
-			return fail("duplicate embedded bytecode module %q", module.Path)
+			return stats, fail("duplicate embedded bytecode module %q", module.Path)
 		}
 		if len(module.Program.Modules) != 0 {
-			return fail("nested module tables are not valid in embedded bytecode")
+			return stats, fail("nested module tables are not valid in embedded bytecode")
 		}
 		compiledModules[module.Path] = module.Program
 	}
 	if err := validateModuleReferences(program, compiledModules); err != nil {
-		return err
+		return stats, err
 	}
 	if err := validateExecutableBytecode(program); err != nil {
-		return err
+		return stats, err
 	}
 	for path, module := range compiledModules {
 		if err := validateExecutableBytecode(module); err != nil {
-			return fail("invalid embedded module %q: %v", path, err)
+			return stats, fail("invalid embedded module %q: %v", path, err)
 		}
 	}
 	assignBytecodeJITKeys(&program, filename)

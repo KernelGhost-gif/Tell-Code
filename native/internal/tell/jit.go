@@ -24,8 +24,6 @@ type nativeCode struct {
 
 func NativeJITAvailable() bool { return nativeJITAvailable() }
 
-func ValidExecutionEngine(engine string) bool { return validExecutionEngine(engine) }
-
 func assignJITFunctionKey(function *BytecodeFunction, namespace string, index int) {
 	if function == nil {
 		return
