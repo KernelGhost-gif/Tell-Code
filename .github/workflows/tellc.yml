@@ -129,13 +129,27 @@ jobs:
         with:
           arch: x64
 
-      - name: Install LLVM
+      - name: Download the LLVM development toolchain
         shell: pwsh
-        run: choco install llvm --no-progress -y
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP "clang+llvm-23.1.6-windows-x64.tar.xz"
+          $extract = Join-Path $env:RUNNER_TEMP "llvm-windows-x64"
+          $url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.6/clang%2Bllvm-23.1.6-x86_64-pc-windows-msvc.tar.xz"
+          $expected = "16af05919cf36958dfb4ddaa4fc4d9d4ff577f5daeb76bc112ea49cd8ced82b2"
+          New-Item -ItemType Directory -Force -Path $extract | Out-Null
+          curl.exe --fail --location --retry 3 --output $archive $url
+          $actual = (Get-FileHash -Path $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw "LLVM archive SHA-256 mismatch: $actual" }
+          tar.exe -xf $archive -C $extract
+          $llvmRoot = Join-Path $extract "clang+llvm-23.1.6-x86_64-pc-windows-msvc"
+          if (-not (Test-Path (Join-Path $llvmRoot "lib\cmake\llvm\LLVMConfig.cmake"))) {
+            throw "The LLVM development archive did not contain LLVMConfig.cmake."
+          }
+          "TELL_LLVM_ROOT=$llvmRoot" >> $env:GITHUB_ENV
 
       - name: Build and test the native Windows compiler
         shell: pwsh
-        run: ./scripts/build-tellc-windows.ps1 -LLVMRoot "$env:ProgramFiles\LLVM" -Jobs 2
+        run: ./scripts/build-tellc-windows.ps1 -LLVMRoot "$env:TELL_LLVM_ROOT" -Jobs 2
 
       - name: Upload Windows compiler
         uses: actions/upload-artifact@v4
