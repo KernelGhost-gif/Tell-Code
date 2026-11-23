@@ -117,3 +117,45 @@ jobs:
         run: |
           cmake --build build/tellc-intel --parallel 2
           ctest --test-dir build/tellc-intel --output-on-failure
+
+  windows-x64:
+    name: Windows x64 / external LLVM toolchain
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize the MSVC x64 build environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Download the LLVM development toolchain
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP "clang+llvm-21.1.8-windows-x64.tar.xz"
+          $extract = Join-Path $env:RUNNER_TEMP "llvm-windows-x64"
+          $url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-21.1.8/clang%2Bllvm-21.1.8-x86_64-pc-windows-msvc.tar.xz"
+          $expected = "749d22f565fcd5718dbed06512572d0e5353b502c03fe1f7f17ee8b8aca21a47"
+          New-Item -ItemType Directory -Force -Path $extract | Out-Null
+          curl.exe --fail --location --retry 3 --output $archive $url
+          $actual = (Get-FileHash -Path $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw "LLVM archive SHA-256 mismatch: $actual" }
+          tar.exe -xf $archive -C $extract
+          $llvmRoot = Join-Path $extract "clang+llvm-21.1.8-x86_64-pc-windows-msvc"
+          if (-not (Test-Path (Join-Path $llvmRoot "lib\cmake\llvm\LLVMConfig.cmake"))) {
+            throw "The LLVM development archive did not contain LLVMConfig.cmake."
+          }
+          "TELL_LLVM_ROOT=$llvmRoot" >> $env:GITHUB_ENV
+
+      - name: Build and test the native Windows compiler
+        shell: pwsh
+        run: ./scripts/build-tellc-windows.ps1 -LLVMRoot "$env:TELL_LLVM_ROOT" -Jobs 2
+
+      - name: Upload Windows compiler
+        uses: actions/upload-artifact@v4
+        with:
+          name: tellc-windows-x64
+          path: |
+            build/tellc-windows-x64/Release/tellc.exe
+            build/tellc-windows-x64/Release/tell-lsp.exe
+          if-no-files-found: error

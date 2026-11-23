@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Portable smoke tests for TellC's command-line interface."""
+import os
 import pathlib
 import subprocess
 import sys
@@ -61,7 +62,8 @@ def main() -> int:
     expect("output must differ from input" in same_path.stderr, "same-path diagnostic was unclear")
 
     with tempfile.TemporaryDirectory(prefix="tellc-cli-") as directory:
-        output = pathlib.Path(directory) / "factorial"
+        executable_name = "factorial.exe" if os.name == "nt" else "factorial"
+        output = pathlib.Path(directory) / executable_name
         compile_result = run(compiler, source, "-o", output)
         expect(
             compile_result.returncode == 0,

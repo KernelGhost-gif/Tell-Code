@@ -113,6 +113,45 @@ new system imports, update the stub and its tests in the same change. Code
 signing and notarization may be needed when distributing the compiler outside
 your own Mac.
 
+## Native Windows x64 build
+
+TellC can be built and run natively on 64-bit Windows with the external LLVM
+toolchain. This build produces a Windows PE compiler executable and uses
+installed LLVM tools plus the Microsoft C++ linker; unlike the standalone Linux
+and Apple silicon builds, it does not embed LLVM or LLD.
+
+Install:
+
+- Visual Studio 2022 or Build Tools with the Desktop development with C++
+  workload and a Windows SDK;
+- CMake and PowerShell;
+- an x64 LLVM installation containing LLVMConfig.cmake, clang.exe, and llc.exe.
+
+Run the script from a Visual Studio 2022 Developer PowerShell session so the
+MSVC linker (link.exe) and Windows SDK libraries are available to Clang.
+
+From the repository root, run:
+
+~~~powershell
+choco install llvm --no-progress -y
+.\scripts\build-tellc-windows.ps1
+~~~
+
+The script discovers LLVM from LLVM_ROOT or llc.exe on PATH. To select a
+specific LLVM installation or build directory:
+
+~~~powershell
+$env:LLVM_ROOT = "C:\Program Files\LLVM"
+.\scripts\build-tellc-windows.ps1 -LLVMRoot $env:LLVM_ROOT -BuildRoot build\tellc-windows-x64 -Jobs 4
+~~~
+
+It configures the Visual Studio 2022 x64 generator, builds TellC and the language
+server, runs the full CTest suite, and compiles and executes the factorial
+example as a native Windows smoke test. The compiler is produced at
+build/tellc-windows-x64/Release/tellc.exe by default. Keep the matching LLVM
+installation, Clang, llc, and Visual Studio linker available when using the
+external-toolchain compiler.
+
 ## Troubleshooting
 
 **CMake cannot find LLVM.** Set LLVM_DIR to the directory containing

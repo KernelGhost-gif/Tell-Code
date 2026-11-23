@@ -25,9 +25,17 @@
 #include <string>
 #include <vector>
 
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <process.h>
+#else
 #include <spawn.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#endif
 
 #ifdef TELL_STANDALONE_MACOS
 #include <fcntl.h>
@@ -48,7 +56,9 @@ extern llvm::DenseMap<llvm::CachedHashStringRef, llvm::MemoryBufferRef> cachedRe
 }
 #endif
 
+#ifndef _WIN32
 extern char **environ;
+#endif
 
 namespace {
 
@@ -73,6 +83,19 @@ struct TempFile {
     std::string path;
 
     TempFile() {
+#ifdef _WIN32
+        char directory[MAX_PATH + 1] = {};
+        const DWORD directory_length = GetTempPathA(MAX_PATH, directory);
+        if (directory_length == 0 || directory_length > MAX_PATH) {
+            throw std::runtime_error("cannot locate the Windows temporary directory");
+        }
+
+        char name[MAX_PATH + 1] = {};
+        if (GetTempFileNameA(directory, "tlc", 0, name) == 0) {
+            throw std::runtime_error("cannot create a temporary file in the Windows temporary directory");
+        }
+        path = name;
+#else
         std::error_code error;
         const auto directory = std::filesystem::temp_directory_path(error);
         if (error) {
@@ -95,11 +118,16 @@ struct TempFile {
             path.clear();
             throw std::runtime_error("cannot close temporary file: " + std::string(std::strerror(close_error)));
         }
+#endif
     }
 
     ~TempFile() {
         if (!path.empty()) {
+#ifdef _WIN32
+            (void)DeleteFileA(path.c_str());
+#else
             unlink(path.c_str());
+#endif
         }
     }
 
@@ -111,6 +139,14 @@ int run(const char* executable, const std::vector<const char*>& arguments) {
     auto args = arguments;
     args.push_back(nullptr);
 
+#ifdef _WIN32
+    const int status = _spawnvp(_P_WAIT, executable, args.data());
+    if (status == -1) {
+        throw std::runtime_error(
+            std::string("could not start ") + executable + ": " + std::strerror(errno));
+    }
+    return status;
+#else
     pid_t pid = 0;
     const int spawn_result = posix_spawnp(
         &pid, executable, nullptr, nullptr,
@@ -134,6 +170,7 @@ int run(const char* executable, const std::vector<const char*>& arguments) {
         return 128 + WTERMSIG(status);
     }
     return 1;
+#endif
 }
 #elif defined(TELL_STANDALONE_MACOS)
 // Build small import stubs for system symbols actually referenced by inputs.
@@ -371,7 +408,11 @@ int main(int argc, char** argv) {
     }
 
     std::string input;
+#ifdef _WIN32
+    std::string output = "a.exe";
+#else
     std::string output = "a.out";
+#endif
     bool output_option_seen = false;
     bool jit = false;
     std::vector<std::string> libraries;
@@ -485,8 +526,13 @@ int main(int argc, char** argv) {
 
         // Ask Clang for its effective target, including the active SDK and
         // MACOSX_DEPLOYMENT_TARGET, before asking llc to emit the object file.
+#ifdef _WIN32
+        constexpr const char* null_input = "NUL";
+#else
+        constexpr const char* null_input = "/dev/null";
+#endif
         if (run("clang", {"clang", "-S", "-emit-llvm", "-x", "c",
-                          "/dev/null", "-o", target_probe.path.c_str()}) != 0) {
+                          null_input, "-o", target_probe.path.c_str()}) != 0) {
             throw std::runtime_error("could not determine Clang target");
         }
 
@@ -519,7 +565,7 @@ int main(int argc, char** argv) {
         for (const auto& library : libraries) link_args.push_back(library.c_str());
 #ifdef __APPLE__
         if (!libraries.empty()) link_args.push_back("-lc++");
-#else
+#elif !defined(_WIN32)
         if (!libraries.empty()) link_args.push_back("-lstdc++");
 #endif
         link_args.push_back("-o"); link_args.push_back(output.c_str());
