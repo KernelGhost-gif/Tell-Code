@@ -408,7 +408,11 @@ int main(int argc, char** argv) {
     }
 
     std::string input;
+#ifdef _WIN32
+    std::string output = "a.exe";
+#else
     std::string output = "a.out";
+#endif
     bool output_option_seen = false;
     bool jit = false;
     std::vector<std::string> libraries;
