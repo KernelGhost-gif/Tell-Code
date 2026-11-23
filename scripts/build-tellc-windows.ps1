@@ -20,6 +20,9 @@ if ([string]::IsNullOrWhiteSpace($LLVMRoot)) {
 }
 
 $LLVMRoot = (Resolve-Path $LLVMRoot).Path
+if (-not (Get-Command "link.exe" -ErrorAction SilentlyContinue)) {
+    throw "MSVC link.exe was not found. Run this script from a Visual Studio 2022 Developer PowerShell session."
+}
 $llvmConfig = Join-Path $LLVMRoot "lib\cmake\llvm\LLVMConfig.cmake"
 $llcPath = Join-Path $LLVMRoot "bin\llc.exe"
 $clangPath = Join-Path $LLVMRoot "bin\clang.exe"
