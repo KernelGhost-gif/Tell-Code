@@ -117,3 +117,26 @@ jobs:
         run: |
           cmake --build build/tellc-intel --parallel 2
           ctest --test-dir build/tellc-intel --output-on-failure
+
+  windows-x64:
+    name: Windows x64 / external LLVM toolchain
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install LLVM
+        shell: pwsh
+        run: choco install llvm --no-progress -y
+
+      - name: Build and test the native Windows compiler
+        shell: pwsh
+        run: ./scripts/build-tellc-windows.ps1 -LLVMRoot "$env:ProgramFiles\LLVM" -Jobs 2
+
+      - name: Upload Windows compiler
+        uses: actions/upload-artifact@v4
+        with:
+          name: tellc-windows-x64
+          path: |
+            build/tellc-windows-x64/Release/tellc.exe
+            build/tellc-windows-x64/Release/tell-lsp.exe
+          if-no-files-found: error
