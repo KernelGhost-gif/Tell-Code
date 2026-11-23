@@ -50,6 +50,12 @@ be needed to avoid Gatekeeper warnings. A build made with newer LLVM libraries
 or a newer deployment target may not run on macOS 11; use the script above to
 build the dependencies and compiler together.
 
+On Windows x64, build the native compiler with Visual Studio 2022, an installed
+LLVM toolchain, and `scripts/build-tellc-windows.ps1`. This produces a Windows
+`tellc.exe` and runs the CTest suite plus a generated-executable smoke test.
+The Windows build uses the installed `clang.exe`, `llc.exe`, and MSVC linker;
+it is not a standalone compiler with LLVM embedded.
+
 The [standalone Linux build](docs/BUILDING.md#standalone-linux) embeds LLVM,
 LLD, and the static runtimes for x86-64 and ARM64. Each compiler can generate
 Linux executables for both architectures.
