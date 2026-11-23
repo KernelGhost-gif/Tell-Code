@@ -124,6 +124,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Initialize the MSVC x64 build environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
       - name: Install LLVM
         shell: pwsh
         run: choco install llvm --no-progress -y
