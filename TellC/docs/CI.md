@@ -1,9 +1,12 @@
 # TellC compiler workflow
 
-The PR workflow runs the external LLVM toolchain on Linux, Apple silicon, and
-Intel macOS. The macOS jobs use the Homebrew LLVM packages and explicitly turn
-off the source-built embedded LLD mode, so they validate the actual compiler
-sources on both Apple CPU architectures without rebuilding LLVM from source.
+The PR workflow runs the external LLVM toolchain on Linux, Apple silicon,
+Intel macOS, and Windows x64. The Windows job builds with Visual Studio 2022
+and the installed LLVM package, then runs the full CTest suite and a native
+Windows executable smoke test. The macOS jobs use the Homebrew LLVM packages
+and explicitly turn off the source-built embedded LLD mode, so they validate
+the actual compiler sources on both Apple CPU architectures without rebuilding
+LLVM from source.
 
 The embedded Apple-silicon LLVM + LLD build remains a weekly/manual workflow
 because building that dependency stack is much slower than installing the
