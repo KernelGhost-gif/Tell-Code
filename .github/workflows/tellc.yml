@@ -137,29 +137,37 @@ jobs:
         with:
           arch: x64
 
-      - name: Install the LLVM development toolchain
+      - name: Download the complete LLVM development archive
         shell: pwsh
         run: |
-          $installer = Join-Path $env:RUNNER_TEMP "LLVM-21.1.8-win64.exe"
-          $installRoot = Join-Path $env:RUNNER_TEMP "llvm-21.1.8"
-          $url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-21.1.8/LLVM-21.1.8-win64.exe"
-          $expected = "7a5386c26497db1691f320121e5b113364dd0274b98e55f15f4dbc00c0450113"
-          curl.exe --fail --location --retry 5 --retry-all-errors --output $installer $url
-          if ($LASTEXITCODE -ne 0) { throw "LLVM installer download failed with exit code $LASTEXITCODE." }
-          $actual = (Get-FileHash -Path $installer -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($actual -ne $expected) { throw "LLVM installer SHA-256 mismatch: $actual" }
-          $install = Start-Process -FilePath $installer -ArgumentList @("/S", "/D=$installRoot") -Wait -PassThru
-          if ($install.ExitCode -ne 0) { throw "LLVM silent installation failed with exit code $($install.ExitCode)." }
+          choco install aria2 --no-progress --yes
+          $aria2 = Join-Path $env:ChocolateyInstall "bin\aria2c.exe"
+          if (-not (Test-Path $aria2 -PathType Leaf)) {
+            throw "aria2c was not installed at the expected Chocolatey path: $aria2"
+          }
+          $archiveName = "clang+llvm-21.1.8-x86_64-pc-windows-msvc.tar.xz"
+          $archive = Join-Path $env:RUNNER_TEMP $archiveName
+          $extract = Join-Path $env:RUNNER_TEMP "llvm-windows-x64"
+          $url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-21.1.8/clang%2Bllvm-21.1.8-x86_64-pc-windows-msvc.tar.xz"
+          $expected = "749d22f565fcd5718dbed06512572d0e5353b502c03fe1f7f17ee8b8aca21a47"
+          & $aria2 --console-log-level=notice --summary-interval=10 --continue=true --max-tries=5 --retry-wait=5 --connect-timeout=30 --timeout=120 -x 16 -s 16 -k 1M --file-allocation=none --dir "$env:RUNNER_TEMP" --out $archiveName $url
+          if ($LASTEXITCODE -ne 0) { throw "Segmented LLVM download failed with exit code $LASTEXITCODE." }
+          $actual = (Get-FileHash -Path $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw "LLVM archive SHA-256 mismatch: $actual" }
+          New-Item -ItemType Directory -Force -Path $extract | Out-Null
+          tar.exe -xf $archive -C $extract
+          if ($LASTEXITCODE -ne 0) { throw "LLVM archive extraction failed with exit code $LASTEXITCODE." }
+          $llvmRoot = Join-Path $extract "clang+llvm-21.1.8-x86_64-pc-windows-msvc"
           foreach ($required in @(
-            (Join-Path $installRoot "lib\cmake\llvm\LLVMConfig.cmake"),
-            (Join-Path $installRoot "bin\llc.exe"),
-            (Join-Path $installRoot "bin\clang.exe")
+            (Join-Path $llvmRoot "lib\cmake\llvm\LLVMConfig.cmake"),
+            (Join-Path $llvmRoot "bin\llc.exe"),
+            (Join-Path $llvmRoot "bin\clang.exe")
           )) {
             if (-not (Test-Path $required -PathType Leaf)) {
-              throw "LLVM installer did not provide the required development file: $required"
+              throw "LLVM development archive did not provide the required file: $required"
             }
           }
-          "TELL_LLVM_ROOT=$installRoot" >> $env:GITHUB_ENV
+          "TELL_LLVM_ROOT=$llvmRoot" >> $env:GITHUB_ENV
 
       - name: Build and test the native Windows compiler
         shell: pwsh
