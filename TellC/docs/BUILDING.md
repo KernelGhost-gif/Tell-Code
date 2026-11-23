@@ -127,6 +127,9 @@ Install:
 - CMake and PowerShell;
 - an x64 LLVM installation containing LLVMConfig.cmake, clang.exe, and llc.exe.
 
+Run the script from a Visual Studio 2022 Developer PowerShell session so the
+MSVC linker (link.exe) and Windows SDK libraries are available to Clang.
+
 From the repository root, run:
 
 ~~~powershell
