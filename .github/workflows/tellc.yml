@@ -1,11 +1,19 @@
 name: TellC LLVM compiler
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "TellC/**"
+      - "lsp/**"
+      - ".github/workflows/tellc.yml"
+      - "scripts/build-tellc-windows.ps1"
   pull_request:
     paths:
       - "TellC/**"
       - "lsp/**"
       - ".github/workflows/tellc.yml"
+      - "scripts/build-tellc-windows.ps1"
   schedule:
     - cron: "17 2 * * 1"
   workflow_dispatch:
@@ -129,23 +137,29 @@ jobs:
         with:
           arch: x64
 
-      - name: Download the LLVM development toolchain
+      - name: Install the LLVM development toolchain
         shell: pwsh
         run: |
-          $archive = Join-Path $env:RUNNER_TEMP "clang+llvm-21.1.8-windows-x64.tar.xz"
-          $extract = Join-Path $env:RUNNER_TEMP "llvm-windows-x64"
-          $url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-21.1.8/clang%2Bllvm-21.1.8-x86_64-pc-windows-msvc.tar.xz"
-          $expected = "749d22f565fcd5718dbed06512572d0e5353b502c03fe1f7f17ee8b8aca21a47"
-          New-Item -ItemType Directory -Force -Path $extract | Out-Null
-          curl.exe --fail --location --retry 3 --output $archive $url
-          $actual = (Get-FileHash -Path $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($actual -ne $expected) { throw "LLVM archive SHA-256 mismatch: $actual" }
-          tar.exe -xf $archive -C $extract
-          $llvmRoot = Join-Path $extract "clang+llvm-21.1.8-x86_64-pc-windows-msvc"
-          if (-not (Test-Path (Join-Path $llvmRoot "lib\cmake\llvm\LLVMConfig.cmake"))) {
-            throw "The LLVM development archive did not contain LLVMConfig.cmake."
+          $installer = Join-Path $env:RUNNER_TEMP "LLVM-21.1.8-win64.exe"
+          $installRoot = Join-Path $env:RUNNER_TEMP "llvm-21.1.8"
+          $url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-21.1.8/LLVM-21.1.8-win64.exe"
+          $expected = "7a5386c26497db1691f320121e5b113364dd0274b98e55f15f4dbc00c0450113"
+          curl.exe --fail --location --retry 5 --retry-all-errors --output $installer $url
+          if ($LASTEXITCODE -ne 0) { throw "LLVM installer download failed with exit code $LASTEXITCODE." }
+          $actual = (Get-FileHash -Path $installer -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw "LLVM installer SHA-256 mismatch: $actual" }
+          $install = Start-Process -FilePath $installer -ArgumentList @("/S", "/D=$installRoot") -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "LLVM silent installation failed with exit code $($install.ExitCode)." }
+          foreach ($required in @(
+            (Join-Path $installRoot "lib\cmake\llvm\LLVMConfig.cmake"),
+            (Join-Path $installRoot "bin\llc.exe"),
+            (Join-Path $installRoot "bin\clang.exe")
+          )) {
+            if (-not (Test-Path $required -PathType Leaf)) {
+              throw "LLVM installer did not provide the required development file: $required"
+            }
           }
-          "TELL_LLVM_ROOT=$llvmRoot" >> $env:GITHUB_ENV
+          "TELL_LLVM_ROOT=$installRoot" >> $env:GITHUB_ENV
 
       - name: Build and test the native Windows compiler
         shell: pwsh
