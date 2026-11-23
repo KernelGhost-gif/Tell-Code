@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Portable smoke tests for TellC's command-line interface."""
+import os
 import pathlib
 import subprocess
 import sys
