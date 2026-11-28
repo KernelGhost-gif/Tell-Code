@@ -391,6 +391,15 @@ func TestNativePackageInstallSupportsScopedNpmAndPythonTools(t *testing.T) {
 					t.Fatalf("go install env does not contain %q", wantEnv)
 				}
 			}
+			if test.spec == "pip:ruff" {
+				packages, err := loadInstalledNativePackages(home)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(packages) != 1 || packages[0].Manager != "uv" {
+					t.Fatalf("Python manager was not persisted: %#v", packages)
+				}
+			}
 		})
 	}
 }
@@ -475,4 +484,59 @@ func containsEnvironment(environment []string, value string) bool {
 		}
 	}
 	return false
+}
+
+
+func TestNativePipInstallPersistsPipxAndUsesItForUpdates(t *testing.T) {
+	home := t.TempDir()
+	var calls [][]string
+	status := runPackageCommandWithHome(
+		[]string{"install", "pip:ruff"},
+		&bytes.Buffer{},
+		&bytes.Buffer{},
+		func(name string) (string, error) {
+			if name == "pipx" {
+				return "/fake/pipx", nil
+			}
+			return "", exec.ErrNotFound
+		},
+		func(command *exec.Cmd) error {
+			calls = append(calls, append([]string(nil), command.Args[1:]...))
+			return nil
+		},
+		home,
+	)
+	if status != 0 {
+		t.Fatalf("pipx install status = %d", status)
+	}
+	packages, err := loadInstalledNativePackages(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(packages) != 1 || packages[0].Manager != "pipx" {
+		t.Fatalf("pipx backend was not persisted: %#v", packages)
+	}
+
+	status = runPackageCommandWithHome(
+		[]string{"update"},
+		&bytes.Buffer{},
+		&bytes.Buffer{},
+		func(name string) (string, error) {
+			if name == "pipx" {
+				return "/fake/pipx", nil
+			}
+			return "", exec.ErrNotFound
+		},
+		func(command *exec.Cmd) error {
+			calls = append(calls, append([]string(nil), command.Args[1:]...))
+			return nil
+		},
+		home,
+	)
+	if status != 0 {
+		t.Fatalf("pipx update status = %d", status)
+	}
+	if !reflect.DeepEqual(calls, [][]string{{"install", "ruff"}, {"upgrade", "ruff"}}) {
+		t.Fatalf("pipx calls = %#v", calls)
+	}
 }

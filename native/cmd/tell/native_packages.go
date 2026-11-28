@@ -15,6 +15,7 @@ import (
 type nativePackage struct {
 	Provider string `json:"provider"`
 	Name     string `json:"name"`
+	Manager  string `json:"manager,omitempty"`
 }
 
 type nativeCommand struct {
@@ -101,6 +102,9 @@ func loadInstalledNativePackages(home string) ([]nativePackage, error) {
 		if err := validateNativePackageName(pkg.Name); err != nil {
 			return nil, fmt.Errorf("native package state contains invalid %s package: %w", pkg.Provider, err)
 		}
+		if pkg.Manager != "" && (pkg.Provider != "pip" || (pkg.Manager != "uv" && pkg.Manager != "pipx")) {
+			return nil, fmt.Errorf("native package state contains invalid manager %q for %s", pkg.Manager, pkg.Provider)
+		}
 	}
 	return packages, nil
 }
@@ -132,6 +136,9 @@ func updateNativePackageRecord(packages []nativePackage, target nativePackage, r
 	for _, pkg := range packages {
 		if pkg.Provider == target.Provider && pkg.Name == target.Name {
 			found = true
+			if target.Manager != "" {
+				pkg.Manager = target.Manager
+			}
 			if remove {
 				continue
 			}
@@ -179,12 +186,18 @@ func nativeCommandPlan(action string, pkg nativePackage, home string, lookPath f
 		return []nativeCommand{command("npm", []string{"install", "--global", "--prefix", root, pkg.Name})}, nil
 
 	case "pip":
-		manager := "uv"
-		if _, err := lookPath(manager); err != nil {
-			manager = "pipx"
+		manager := pkg.Manager
+		if manager == "" {
+			manager = "uv"
 			if _, err := lookPath(manager); err != nil {
-				return nil, errors.New("Python CLI installs require either uv or pipx on PATH")
+				manager = "pipx"
 			}
+		}
+		if manager != "uv" && manager != "pipx" {
+			return nil, fmt.Errorf("unsupported Python CLI package manager %q", manager)
+		}
+		if _, err := lookPath(manager); err != nil {
+			return nil, fmt.Errorf("Python CLI installs require %s on PATH", manager)
 		}
 		env := []string{"UV_TOOL_DIR=" + filepath.Join(root, "uv-tools"), "UV_TOOL_BIN_DIR=" + binDir,
 			"PIPX_HOME=" + filepath.Join(root, "pipx"), "PIPX_BIN_DIR=" + binDir}
@@ -285,6 +298,17 @@ func runNativePackageAction(
 	if err := os.MkdirAll(nativePackageRoot(home), 0o755); err != nil {
 		fmt.Fprintf(stderr, "tell pkg: cannot create native package directory: %v\n", err)
 		return 1
+	}
+
+	if action == "install" && pkg.Provider == "pip" && pkg.Manager == "" {
+		if _, err := lookPath("uv"); err == nil {
+			pkg.Manager = "uv"
+		} else if _, err := lookPath("pipx"); err == nil {
+			pkg.Manager = "pipx"
+		} else {
+			fmt.Fprintln(stderr, "tell pkg: Python CLI installs require either uv or pipx on PATH")
+			return 127
+		}
 	}
 
 	if action == "remove" && (pkg.Provider == "go" || pkg.Provider == "cabal") {

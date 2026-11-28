@@ -74,7 +74,7 @@ The first `tell pkg install NAME` automatically registers a bundled catalogue re
 After a native registry install, add Tell's native binary directory to your shell path. Luna installs continue to use Luna's binary directory:
 
 ```sh
-export PATH="$HOME/.local/tell/bin:$HOME/.local/luna:$PATH"
+export PATH="$HOME/.local/tell/bin:$HOME/.local/tell/pub-cache/bin:$HOME/.local/luna:$PATH"
 ```
 
 Examples:
