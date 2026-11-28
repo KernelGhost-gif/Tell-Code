@@ -28,6 +28,17 @@ tell pkg info ruff
 tell pkg install rg fd bat hyperfine tokei
 tell pkg install jq btop fastfetch
 tell pkg install gofumpt staticcheck shfmt
+# Install directly from native language package registries
+tell pkg install cargo:cargo-audit
+tell pkg install npm:@biomejs/biome npm:eslint
+tell pkg install pip:mypy pip:pylint
+tell pkg install go:golang.org/x/tools/gopls
+tell pkg install gem:solargraph
+tell pkg install composer:phpstan/phpstan
+tell pkg install nuget:dotnet-format
+tell pkg install pub:very_good_cli
+tell pkg install cabal:hlint
+tell pkg install mix:phoenix_new
 tell pkg list
 tell pkg update
 tell pkg remove rg
@@ -54,14 +65,16 @@ The 29-entry starter catalogue includes utilities and formatters/linters for Rus
 | `stylua` | Lua and Luau formatting |
 | `swift-format` | Swift formatting |
 
-Use `tell pkg info NAME` to see the exact toolchain required by a package. Recipes currently target Linux. Windows, macOS, Android, and Termux package installation are not implied by the existence of Tell binaries for those platforms. Some upstream tools may build on other operating systems, but those recipes have not been validated there.
+Native registry installs are tracked separately from Luna. Supported prefixes are `cargo:`, `npm:`, `pip:` (using uv or pipx), `go:`, `gem:`, `composer:`, `nuget:`, `pub:`, `cabal:`, and `mix:`. These prefixes install command-line applications through the corresponding language ecosystem manager. They are not substitutes for project dependency declarations: use the ecosystem-native project workflow when adding a library dependency to an application.
+
+Use `tell pkg info NAME` to see the exact toolchain required by a curated package. Recipes currently target Linux. Windows, macOS, Android, and Termux package installation are not implied by the existence of Tell binaries for those platforms. Some upstream tools may build on other operating systems, but those recipes have not been validated there.
 
 The first `tell pkg install NAME` automatically registers a bundled catalogue recipe with Luna, then asks Luna to build and install it. `tell pkg add NAME` only registers the recipe. If a recipe with that name already exists in `~/.local/lunaorigin`, Tell keeps it rather than overwriting your custom configuration. Packages not in Tell's catalogue are still passed directly to Luna, so existing Luna packages and custom recipes continue to work.
 
-After installation, add Luna's binary directory to your shell path:
+After a native registry install, add Tell's native binary directory to your shell path. Luna installs continue to use Luna's binary directory:
 
 ```sh
-export PATH="$HOME/.local/luna:$PATH"
+export PATH="$HOME/.local/tell/bin:$HOME/.local/luna:$PATH"
 ```
 
 Examples:
@@ -79,7 +92,7 @@ Some tools have additional runtime behavior. For example, dprint requires a `dpr
 
 ## Validation status
 
-Each entry exposes a validation label through `tell pkg info NAME`. The initial Rust starter set (`bat`, `fd`, `hyperfine`, `rg`, and `tokei`) has passed real build, execution, listing, and removal checks on Ubuntu Linux. The additional 24 catalogue recipes are included with explicit toolchain requirements and remain marked as awaiting CI validation until the package integration workflow has exercised them.
+Each curated entry exposes a validation label through `tell pkg info NAME`. Native registry installs use the package manager's own release and dependency metadata. The initial Rust starter set (`bat`, `fd`, `hyperfine`, `rg`, and `tokei`) has passed real build, execution, listing, and removal checks on Ubuntu Linux. The additional 24 catalogue recipes are included with explicit toolchain requirements and remain marked as awaiting CI validation until the package integration workflow has exercised them.
 
 ## Lunafile format
 

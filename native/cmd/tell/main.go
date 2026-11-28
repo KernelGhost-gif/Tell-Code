@@ -32,7 +32,7 @@ func main() {
 	maxLoopIterations := flag.Int("max-loop-iterations", defaults.MaxLoopIterations, "maximum iterations in one loop or range")
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "Tell %s - a sentence-first programming language\n\n", version)
-		fmt.Fprintf(flag.CommandLine.Output(), "Usage: tell [run|check|test|build|format|repl|new|init|pkg] [options] <program.tell|program.tbc|->\n       tell pkg <install|remove|list|update|sync> [arguments]\n       tell --version\n\nOptions:\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "Usage: tell [run|check|test|build|format|repl|new|init|pkg] [options] <program.tell|program.tbc|->\n       tell pkg <search|info|add|install|remove|list|update|sync> [arguments]\n       tell --version\n\nOptions:\n")
 		flag.PrintDefaults()
 	}
 	args := os.Args[1:]

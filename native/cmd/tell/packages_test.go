@@ -257,3 +257,218 @@ func TestEmbeddedPackageCatalogueIsValidAndUnique(t *testing.T) {
 		}
 	}
 }
+
+
+func TestNativePackageInstallTracksAndRemoves(t *testing.T) {
+	home := t.TempDir()
+	var calls [][]string
+	status := runPackageCommandWithHome(
+		[]string{"install", "cargo:bat"},
+		&bytes.Buffer{},
+		&bytes.Buffer{},
+		func(name string) (string, error) {
+			if name != "cargo" {
+				return "", exec.ErrNotFound
+			}
+			return "/fake/cargo", nil
+		},
+		func(command *exec.Cmd) error {
+			calls = append(calls, append([]string(nil), command.Args[1:]...))
+			return nil
+		},
+		home,
+	)
+	if status != 0 {
+		t.Fatalf("native install status = %d", status)
+	}
+	packages, err := loadInstalledNativePackages(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(packages, []nativePackage{{Provider: "cargo", Name: "bat"}}) {
+		t.Fatalf("tracked packages = %#v", packages)
+	}
+	wantInstall := []string{"install", "--root", nativePackageRoot(home), "--locked", "bat"}
+	if !reflect.DeepEqual(calls, [][]string{wantInstall}) {
+		t.Fatalf("install calls = %#v, want %#v", calls, [][]string{wantInstall})
+	}
+
+	status = runPackageCommandWithHome(
+		[]string{"remove", "cargo:bat"},
+		&bytes.Buffer{},
+		&bytes.Buffer{},
+		func(name string) (string, error) {
+			if name != "cargo" {
+				return "", exec.ErrNotFound
+			}
+			return "/fake/cargo", nil
+		},
+		func(command *exec.Cmd) error {
+			calls = append(calls, append([]string(nil), command.Args[1:]...))
+			return nil
+		},
+		home,
+	)
+	if status != 0 {
+		t.Fatalf("native removal status = %d", status)
+	}
+	packages, err = loadInstalledNativePackages(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(packages) != 0 {
+		t.Fatalf("packages remain after removal: %#v", packages)
+	}
+	wantRemove := []string{"uninstall", "--root", nativePackageRoot(home), "bat"}
+	if !reflect.DeepEqual(calls[1], wantRemove) {
+		t.Fatalf("remove args = %#v, want %#v", calls[1], wantRemove)
+	}
+}
+
+func TestNativePackageInstallSupportsScopedNpmAndPythonTools(t *testing.T) {
+	tests := []struct {
+		spec       string
+		lookups    map[string]string
+		wantProgram string
+		wantArgs   []string
+	}{
+		{
+			spec: "npm:@biomejs/biome",
+			lookups: map[string]string{"npm": "/fake/npm"},
+			wantProgram: "/fake/npm",
+			wantArgs: []string{"install", "--global", "--prefix", filepath.Join("HOME", ".local", "tell"), "@biomejs/biome"},
+		},
+		{
+			spec: "pip:ruff",
+			lookups: map[string]string{"uv": "/fake/uv"},
+			wantProgram: "/fake/uv",
+			wantArgs: []string{"tool", "install", "ruff"},
+		},
+		{
+			spec: "go:golang.org/x/tools/gopls",
+			lookups: map[string]string{"go": "/fake/go"},
+			wantProgram: "/fake/go",
+			wantArgs: []string{"install", "golang.org/x/tools/gopls@latest"},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.spec, func(t *testing.T) {
+			home := t.TempDir()
+			var got *exec.Cmd
+			lookPath := func(name string) (string, error) {
+				if path := test.lookups[name]; path != "" {
+					return path, nil
+				}
+				return "", exec.ErrNotFound
+			}
+			status := runPackageCommandWithHome(
+				[]string{"install", test.spec},
+				&bytes.Buffer{},
+				&bytes.Buffer{},
+				lookPath,
+				func(command *exec.Cmd) error {
+					got = command
+					return nil
+				},
+				home,
+			)
+			if status != 0 {
+				t.Fatalf("status = %d", status)
+			}
+			if got == nil || got.Path != test.wantProgram {
+				t.Fatalf("command = %#v, want executable %q", got, test.wantProgram)
+			}
+			expectedArgs := append([]string(nil), test.wantArgs...)\n\t\t\tfor i := range expectedArgs {\n\t\t\t\texpectedArgs[i] = strings.ReplaceAll(expectedArgs[i], filepath.Join("HOME", ".local", "tell"), nativePackageRoot(home))\n\t\t\t}\n\t\t\tif !reflect.DeepEqual(got.Args[1:], expectedArgs) {
+				t.Fatalf("args = %#v, want %#v", got.Args[1:], expectedArgs)
+			}
+			if test.spec == "go:golang.org/x/tools/gopls" {
+				wantEnv := "GOBIN=" + filepath.Join(home, ".local", "tell", "bin")
+				if !containsEnvironment(got.Env, wantEnv) {
+					t.Fatalf("go install env does not contain %q", wantEnv)
+				}
+			}
+		})
+	}
+}
+
+func TestNativePackageSpecRejectsUnsafeNames(t *testing.T) {
+	for _, spec := range []string{
+		"npm:",
+		"cargo:--help",
+		"pip:ruff;touch",
+		"go:module with spaces",
+	} {
+		if _, recognized, err := parseNativePackageSpec(spec); !recognized || err == nil {
+			t.Fatalf("parseNativePackageSpec(%q) = recognized %v, err %v; want validation error", spec, recognized, err)
+		}
+	}
+	if _, recognized, err := parseNativePackageSpec("custom:recipe"); recognized || err != nil {
+		t.Fatalf("unknown provider should remain Luna-compatible, got recognized=%v err=%v", recognized, err)
+	}
+}
+
+func TestNativeListWorksWithoutLuna(t *testing.T) {
+	home := t.TempDir()
+	if err := saveInstalledNativePackages(home, []nativePackage{{Provider: "go", Name: "golang.org/x/tools/gopls"}}); err != nil {
+		t.Fatal(err)
+	}
+	var output, diagnostics bytes.Buffer
+	status := runPackageCommandWithHome(
+		[]string{"list"},
+		&output,
+		&diagnostics,
+		func(string) (string, error) { return "", exec.ErrNotFound },
+		func(*exec.Cmd) error { t.Fatal("Luna should not be called when it is unavailable"); return nil },
+		home,
+	)
+	if status != 0 || !strings.Contains(output.String(), "go:golang.org/x/tools/gopls") {
+		t.Fatalf("status=%d output=%q stderr=%q", status, output.String(), diagnostics.String())
+	}
+}
+
+func TestNativeUpdateRunsTrackedPackagesWithoutLuna(t *testing.T) {
+	home := t.TempDir()
+	if err := saveInstalledNativePackages(home, []nativePackage{
+		{Provider: "cargo", Name: "bat"},
+		{Provider: "npm", Name: "eslint"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var calls [][]string
+	status := runPackageCommandWithHome(
+		[]string{"update"},
+		&bytes.Buffer{},
+		&bytes.Buffer{},
+		func(name string) (string, error) {
+			switch name {
+			case "cargo":
+				return "/fake/cargo", nil
+			case "npm":
+				return "/fake/npm", nil
+			default:
+				return "", exec.ErrNotFound
+			}
+		},
+		func(command *exec.Cmd) error {
+			calls = append(calls, append([]string(nil), command.Args[1:]...))
+			return nil
+		},
+		home,
+	)
+	want := [][]string{
+		{"install", "--root", nativePackageRoot(home), "--locked", "--force", "bat"},
+		{"update", "--global", "--prefix", nativePackageRoot(home), "eslint"},
+	}
+	if status != 0 || !reflect.DeepEqual(calls, want) {
+		t.Fatalf("status=%d calls=%#v want=%#v", status, calls, want)
+	}
+}
+
+func containsEnvironment(environment []string, value string) bool {
+	for _, item := range environment {
+		if item == value {
+			return true
+		}
+	}
+	return false
+}
