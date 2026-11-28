@@ -386,6 +386,24 @@ func TestNativePackageInstallSupportsScopedNpmAndPythonTools(t *testing.T) {
 			wantProgram: "/fake/luarocks",
 			wantArgs: []string{"install", "--tree", filepath.Join("HOME", ".local", "tell", "luarocks"), "luafilesystem"},
 		},
+		{
+			spec: "deno:npm:cowsay",
+			lookups: map[string]string{"deno": "/fake/deno"},
+			wantProgram: "/fake/deno",
+			wantArgs: []string{"install", "--global", "--root", filepath.Join("HOME", ".local", "tell", "deno"), "--name", "cowsay", "npm:cowsay"},
+		},
+		{
+			spec: "bun:cowsay",
+			lookups: map[string]string{"bun": "/fake/bun"},
+			wantProgram: "/fake/bun",
+			wantArgs: []string{"install", "--global", "cowsay"},
+		},
+		{
+			spec: "nimble:nake",
+			lookups: map[string]string{"nimble": "/fake/nimble"},
+			wantProgram: "/fake/nimble",
+			wantArgs: []string{"--nimbleDir:" + filepath.Join("HOME", ".local", "tell", "nimble"), "install", "-g", "nake"},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.spec, func(t *testing.T) {
@@ -420,6 +438,9 @@ func TestNativePackageInstallSupportsScopedNpmAndPythonTools(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got.Args[1:], expectedArgs) {
 				t.Fatalf("args = %#v, want %#v", got.Args[1:], expectedArgs)
+			}
+			if test.spec == "bun:cowsay" && !containsEnvironment(got.Env, "BUN_INSTALL="+filepath.Join(home, ".local", "tell", "bun")) {
+				t.Fatalf("Bun install root was not configured: %#v", got.Env)
 			}
 			if test.spec == "mint:realm/SwiftLint@0.60.0" {
 				if !containsEnvironment(got.Env, "MINT_PATH="+filepath.Join(home, ".local", "tell", "mint")) || !containsEnvironment(got.Env, "MINT_LINK_PATH="+filepath.Join(home, ".local", "tell", "bin")) {
@@ -601,6 +622,7 @@ func TestNativeRegistrySearchUsesRegistryCommands(t *testing.T) {
 		{"go:golang.org/x/tools/gopls", "go", []string{"list", "-m", "-versions", "golang.org/x/tools/gopls"}},
 		{"pip:ruff", "pip", []string{"index", "versions", "ruff"}},
 		{"luarocks:socket", "luarocks", []string{"search", "socket"}},
+		{"nimble:nake", "nimble", []string{"search", "nake"}},
 	}
 	for _, test := range tests {
 		t.Run(test.spec, func(t *testing.T) {

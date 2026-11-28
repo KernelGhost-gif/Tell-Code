@@ -603,6 +603,8 @@ func nativePackageSearchPlan(provider, query string) (nativeCommand, error) {
 		return nativeCommand{Program: "cs", Args: []string{"search", query}}, nil
 	case "opam":
 		return nativeCommand{Program: "opam", Args: []string{"search", "--short", query}}, nil
+	case "nimble":
+		return nativeCommand{Program: "nimble", Args: []string{"search", query}}, nil
 	case "luarocks":
 		return nativeCommand{Program: "luarocks", Args: []string{"search", query}}, nil
 	case "mix":
