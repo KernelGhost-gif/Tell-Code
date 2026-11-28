@@ -117,7 +117,7 @@ tell run hello-world/main.tell
 tell test hello-world
 ```
 
-`tell new` and `tell init` create a small project scaffold with a manifest, entrypoint and smoke test. Dependency resolution and package installation are not implemented yet.
+`tell new` and `tell init` create a small project scaffold with a manifest, entrypoint, smoke test, and an empty `Lunafile` JSON package list. Optional package operations can be delegated to [Luna](https://github.com/Neonwave175/Luna) with `tell pkg`; see [Package Management](docs/PACKAGES.md).
 
 ## The language
 
@@ -189,6 +189,7 @@ Explore [more examples](examples/) or read the [language specification](docs/LAN
 | Errors and tests | `Try` / `Raise`, source diagnostics, `Check that` and a Tell source-test runner |
 | Standard library | Math, random, statistics, JSON, date/time and CSV APIs, with runtime-specific differences |
 | CLI | Run, check, format, test, REPL, project scaffolding and bytecode build |
+| Packages | Optional Luna adapter for install, remove, list, update and manifest sync |
 | Type checks | Optional conservative checks for statically knowable declarations and values |
 
 See [Collections](docs/COLLECTIONS.md), [Objects and Classes](docs/OBJECTS_AND_CLASSES.md), and the [Standard Library](docs/STANDARD_LIBRARY.md) for details.
