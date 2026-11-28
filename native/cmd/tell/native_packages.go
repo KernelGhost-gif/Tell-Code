@@ -391,11 +391,11 @@ func nativeCommandPlan(action string, pkg nativePackage, home string, lookPath f
 
 	case "nimble":
 		nimbleDir := filepath.Join(root, "nimble")
-		args := []string{"--nimbleDir:" + nimbleDir, "install", "-g", pkg.Name}
+		args := []string{"--nimbleDir:" + nimbleDir, "--accept", "install", "-g", pkg.Name}
 		if action == "remove" {
-			args = []string{"--nimbleDir:" + nimbleDir, "uninstall", pkg.Name}
+			args = []string{"--nimbleDir:" + nimbleDir, "--accept", "uninstall", pkg.Name}
 		} else if action == "update" {
-			args = []string{"--nimbleDir:" + nimbleDir, "install", "-g", "--refresh", pkg.Name}
+			args = []string{"--nimbleDir:" + nimbleDir, "--accept", "install", "-g", "--refresh", pkg.Name}
 		}
 		return []nativeCommand{command("nimble", args)}, nil
 	}

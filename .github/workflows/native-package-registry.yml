@@ -56,7 +56,7 @@ jobs:
         working-directory: native
         run: go build -trimpath -o "$RUNNER_TEMP/tell" ./cmd/tell
 
-      - name: Install from four language registries
+      - name: Install from seven language registries
         run: |
           "$RUNNER_TEMP/tell" pkg install cargo:typos-cli npm:prettier pip:ruff go:golang.org/x/tools/gopls
           echo "$HOME/.local/tell/bin" >> "$GITHUB_PATH"

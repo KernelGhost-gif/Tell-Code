@@ -782,3 +782,60 @@ func TestNativeListWithNoPackagesAndNoLunaIsSuccessful(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %q", diagnostics.String())
 	}
 }
+
+
+func TestDenoBunNimbleUpdateAndRemovePlans(t *testing.T) {
+	home := t.TempDir()
+	deno := nativePackage{Provider: "deno", Name: "npm:cowsay"}
+	bun := nativePackage{Provider: "bun", Name: "cowsay"}
+	nimble := nativePackage{Provider: "nimble", Name: "nake"}
+	lookPath := func(string) (string, error) { return "/fake/manager", nil }
+
+	denoUpdate, err := nativeCommandPlan("update", deno, home, lookPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(denoUpdate) != 1 || !reflect.DeepEqual(denoUpdate[0].Args, []string{"install", "--global", "--force", "--root", filepath.Join(nativePackageRoot(home), "deno"), "--name", "cowsay", "npm:cowsay"}) {
+		t.Fatalf("Deno update plan = %#v", denoUpdate)
+	}
+	denoRemove, err := nativeCommandPlan("remove", deno, home, lookPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(denoRemove) != 1 || !reflect.DeepEqual(denoRemove[0].Args, []string{"remove", "--global", "--root", filepath.Join(nativePackageRoot(home), "deno"), "cowsay"}) {
+		t.Fatalf("Deno remove plan = %#v", denoRemove)
+	}
+
+	bunUpdate, err := nativeCommandPlan("update", bun, home, lookPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bunUpdate) != 1 || !reflect.DeepEqual(bunUpdate[0].Args, []string{"update", "--global", "cowsay"}) {
+		t.Fatalf("Bun update plan = %#v", bunUpdate)
+	}
+	bunRemove, err := nativeCommandPlan("remove", bun, home, lookPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bunRemove) != 1 || !reflect.DeepEqual(bunRemove[0].Args, []string{"remove", "--global", "cowsay"}) {
+		t.Fatalf("Bun remove plan = %#v", bunRemove)
+	}
+	if !containsEnvironment(bunUpdate[0].Env, "BUN_INSTALL="+filepath.Join(nativePackageRoot(home), "bun")) {
+		t.Fatalf("Bun update root is not isolated: %#v", bunUpdate[0].Env)
+	}
+
+	nimbleUpdate, err := nativeCommandPlan("update", nimble, home, lookPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nimbleUpdate) != 1 || !reflect.DeepEqual(nimbleUpdate[0].Args, []string{"--nimbleDir:" + filepath.Join(nativePackageRoot(home), "nimble"), "--accept", "install", "-g", "--refresh", "nake"}) {
+		t.Fatalf("Nimble update plan = %#v", nimbleUpdate)
+	}
+	nimbleRemove, err := nativeCommandPlan("remove", nimble, home, lookPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nimbleRemove) != 1 || !reflect.DeepEqual(nimbleRemove[0].Args, []string{"--nimbleDir:" + filepath.Join(nativePackageRoot(home), "nimble"), "--accept", "uninstall", "nake"}) {
+		t.Fatalf("Nimble remove plan = %#v", nimbleRemove)
+	}
+}
