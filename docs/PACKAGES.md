@@ -135,4 +135,4 @@ Tell registers catalogue recipes only after an explicit `tell pkg add` or `tell 
 
 ## Integration validation
 
-The [Luna package integration workflow](../.github/workflows/luna-integration.yml) builds the native CLI and executes the validated starter subset through Luna. The initial Tokei package test passed on 2026-11-28 with Tokei 15.0.0; the expanded workflow verifies additional language toolchains as those jobs are enabled.
+The [Luna package integration workflow](../.github/workflows/luna-integration.yml) builds the native CLI and executes the curated source-build subset through Luna. The [native package registry workflow](../.github/workflows/native-package-registry.yml) verifies real installs, execution, listing, updates, and removals through Cargo, npm, uv, and Go. The initial Tokei package test passed on 2026-11-28 with Tokei 15.0.0; the expanded workflow verifies additional language toolchains as those jobs are enabled.
