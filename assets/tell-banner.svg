@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="470" viewBox="0 0 1600 470" role="img" aria-labelledby="title desc">
+  <title id="title">Tell — a sentence-first programming language</title>
+  <desc id="desc">A dark indigo and teal banner with the Tell wordmark and a short Tell code example.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#101329"/>
+      <stop offset=".52" stop-color="#1d2148"/>
+      <stop offset="1" stop-color="#102337"/>
+    </linearGradient>
+    <linearGradient id="teal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8effd9"/>
+      <stop offset="1" stop-color="#65b9ff"/>
+    </linearGradient>
+    <radialGradient id="halo">
+      <stop offset="0" stop-color="#766cff" stop-opacity=".3"/>
+      <stop offset="1" stop-color="#766cff" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#aab8ff" stroke-opacity=".07"/>
+    </pattern>
+  </defs>
+  <rect width="1600" height="470" rx="28" fill="url(#bg)"/>
+  <rect width="1600" height="470" rx="28" fill="url(#grid)"/>
+  <ellipse cx="230" cy="85" rx="460" ry="330" fill="url(#halo)"/>
+  <ellipse cx="1390" cy="415" rx="460" ry="280" fill="url(#halo)"/>
+  <path d="M0 400C220 310 425 490 675 403S1095 310 1300 374s245 38 300 4" fill="none" stroke="#76f1d0" stroke-opacity=".13" stroke-width="2"/>
+  <path d="M0 426C220 336 425 516 675 429S1095 336 1300 400s245 38 300 4" fill="none" stroke="#ffb18d" stroke-opacity=".10" stroke-width="2"/>
+  <g transform="translate(86 112)">
+    <path d="M38 0h116c39 0 70 31 70 70v95c0 39-31 70-70 70H94l-48 36v-36H38c-39 0-70-31-70-70V70C-32 31-1 0 38 0Z" fill="#161f3d" stroke="url(#teal)" stroke-width="4"/>
+    <path d="M49 70h117M107 70v110" fill="none" stroke="url(#teal)" stroke-linecap="round" stroke-width="18"/>
+    <circle cx="171" cy="183" r="8" fill="#ffb38a"/>
+  </g>
+  <text x="350" y="205" fill="#f6f7ff" font-family="Inter,ui-sans-serif,system-ui,sans-serif" font-size="118" font-weight="850" letter-spacing="-7">TELL</text>
+  <text x="358" y="263" fill="#c0cbed" font-family="Inter,ui-sans-serif,system-ui,sans-serif" font-size="29" font-weight="500">Code that reads like clear instructions.</text>
+  <rect x="358" y="294" width="387" height="44" rx="22" fill="#75f0d0" fill-opacity=".12" stroke="#75f0d0" stroke-opacity=".42"/>
+  <circle cx="382" cy="316" r="5" fill="#75f0d0"/>
+  <text x="401" y="322" fill="#b8f6e6" font-family="Inter,ui-sans-serif,system-ui,sans-serif" font-size="15" font-weight="750" letter-spacing="2">SENTENCE-FIRST PROGRAMMING</text>
+  <g transform="translate(915 75)">
+    <rect width="600" height="315" rx="22" fill="#0a1021" fill-opacity=".92" stroke="#8294d4" stroke-opacity=".44" stroke-width="2"/>
+    <path d="M0 57H600" stroke="#8294d4" stroke-opacity=".3"/>
+    <circle cx="29" cy="29" r="6" fill="#ff8793"/>
+    <circle cx="51" cy="29" r="6" fill="#ffd17b"/>
+    <circle cx="73" cy="29" r="6" fill="#75e5b0"/>
+    <text x="108" y="35" fill="#8f9dc6" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="14">hello.tell</text>
+    <text x="38" y="111" fill="#86f3d4" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="22">Let</text>
+    <text x="82" y="111" fill="#e0e7ff" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="22">idea</text>
+    <text x="145" y="111" fill="#b9c7ed" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="22">be</text>
+    <text x="181" y="111" fill="#ffc194" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="22">"make it readable"</text>
+    <text x="38" y="164" fill="#86f3d4" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="22">Say</text>
+    <text x="91" y="164" fill="#e0e7ff" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="22">"Hello, {idea}."</text>
+    <text x="38" y="213" fill="#8594bd" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="17"># readable by people, executed by Tell</text>
+    <rect x="38" y="248" width="524" height="40" rx="9" fill="#172641"/>
+    <circle cx="58" cy="268" r="5" fill="#75f0d0"/>
+    <text x="76" y="274" fill="#b8f6e6" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="16">Go runtime · optional Python + Node.js</text>
+  </g>
+  <text x="86" y="435" fill="#929fc8" font-family="Inter,ui-sans-serif,system-ui,sans-serif" font-size="14" letter-spacing="2">OPEN SOURCE · MIT LICENSE</text>
+  <text x="1514" y="435" text-anchor="end" fill="#929fc8" font-family="Inter,ui-sans-serif,system-ui,sans-serif" font-size="14" letter-spacing="2">KERNELGHOST-GIF / TELL-CODE</text>
+</svg>
