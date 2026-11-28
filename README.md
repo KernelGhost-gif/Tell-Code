@@ -17,6 +17,13 @@
 
 ## Code should explain itself
 
+<!-- tell-loop:intro -->
+<p align="center">
+  <img src="assets/tell-clips/intro.gif" alt="Code should explain itself — five-second looping animation" width="100%">
+</p>
+<p align="right"><sub><a href="assets/tell-clips/intro.mp4">MP4 clip</a></sub></p>
+
+
 Tell is a programming language built around one simple idea: **make everyday code read more like clear instructions without giving up the structure of a real language.**
 
 It has variables, functions, loops, collections, modules, errors, tests, a command-line interface and a native runtime. Its sentence-shaped syntax is defined and parsed—not guessed from free-form English.
@@ -38,6 +45,13 @@ Tell is not an AI prompt interpreter, a pseudocode renderer, or a wrapper around
 
 ## Why Tell?
 
+<!-- tell-loop:why-tell -->
+<p align="center">
+  <img src="assets/tell-clips/why-tell.gif" alt="Why Tell? — five-second looping animation" width="100%">
+</p>
+<p align="right"><sub><a href="assets/tell-clips/why-tell.mp4">MP4 clip</a></sub></p>
+
+
 - **Readable by design.** Statements such as `Let total be 0.` and `For each item in items:` put intent close to the code.
 - **Still a programming language.** Functions, recursion, closures, collections, modules, classes, error handling and source diagnostics are part of the implementation.
 - **Native execution.** Run ordinary Tell programs with a self-contained Go binary; Python is not needed for the core runtime.
@@ -45,6 +59,13 @@ Tell is not an AI prompt interpreter, a pseudocode renderer, or a wrapper around
 - **Reuse existing ecosystems.** Optional Python and JavaScript bridges let Tell call functions from installed modules.
 
 ## Quick start
+
+<!-- tell-loop:quick-start -->
+<p align="center">
+  <img src="assets/tell-clips/quick-start.gif" alt="Quick start — five-second looping animation" width="100%">
+</p>
+<p align="right"><sub><a href="assets/tell-clips/quick-start.mp4">MP4 clip</a></sub></p>
+
 
 ### 1. Get the native executable
 
@@ -100,6 +121,13 @@ tell test hello-world
 
 ## The language
 
+<!-- tell-loop:language -->
+<p align="center">
+  <img src="assets/tell-clips/language.gif" alt="The language — five-second looping animation" width="100%">
+</p>
+<p align="right"><sub><a href="assets/tell-clips/language.mp4">MP4 clip</a></sub></p>
+
+
 Tell keeps common operations approachable while allowing familiar symbols in expressions.
 
 | Tell syntax | Meaning |
@@ -145,6 +173,13 @@ Explore [more examples](examples/) or read the [language specification](docs/LAN
 
 ## What you get
 
+<!-- tell-loop:features -->
+<p align="center">
+  <img src="assets/tell-clips/features.gif" alt="What you get — five-second looping animation" width="100%">
+</p>
+<p align="right"><sub><a href="assets/tell-clips/features.mp4">MP4 clip</a></sub></p>
+
+
 | Area | Available today |
 |---|---|
 | Core language | Variables, expressions, branches, loops, functions, recursion, closures and collections |
@@ -159,6 +194,13 @@ Explore [more examples](examples/) or read the [language specification](docs/LAN
 See [Collections](docs/COLLECTIONS.md), [Objects and Classes](docs/OBJECTS_AND_CLASSES.md), and the [Standard Library](docs/STANDARD_LIBRARY.md) for details.
 
 ## How it works
+
+<!-- tell-loop:execution -->
+<p align="center">
+  <img src="assets/tell-clips/execution.gif" alt="How it works — five-second looping animation" width="100%">
+</p>
+<p align="right"><sub><a href="assets/tell-clips/execution.mp4">MP4 clip</a></sub></p>
+
 
 The Go runtime is the primary implementation. The execution options are deliberately different:
 
@@ -193,6 +235,13 @@ The host runtimes and packages must already be installed. Calls cross a JSON bou
 
 ## The wider Tell toolchain
 
+<!-- tell-loop:toolchain -->
+<p align="center">
+  <img src="assets/tell-clips/toolchain.gif" alt="The wider Tell toolchain — five-second looping animation" width="100%">
+</p>
+<p align="right"><sub><a href="assets/tell-clips/toolchain.mp4">MP4 clip</a></sub></p>
+
+
 The repository contains several related projects. They have different maturity levels and language boundaries.
 
 ### Tell — native Go runtime
@@ -215,6 +264,13 @@ The Python implementation remains as a deprecated compatibility path. New langua
 
 ## Examples worth opening
 
+<!-- tell-loop:examples -->
+<p align="center">
+  <img src="assets/tell-clips/examples.gif" alt="Examples worth opening — five-second looping animation" width="100%">
+</p>
+<p align="right"><sub><a href="assets/tell-clips/examples.mp4">MP4 clip</a></sub></p>
+
+
 | Example | Demonstrates |
 |---|---|
 | [hello.tell](examples/hello.tell) | Minimal program |
@@ -229,6 +285,13 @@ The Python implementation remains as a deprecated compatibility path. New langua
 | [jit-numeric.tell](native/examples/jit-numeric.tell) | JIT-eligible numeric function |
 
 ## Documentation
+
+<!-- tell-loop:documentation -->
+<p align="center">
+  <img src="assets/tell-clips/documentation.gif" alt="Documentation — five-second looping animation" width="100%">
+</p>
+<p align="right"><sub><a href="assets/tell-clips/documentation.mp4">MP4 clip</a></sub></p>
+
 
 | Guide | Description |
 |---|---|
@@ -246,6 +309,13 @@ The Python implementation remains as a deprecated compatibility path. New langua
 | [Engineering audit](docs/ENGINEERING_AUDIT.md) | Verified gaps and engineering notes |
 
 ## Build and test
+
+<!-- tell-loop:build-test -->
+<p align="center">
+  <img src="assets/tell-clips/build-test.gif" alt="Build and test — five-second looping animation" width="100%">
+</p>
+<p align="right"><sub><a href="assets/tell-clips/build-test.mp4">MP4 clip</a></sub></p>
+
 
 Install Go 1.22 or newer to build the native runtime:
 
@@ -280,6 +350,13 @@ cd .. && python -m unittest discover -s tests -v
 
 ## Project status
 
+<!-- tell-loop:status -->
+<p align="center">
+  <img src="assets/tell-clips/status.gif" alt="Project status — five-second looping animation" width="100%">
+</p>
+<p align="right"><sub><a href="assets/tell-clips/status.mp4">MP4 clip</a></sub></p>
+
+
 Tell is actively evolving. The current focus is improving grammar and cross-runtime conformance, expanding the bytecode VM, growing the JIT's supported subset, and developing TellC and Tell Studio.
 
 A few things are **not** implemented yet: there is no package manager, dependency resolver, debugger or complete language server. The native bytecode compiler supports a documented subset, and the JIT supports only a narrow numeric subset. The Python runtime is deprecated. The [engineering audit](docs/ENGINEERING_AUDIT.md) tracks known gaps.
@@ -287,6 +364,13 @@ A few things are **not** implemented yet: there is no package manager, dependenc
 Tell is an interpreter, **not a sandbox**. Programs and foreign modules run with the permissions of the user who launches them. Do not execute untrusted code as if it were isolated; read the [security notes](docs/SECURITY.md).
 
 ## Contributing
+
+<!-- tell-loop:contributing -->
+<p align="center">
+  <img src="assets/tell-clips/contributing.gif" alt="Contributing — five-second looping animation" width="100%">
+</p>
+<p align="right"><sub><a href="assets/tell-clips/contributing.mp4">MP4 clip</a></sub></p>
+
 
 Language ideas, examples, bug reports, documentation improvements and code contributions are welcome.
 
@@ -306,5 +390,12 @@ Open an [issue](https://github.com/KernelGhost-gif/Tell-Code/issues) or submit a
 </div>
 
 ## License
+
+<!-- tell-loop:license -->
+<p align="center">
+  <img src="assets/tell-clips/license.gif" alt="License — five-second looping animation" width="100%">
+</p>
+<p align="right"><sub><a href="assets/tell-clips/license.mp4">MP4 clip</a></sub></p>
+
 
 Tell is released under the [MIT License](LICENSE).
