@@ -95,6 +95,6 @@ jobs:
 
       - name: Show the remaining recipe-only language entries
         run: |
-          for package in google-java-format php-cs-fixer rubocop hlint shellcheck dart-format swift-format prettier neovim sqlfluff; do
+          for package in google-java-format ktlint csharpier air php-cs-fixer rubocop hlint shellcheck dart-format swift-format prettier neovim sqlfluff; do
             "$RUNNER_TEMP/tell" pkg info "$package"
           done

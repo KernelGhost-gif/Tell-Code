@@ -1,5 +1,27 @@
 [
   {
+    "name": "air",
+    "description": "Fast R formatter and language server",
+    "category": "Formatters and language tools",
+    "languages": [
+      "R",
+      "Rust"
+    ],
+    "platforms": [
+      "Linux"
+    ],
+    "requirements": [
+      "Git",
+      "Rust 1.95+ and Cargo"
+    ],
+    "validation": "Recipe added; awaiting CI validation",
+    "url": "https://github.com/posit-dev/air.git",
+    "config": "",
+    "compile": "cargo build --release --locked -p air",
+    "install": "mkdir -p ~/.local/luna && cp target/release/air ~/.local/luna/air",
+    "executable": "air"
+  },
+  {
     "name": "bat",
     "description": "Syntax-highlighted file viewer with Git integration",
     "category": "File and terminal tools",
@@ -65,6 +87,49 @@
     "compile": "cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=\"$HOME/.local/luna-stage\" && cmake --build build --parallel 2 && cmake --install build",
     "install": "mkdir -p ~/.local/luna && cp \"$HOME/.local/luna-stage/bin/cmatrix\" ~/.local/luna/cmatrix",
     "executable": "cmatrix"
+  },
+  {
+    "name": "csharpier",
+    "description": "Opinionated C# and XML source formatter",
+    "category": "Formatters",
+    "languages": [
+      "C#",
+      "XML"
+    ],
+    "platforms": [
+      "Linux"
+    ],
+    "requirements": [
+      "Git",
+      ".NET 10 SDK or newer"
+    ],
+    "validation": "Recipe added; awaiting CI validation",
+    "url": "https://github.com/belav/csharpier.git",
+    "config": "",
+    "compile": "dotnet publish Src/CSharpier.Cli/CSharpier.Cli.csproj --configuration Release --framework net10.0 -o \"$HOME/.local/lunasource/csharpier/publish\"",
+    "install": "mkdir -p ~/.local/luna && printf '%s\\n' '#!/bin/sh' 'exec dotnet \"$HOME/.local/lunasource/csharpier/publish/CSharpier.dll\" \"$@\"' > ~/.local/luna/csharpier && chmod +x ~/.local/luna/csharpier",
+    "executable": "csharpier"
+  },
+  {
+    "name": "dart-format",
+    "description": "Opinionated Dart source formatter",
+    "category": "Formatters",
+    "languages": [
+      "Dart"
+    ],
+    "platforms": [
+      "Linux"
+    ],
+    "requirements": [
+      "Git",
+      "Dart SDK 3.13+"
+    ],
+    "validation": "Recipe added; awaiting CI validation",
+    "url": "https://github.com/dart-lang/dart_style.git",
+    "config": "",
+    "compile": "mkdir -p \"$HOME/.local/luna\" && dart pub get && dart compile exe bin/format.dart -o \"$HOME/.local/luna/dart-format\"",
+    "install": "test -x \"$HOME/.local/luna/dart-format\"",
+    "executable": "dart-format"
   },
   {
     "name": "dprint",
@@ -257,6 +322,28 @@
     "executable": "jq"
   },
   {
+    "name": "ktlint",
+    "description": "Kotlin linter with built-in formatter",
+    "category": "Formatters and linters",
+    "languages": [
+      "Kotlin"
+    ],
+    "platforms": [
+      "Linux"
+    ],
+    "requirements": [
+      "Git",
+      "JDK 27+",
+      "Gradle wrapper (included)"
+    ],
+    "validation": "Recipe added; awaiting CI validation",
+    "url": "https://github.com/ktlint/ktlint.git",
+    "config": "",
+    "compile": "./gradlew :ktlint-cli:shadowJar",
+    "install": "mkdir -p ~/.local/luna && printf '%s\\n' '#!/bin/sh' 'JAR=\"$(find \"$HOME/.local/lunasource/ktlint/ktlint-cli/build/libs\" -name \"ktlint-cli-*-all.jar\" -print -quit)\"' 'test -n \"$JAR\"' 'exec java -jar \"$JAR\" \"$@\"' > ~/.local/luna/ktlint && chmod +x ~/.local/luna/ktlint",
+    "executable": "ktlint"
+  },
+  {
     "name": "neovim",
     "description": "Extensible terminal text editor",
     "category": "Editors",
@@ -402,6 +489,29 @@
     "executable": "ruff"
   },
   {
+    "name": "shellcheck",
+    "description": "Static analysis tool for shell scripts",
+    "category": "Formatters and linters",
+    "languages": [
+      "Shell",
+      "Haskell"
+    ],
+    "platforms": [
+      "Linux"
+    ],
+    "requirements": [
+      "Git",
+      "GHC",
+      "Cabal"
+    ],
+    "validation": "Recipe added; awaiting CI validation",
+    "url": "https://github.com/koalaman/shellcheck.git",
+    "config": "",
+    "compile": "cabal update && cabal build exe:shellcheck",
+    "install": "mkdir -p \"$HOME/.local/luna\" && cabal install . --installdir=\"$HOME/.local/luna\" --install-method=copy",
+    "executable": "shellcheck"
+  },
+  {
     "name": "shfmt",
     "description": "Shell script parser and formatter",
     "category": "Formatters and linters",
@@ -531,49 +641,5 @@
     "compile": "cargo build --release --locked",
     "install": "mkdir -p ~/.local/luna && cp target/release/tokei ~/.local/luna/tokei",
     "executable": "tokei"
-  },
-  {
-    "name": "dart-format",
-    "description": "Opinionated Dart source formatter",
-    "category": "Formatters",
-    "languages": [
-      "Dart"
-    ],
-    "platforms": [
-      "Linux"
-    ],
-    "requirements": [
-      "Git",
-      "Dart SDK 3.13+"
-    ],
-    "validation": "Recipe added; awaiting CI validation",
-    "url": "https://github.com/dart-lang/dart_style.git",
-    "config": "",
-    "compile": "mkdir -p \"$HOME/.local/luna\" && dart pub get && dart compile exe bin/format.dart -o \"$HOME/.local/luna/dart-format\"",
-    "install": "test -x \"$HOME/.local/luna/dart-format\"",
-    "executable": "dart-format"
-  },
-  {
-    "name": "shellcheck",
-    "description": "Static analysis tool for shell scripts",
-    "category": "Formatters and linters",
-    "languages": [
-      "Shell",
-      "Haskell"
-    ],
-    "platforms": [
-      "Linux"
-    ],
-    "requirements": [
-      "Git",
-      "GHC",
-      "Cabal"
-    ],
-    "validation": "Recipe added; awaiting CI validation",
-    "url": "https://github.com/koalaman/shellcheck.git",
-    "config": "",
-    "compile": "cabal update && cabal build exe:shellcheck",
-    "install": "mkdir -p \"$HOME/.local/luna\" && cabal install . --installdir=\"$HOME/.local/luna\" --install-method=copy",
-    "executable": "shellcheck"
   }
 ]

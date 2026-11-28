@@ -22,6 +22,8 @@ The catalogue is embedded in the Tell CLI binary, so searching it does not requi
 tell pkg search
 tell pkg search python
 tell pkg search typescript
+tell pkg search kotlin
+tell pkg search r
 tell pkg info ruff
 tell pkg install rg fd bat hyperfine tokei
 tell pkg install jq btop fastfetch
@@ -31,7 +33,7 @@ tell pkg update
 tell pkg remove rg
 ```
 
-The catalogue includes utilities and formatters/linters for Rust, C, C++, Go, Python, JavaScript, TypeScript, Java, PHP, Ruby, Haskell, Dart, Lua, Swift, shell scripts, SQL, JSON, YAML, TOML, Markdown, HTML, and CSS.
+The 28-entry starter catalogue includes utilities and formatters/linters for Rust, C, C++, C#, Go, Python, JavaScript, TypeScript, Java, Kotlin, PHP, Ruby, Haskell, Dart, Lua, Swift, R, shell scripts, SQL, JSON, YAML, TOML, Markdown, HTML, XML, and CSS.
 
 | Package | Languages / purpose |
 |---|---|
@@ -42,6 +44,9 @@ The catalogue includes utilities and formatters/linters for Rust, C, C++, Go, Py
 | `ruff`, `black` | Python linting and formatting |
 | `prettier`, `dprint` | JavaScript, TypeScript, and common web/data formats |
 | `google-java-format` | Java formatting |
+| `ktlint` | Kotlin linting and formatting |
+| `csharpier` | C# and XML formatting |
+| `air` | R formatting and language server |
 | `php-cs-fixer` | PHP formatting |
 | `rubocop` | Ruby linting and formatting |
 | `hlint` | Haskell analysis |
@@ -70,11 +75,11 @@ staticcheck -version
 swift-format --version
 ```
 
-Some tools have additional runtime behavior. For example, dprint requires a `dprint.json` file and configured plugins for the specific formats you use. Java, PHP, Ruby, Haskell, Swift, and Dart entries require their named runtime/build toolchains to be installed before package installation.
+Some tools have additional runtime behavior. For example, dprint requires a `dprint.json` file and configured plugins for the specific formats you use. Java, Kotlin, C#, R, PHP, Ruby, Haskell, Swift, and Dart entries require their named runtime/build toolchains to be installed before package installation.
 
 ## Validation status
 
-Each entry exposes a validation label through `tell pkg info NAME`. The initial Rust starter set (`bat`, `fd`, `hyperfine`, `rg`, and `tokei`) has passed real build, execution, listing, and removal checks on Ubuntu Linux. Other recipes are included with explicit toolchain requirements and remain marked as awaiting CI validation until the package integration workflow has exercised them.
+Each entry exposes a validation label through `tell pkg info NAME`. The initial Rust starter set (`bat`, `fd`, `hyperfine`, `rg`, and `tokei`) has passed real build, execution, listing, and removal checks on Ubuntu Linux. The additional 23 catalogue recipes are included with explicit toolchain requirements and remain marked as awaiting CI validation until the package integration workflow has exercised them.
 
 ## Lunafile format
 
