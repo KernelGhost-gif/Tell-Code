@@ -24,10 +24,31 @@ tell pkg search python
 tell pkg search typescript
 tell pkg search kotlin
 tell pkg search r
+tell pkg search cargo:serde
+tell pkg search npm:eslint
+tell pkg search nuget:json
 tell pkg info ruff
 tell pkg install rg fd bat hyperfine tokei
 tell pkg install jq btop fastfetch
 tell pkg install gofumpt staticcheck shfmt
+# Install directly from native language package registries
+tell pkg install cargo:cargo-audit
+tell pkg install npm:@biomejs/biome npm:eslint
+tell pkg install pip:mypy pip:pylint
+tell pkg install go:golang.org/x/tools/gopls
+tell pkg install gem:solargraph
+tell pkg install composer:phpstan/phpstan
+tell pkg install nuget:dotnet-format
+tell pkg install pub:very_good_cli
+tell pkg install cabal:hlint
+tell pkg install mix:phoenix_new
+tell pkg install coursier:scalafmt
+ tell pkg install julia:JSON3 r:styler opam:ocamlformat
+tell pkg install mint:realm/SwiftLint@0.60.0 luarocks:luafilesystem
+tell pkg install conan:fmt/11.0.2
+tell pkg install deno:npm:cowsay bun:cowsay nimble:nake
+tell pkg install dub:vibe-d
+ tell pkg install zef:JSON::Fast
 tell pkg list
 tell pkg update
 tell pkg remove rg
@@ -54,14 +75,18 @@ The 29-entry starter catalogue includes utilities and formatters/linters for Rus
 | `stylua` | Lua and Luau formatting |
 | `swift-format` | Swift formatting |
 
-Use `tell pkg info NAME` to see the exact toolchain required by a package. Recipes currently target Linux. Windows, macOS, Android, and Termux package installation are not implied by the existence of Tell binaries for those platforms. Some upstream tools may build on other operating systems, but those recipes have not been validated there.
+Run `tell pkg search PROVIDER:QUERY` to search supported native registries without relying on the curated list. Full-text search is available for Cargo, npm, Composer, RubyGems, NuGet, Cabal, Coursier, OPAM, Hex/Mix, CRAN, LuaRocks, Nimble, DUB, and Zef. Go and Python currently perform exact module/package index lookups. Dart Pub, Conan, Deno, Bun, Julia, and Mint have install support but no direct CLI search command in this adapter.
+
+Native registry installs are tracked separately from Luna. Supported prefixes are `cargo:`, `npm:`, `pip:` (using uv or pipx), `go:`, `gem:`, `composer:`, `nuget:`, `pub:`, `cabal:`, `mix:`, `coursier:`, `julia:`, `r:`, `opam:`, `mint:`, `luarocks:`, `conan:`, `deno:`, `bun:`, `nimble:`, `dub:`, and `zef:`. These prefixes use the matching language ecosystem manager. `cargo:`, `npm:`, `pip:`, `go:`, `gem:`, `composer:`, `nuget:`, `pub:`, `cabal:`, `mix:`, `coursier:`, `mint:`, `luarocks:`, `deno:`, `bun:`, and `nimble:` are intended for CLI tools and apps. `zef:` manages Raku distributions/libraries rather than standalone executables. `dub:` caches D libraries in a Tell-local DUB home; add those packages to the project's `dub.json` to use them. `zef:` installs Raku distributions into a Tell-local CompUnit Repository; set `RAKULIB` to that repository when using the distributions. `julia:` and `r:` add libraries to the active Julia/R environment; `conan:` installs a versioned C/C++ library into an isolated Conan cache and emits CMake generator files; `luarocks:` installs Lua rocks into a Tell-local tree; `opam:` installs into the active OPAM switch. These global/environment installs are not substitutes for project dependency declarations: use the ecosystem-native project workflow when adding a library dependency to an application.
+
+Use `tell pkg info NAME` to see the exact toolchain required by a curated package. Recipes currently target Linux. Windows, macOS, Android, and Termux package installation are not implied by the existence of Tell binaries for those platforms. Some upstream tools may build on other operating systems, but those recipes have not been validated there.
 
 The first `tell pkg install NAME` automatically registers a bundled catalogue recipe with Luna, then asks Luna to build and install it. `tell pkg add NAME` only registers the recipe. If a recipe with that name already exists in `~/.local/lunaorigin`, Tell keeps it rather than overwriting your custom configuration. Packages not in Tell's catalogue are still passed directly to Luna, so existing Luna packages and custom recipes continue to work.
 
-After installation, add Luna's binary directory to your shell path:
+After a native registry install, add Tell's native binary directories to your shell path. Mint links Swift tools to `~/.local/tell/bin`; LuaRocks uses `~/.local/tell/luarocks/bin`; Deno, Bun, and Nimble use their own bin directories under `~/.local/tell`. Luna installs continue to use Luna's binary directory:
 
 ```sh
-export PATH="$HOME/.local/luna:$PATH"
+export PATH="$HOME/.local/tell/bin:$HOME/.local/tell/pub-cache/bin:$HOME/.local/tell/luarocks/bin:$HOME/.local/tell/deno/bin:$HOME/.local/tell/bun/bin:$HOME/.local/tell/nimble/bin:$HOME/.local/luna:$PATH"
 ```
 
 Examples:
@@ -79,7 +104,7 @@ Some tools have additional runtime behavior. For example, dprint requires a `dpr
 
 ## Validation status
 
-Each entry exposes a validation label through `tell pkg info NAME`. The initial Rust starter set (`bat`, `fd`, `hyperfine`, `rg`, and `tokei`) has passed real build, execution, listing, and removal checks on Ubuntu Linux. The additional 24 catalogue recipes are included with explicit toolchain requirements and remain marked as awaiting CI validation until the package integration workflow has exercised them.
+Each curated entry exposes a validation label through `tell pkg info NAME`. Native registry installs use the package manager's own release and dependency metadata. The initial Rust starter set (`bat`, `fd`, `hyperfine`, `rg`, and `tokei`) has passed real build, execution, listing, and removal checks on Ubuntu Linux. The additional 24 catalogue recipes are included with explicit toolchain requirements and remain marked as awaiting CI validation until the package integration workflow has exercised them.
 
 ## Lunafile format
 
@@ -113,4 +138,4 @@ Tell registers catalogue recipes only after an explicit `tell pkg add` or `tell 
 
 ## Integration validation
 
-The [Luna package integration workflow](../.github/workflows/luna-integration.yml) builds the native CLI and executes the validated starter subset through Luna. The initial Tokei package test passed on 2026-11-28 with Tokei 15.0.0; the expanded workflow verifies additional language toolchains as those jobs are enabled.
+The [Luna package integration workflow](../.github/workflows/luna-integration.yml) builds the native CLI and executes the curated source-build subset through Luna. The [native package registry workflow](../.github/workflows/native-package-registry.yml) verifies real installs, execution, listing, updates, and removals through Cargo, npm, uv, Go, Deno, Bun, Nimble, and DUB. The initial Tokei package test passed on 2026-11-28 with Tokei 15.0.0; the expanded workflow verifies additional language toolchains as those jobs are enabled.

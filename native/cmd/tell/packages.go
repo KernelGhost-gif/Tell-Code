@@ -64,7 +64,7 @@ func packageCatalogIndex(entries []packageCatalogEntry) map[string]packageCatalo
 }
 
 func printPackageUsage(writer io.Writer) {
-	fmt.Fprintln(writer, "Tell package commands (curated catalogue + Luna)")
+	fmt.Fprintln(writer, "Tell package commands (curated catalogue, native registries, and Luna)")
 	fmt.Fprintln(writer, "")
 	fmt.Fprintln(writer, "Usage: tell pkg <command> [arguments]")
 	fmt.Fprintln(writer, "")
@@ -72,7 +72,9 @@ func printPackageUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  search [query]             Search packages, descriptions, and languages")
 	fmt.Fprintln(writer, "  info <name>                Show package details and build requirements")
 	fmt.Fprintln(writer, "  add <name>                 Register a catalogue recipe with Luna")
-	fmt.Fprintln(writer, "  install <name> [name...]   Register catalogue recipes, then install")
+	fmt.Fprintln(writer, "  install <name> [name...]   Install Tell, native-registry, or Luna packages")
+	fmt.Fprintln(writer, "  native specs: cargo:, npm:, pip:, go:, gem:, composer:, nuget:, pub:, cabal:, mix:, coursier:, julia:, r:, opam:, mint:, luarocks:, conan:, deno:, bun:, nimble:, dub:, zef:")
+	fmt.Fprintln(writer, "  registry search: tell pkg search <provider>:<query>")
 	fmt.Fprintln(writer, "  remove <name>              Remove a package")
 	fmt.Fprintln(writer, "  list                       List packages registered with Luna")
 	fmt.Fprintln(writer, "  update                     Update installed packages")
@@ -128,6 +130,16 @@ func runPackageCommandWithHome(
 		if len(operands) > 1 {
 			fmt.Fprintln(stderr, "tell pkg search: expected at most one query")
 			return 2
+		}
+		if len(operands) == 1 {
+			provider, query, recognized, parseErr := parseNativePackageQuery(operands[0])
+			if parseErr != nil {
+				fmt.Fprintf(stderr, "tell pkg search: %v\n", parseErr)
+				return 2
+			}
+			if recognized {
+				return runNativePackageSearch(provider, query, lookPath, runCommand, stdout, stderr)
+			}
 		}
 		query := ""
 		if len(operands) == 1 {
@@ -192,19 +204,37 @@ func runPackageCommandWithHome(
 			printPackageUsage(stderr)
 			return 2
 		}
+		lunaPackages := make([]string, 0, len(operands))
+		for _, name := range operands {
+			native, recognized, parseErr := parseNativePackageSpec(name)
+			if parseErr != nil {
+				fmt.Fprintf(stderr, "tell pkg install: %v\n", parseErr)
+				return 2
+			}
+			if recognized {
+				if status := runNativePackageAction("install", native, homeDir, lookPath, runCommand, stdout, stderr); status != 0 {
+					return status
+				}
+				continue
+			}
+			lunaPackages = append(lunaPackages, name)
+		}
+		if len(lunaPackages) == 0 {
+			return 0
+		}
 		executable, lookupErr := lookPath("luna")
 		if lookupErr != nil {
 			fmt.Fprintf(stderr, "tell pkg: Luna was not found on PATH. Install it from %s and try again.\n", lunaInstallURL)
 			return 127
 		}
-		for _, name := range operands {
+		for _, name := range lunaPackages {
 			if entry, ok := catalogByName[strings.ToLower(name)]; ok {
 				if status := registerCatalogPackage(entry, executable, homeDir, stdout, stderr, runCommand); status != 0 {
 					return status
 				}
 			}
 		}
-		return runLunaCommand(executable, append([]string{"install"}, operands...), stdout, stderr, runCommand)
+		return runLunaCommand(executable, append([]string{"install"}, lunaPackages...), stdout, stderr, runCommand)
 
 	case "remove":
 		if len(operands) != 1 {
@@ -212,15 +242,42 @@ func runPackageCommandWithHome(
 			printPackageUsage(stderr)
 			return 2
 		}
+		native, recognized, parseErr := parseNativePackageSpec(operands[0])
+		if parseErr != nil {
+			fmt.Fprintf(stderr, "tell pkg remove: %v\n", parseErr)
+			return 2
+		}
+		if recognized {
+			return runNativePackageAction("remove", native, homeDir, lookPath, runCommand, stdout, stderr)
+		}
 		return runLunaCommandFromPath([]string{"remove", operands[0]}, stdout, stderr, lookPath, runCommand)
 
-	case "list", "update":
+	case "list":
 		if len(operands) != 0 {
 			fmt.Fprintf(stderr, "tell pkg %s: this command does not accept arguments\n", command)
 			printPackageUsage(stderr)
 			return 2
 		}
-		return runLunaCommandFromPath([]string{command}, stdout, stderr, lookPath, runCommand)
+		return runNativeAndLunaList(homeDir, lookPath, runCommand, stdout, stderr)
+
+	case "update":
+		if len(operands) != 0 {
+			fmt.Fprintf(stderr, "tell pkg %s: this command does not accept arguments\n", command)
+			printPackageUsage(stderr)
+			return 2
+		}
+		if status := runTrackedNativeUpdates(homeDir, lookPath, runCommand, stdout, stderr); status != 0 {
+			return status
+		}
+		if _, lookupErr := lookPath("luna"); lookupErr != nil {
+			packages, loadErr := loadInstalledNativePackages(homeDir)
+			if loadErr == nil && len(packages) > 0 {
+				return 0
+			}
+			fmt.Fprintf(stderr, "tell pkg: Luna was not found on PATH. Install it from %s and try again.\n", lunaInstallURL)
+			return 127
+		}
+		return runLunaCommandFromPath([]string{"update"}, stdout, stderr, lookPath, runCommand)
 
 	case "sync":
 		if len(operands) > 1 {
