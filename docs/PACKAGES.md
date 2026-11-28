@@ -44,19 +44,28 @@ A generated Tell project contains an empty `Lunafile`:
 []
 ```
 
-Luna expects a JSON array. Each entry identifies a package and its source repository, with optional configure, compile, and install commands:
+Luna expects a JSON array. Each entry identifies a package and its source repository, with optional configure, compile, and install commands. This real package recipe was verified in GitHub Actions against upstream Tokei 15.0.0:
 
 ```json
 [
   {
-    "Name": "example",
-    "URL": "https://github.com/example/example.git",
+    "Name": "tokei",
+    "URL": "https://github.com/XAMPPRocky/tokei.git",
     "Config": "",
-    "Compile": "make",
-    "Install": "make install"
+    "Compile": "cargo build --release --locked",
+    "Install": "mkdir -p ~/.local/luna && cp target/release/tokei ~/.local/luna/tokei"
   }
 ]
 ```
+
+Save this as `Lunafile` and run:
+
+```sh
+tell pkg sync
+~/.local/luna/tokei --version
+```
+
+This recipe needs Git and the Rust toolchain (`cargo`). The installed binary is placed in `~/.local/luna`; add that directory to `PATH` or use its full path as shown. The test recipe follows the upstream project's current default branch, so future source changes may affect build compatibility.
 
 The `Name` and `URL` fields are required. The other command fields may be empty when the package does not need that phase. The exact recipe schema and package behavior are owned by Luna; consult its upstream README before authoring a manifest.
 
@@ -65,6 +74,11 @@ The `Name` and `URL` fields are required. The other command fields may be empty 
 **Only sync a Lunafile whose package sources and commands you trust.** Luna's current package implementation clones the source and executes the manifest's configure, compile, and install commands through a shell. Those commands run with the permissions of the current user. A malicious or compromised recipe can therefore modify files, execute programs, or access user data.
 
 Tell invokes Luna only after an explicit `tell pkg` command. It does not run package hooks as a side effect of `tell run`, `tell build`, or project creation. The adapter passes arguments directly to the Luna process and does not interpolate them through a shell.
+
+
+## Verified integration test
+
+The [Luna package integration workflow](../.github/workflows/luna-integration.yml) installs the real Tokei source through `tell pkg sync`, verifies the installed executable, exercises `tell pkg install` and `tell pkg list`, and removes the package with `tell pkg remove`. It passed on 2026-11-28 with Tokei 15.0.0.
 
 ## Compatibility
 
