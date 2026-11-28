@@ -402,7 +402,7 @@ func TestNativePackageInstallSupportsScopedNpmAndPythonTools(t *testing.T) {
 			spec: "nimble:nake",
 			lookups: map[string]string{"nimble": "/fake/nimble"},
 			wantProgram: "/fake/nimble",
-			wantArgs: []string{"--nimbleDir:" + filepath.Join("HOME", ".local", "tell", "nimble"), "install", "-g", "nake"},
+			wantArgs: []string{"--nimbleDir:" + filepath.Join("HOME", ".local", "tell", "nimble"), "--accept", "install", "-g", "nake"},
 		},
 	}
 	for _, test := range tests {
