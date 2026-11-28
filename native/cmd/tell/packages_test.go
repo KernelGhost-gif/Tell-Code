@@ -624,6 +624,7 @@ func TestNativeRegistrySearchUsesRegistryCommands(t *testing.T) {
 		{"luarocks:socket", "luarocks", []string{"search", "socket"}},
 		{"nimble:nake", "nimble", []string{"search", "nake"}},
 		{"dub:vibe-d", "dub", []string{"search", "vibe-d"}},
+		{"zef:JSON::Fast", "zef", []string{"search", "JSON::Fast"}},
 	}
 	for _, test := range tests {
 		t.Run(test.spec, func(t *testing.T) {
@@ -888,5 +889,39 @@ func TestDubRegistrySearchPlan(t *testing.T) {
 	}
 	if plan.Program != "dub" || !reflect.DeepEqual(plan.Args, []string{"search", "vibe-d"}) {
 		t.Fatalf("DUB search plan = %#v", plan)
+	}
+}
+
+
+func TestZefUsesTellLocalInstallationRepository(t *testing.T) {
+	home := t.TempDir()
+	pkg := nativePackage{Provider: "zef", Name: "JSON::Fast"}
+	lookPath := func(string) (string, error) { return "/fake/zef", nil }
+	repository := "inst#" + filepath.Join(nativePackageRoot(home), "zef")
+
+	install, err := nativeCommandPlan("install", pkg, home, lookPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(install) != 1 || !reflect.DeepEqual(install[0].Args, []string{"install", "--install-to=" + repository, "JSON::Fast"}) {
+		t.Fatalf("Zef install plan = %#v", install)
+	}
+	if !containsEnvironment(install[0].Env, "ZEF_INSTALL_TO="+repository) {
+		t.Fatalf("Zef install repository is not isolated: %#v", install[0].Env)
+	}
+
+	update, err := nativeCommandPlan("update", pkg, home, lookPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(update) != 1 || !reflect.DeepEqual(update[0].Args, []string{"upgrade", "--install-to=" + repository, "JSON::Fast"}) {
+		t.Fatalf("Zef update plan = %#v", update)
+	}
+	remove, err := nativeCommandPlan("remove", pkg, home, lookPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(remove) != 1 || !reflect.DeepEqual(remove[0].Args, []string{"uninstall", "--uninstall-from=" + repository, "JSON::Fast"}) {
+		t.Fatalf("Zef remove plan = %#v", remove)
 	}
 }

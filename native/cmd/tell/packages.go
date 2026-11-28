@@ -73,7 +73,7 @@ func printPackageUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  info <name>                Show package details and build requirements")
 	fmt.Fprintln(writer, "  add <name>                 Register a catalogue recipe with Luna")
 	fmt.Fprintln(writer, "  install <name> [name...]   Install Tell, native-registry, or Luna packages")
-	fmt.Fprintln(writer, "  native specs: cargo:, npm:, pip:, go:, gem:, composer:, nuget:, pub:, cabal:, mix:, coursier:, julia:, r:, opam:, mint:, luarocks:, conan:, deno:, bun:, nimble:, dub:")
+	fmt.Fprintln(writer, "  native specs: cargo:, npm:, pip:, go:, gem:, composer:, nuget:, pub:, cabal:, mix:, coursier:, julia:, r:, opam:, mint:, luarocks:, conan:, deno:, bun:, nimble:, dub:, zef:")
 	fmt.Fprintln(writer, "  registry search: tell pkg search <provider>:<query>")
 	fmt.Fprintln(writer, "  remove <name>              Remove a package")
 	fmt.Fprintln(writer, "  list                       List packages registered with Luna")

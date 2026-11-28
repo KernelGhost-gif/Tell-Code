@@ -49,6 +49,7 @@ var nativePackageProviders = map[string]bool{
 	"bun":      true,
 	"nimble":   true,
 	"dub":      true,
+	"zef":      true,
 }
 
 func parseNativePackageSpec(spec string) (nativePackage, bool, error) {
@@ -413,6 +414,18 @@ func nativeCommandPlan(action string, pkg nativePackage, home string, lookPath f
 			return []nativeCommand{remove, fetch}, nil
 		}
 
+	case "zef":
+		repository := "inst#" + filepath.Join(root, "zef")
+		env := []string{"ZEF_INSTALL_TO=" + repository}
+		switch action {
+		case "install":
+			return []nativeCommand{command("zef", []string{"install", "--install-to=" + repository, pkg.Name}, env...)}, nil
+		case "remove":
+			return []nativeCommand{command("zef", []string{"uninstall", "--uninstall-from=" + repository, pkg.Name}, env...)}, nil
+		case "update":
+			return []nativeCommand{command("zef", []string{"upgrade", "--install-to=" + repository, pkg.Name}, env...)}, nil
+		}
+
 	}
 	return nil, fmt.Errorf("unsupported native package provider %q", pkg.Provider)
 }
@@ -509,6 +522,8 @@ func runNativePackageAction(
 			fmt.Fprintf(stdout, "Add %s to PATH to run installed Nim tools.\n", filepath.Join(nativePackageRoot(home), "nimble", "bin"))
 		case "dub":
 			fmt.Fprintf(stdout, "DUB library packages are cached under %s; add them to a D project with dub.json dependencies.\n", filepath.Join(nativePackageRoot(home), "dub", "packages"))
+		case "zef":
+			fmt.Fprintf(stdout, "Raku distributions are installed in the isolated repository %s; set RAKULIB to use them.\n", filepath.Join(nativePackageRoot(home), "zef"))
 		default:
 			fmt.Fprintf(stdout, "Add %s to PATH to run installed tools.\n", filepath.Join(nativePackageRoot(home), "bin"))
 		}
@@ -664,6 +679,8 @@ func nativePackageSearchPlan(provider, query string) (nativeCommand, error) {
 		return nativeCommand{Program: "nimble", Args: []string{"search", query}}, nil
 	case "dub":
 		return nativeCommand{Program: "dub", Args: []string{"search", query}}, nil
+	case "zef":
+		return nativeCommand{Program: "zef", Args: []string{"search", query}}, nil
 	case "luarocks":
 		return nativeCommand{Program: "luarocks", Args: []string{"search", query}}, nil
 	case "mix":
