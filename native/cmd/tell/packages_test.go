@@ -182,7 +182,7 @@ func TestPackageInstallKeepsExistingCustomRecipe(t *testing.T) {
 func TestPackageCommandReportsMissingLuna(t *testing.T) {
 	var stderr bytes.Buffer
 	status := runPackageCommandWithHome(
-		[]string{"list"},
+		[]string{"install", "custom-tool"},
 		&bytes.Buffer{},
 		&stderr,
 		func(string) (string, error) { return "", exec.ErrNotFound },
