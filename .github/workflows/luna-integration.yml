@@ -1,0 +1,88 @@
+name: Luna package integration
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "native/cmd/tell/**"
+      - ".github/workflows/luna-integration.yml"
+  pull_request:
+    paths:
+      - "native/cmd/tell/**"
+      - ".github/workflows/luna-integration.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: luna-integration-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  install-real-package:
+    name: Install and execute a real package through Tell
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out Tell
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+
+      - name: Install Python and Luna prerequisites
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Luna and its CLI dependencies
+        run: |
+          python -m pip install --user git+https://github.com/Neonwave175/Luna.git
+          python -m pip install --user rich
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          luna --help
+
+      - name: Build the Tell CLI
+        working-directory: native
+        run: go build -trimpath -o "$RUNNER_TEMP/tell" ./cmd/tell
+
+      - name: Create a Luna manifest for a real upstream package
+        run: |
+          cat > "$RUNNER_TEMP/Lunafile" <<'EOF'
+          [
+            {
+              "Name": "tokei",
+              "URL": "https://github.com/XAMPPRocky/tokei.git",
+              "Config": "",
+              "Compile": "cargo build --release --locked",
+              "Install": "mkdir -p ~/.local/luna && cp target/release/tokei ~/.local/luna/tokei"
+            }
+          ]
+          EOF
+          python -m json.tool "$RUNNER_TEMP/Lunafile"
+
+      - name: Install upstream Tokei through tell pkg sync
+        run: |
+          "$RUNNER_TEMP/tell" pkg sync "$RUNNER_TEMP/Lunafile"
+          test -x "$HOME/.local/luna/tokei"
+          "$HOME/.local/luna/tokei" --version
+
+      - name: Exercise tell pkg install and list
+        run: |
+          "$RUNNER_TEMP/tell" pkg install tokei
+          "$RUNNER_TEMP/tell" pkg list | tee "$RUNNER_TEMP/luna-list.txt"
+          grep -q tokei "$RUNNER_TEMP/luna-list.txt"
+          "$HOME/.local/luna/tokei" --version
+
+      - name: Exercise tell pkg remove
+        run: |
+          "$RUNNER_TEMP/tell" pkg remove tokei
+          test ! -e "$HOME/.local/luna/tokei"
+          test ! -d "$HOME/.local/lunasource/tokei"
