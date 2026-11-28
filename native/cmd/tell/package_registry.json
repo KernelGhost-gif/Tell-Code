@@ -44,6 +44,28 @@
     "executable": "bat"
   },
   {
+    "name": "black",
+    "description": "The uncompromising Python code formatter",
+    "category": "Formatters and linters",
+    "languages": [
+      "Python"
+    ],
+    "platforms": [
+      "Linux"
+    ],
+    "requirements": [
+      "Git",
+      "Python 3.11+",
+      "python3-venv"
+    ],
+    "validation": "Recipe added; awaiting CI validation",
+    "url": "https://github.com/psf/black.git",
+    "config": "",
+    "compile": "python3 -m venv .venv && .venv/bin/pip install --upgrade pip && .venv/bin/pip install .",
+    "install": "mkdir -p ~/.local/luna && printf '%s\\n' '#!/bin/sh' 'exec \"$HOME/.local/lunasource/black/.venv/bin/black\" \"$@\"' > ~/.local/luna/black && chmod +x ~/.local/luna/black",
+    "executable": "black"
+  },
+  {
     "name": "btop",
     "description": "Resource monitor for CPU, memory, disks, network, and processes",
     "category": "System tools",
@@ -55,13 +77,13 @@
     ],
     "requirements": [
       "Git",
-      "C++ compiler",
+      "g++-14 or newer",
       "make"
     ],
     "validation": "Recipe added; awaiting CI validation",
     "url": "https://github.com/aristocratos/btop.git",
     "config": "",
-    "compile": "make -j2",
+    "compile": "make -j2 CXX=g++-14",
     "install": "mkdir -p ~/.local/luna && cp bin/btop ~/.local/luna/btop",
     "executable": "btop"
   },

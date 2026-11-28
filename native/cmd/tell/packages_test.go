@@ -73,6 +73,7 @@ func TestPackageSearchAndInfoUseLanguageMetadataWithoutLuna(t *testing.T) {
 		{args: []string{"search", "haskell"}, want: []string{"hlint", "shellcheck"}},
 		{args: []string{"search", "typescript"}, want: []string{"dprint", "prettier"}},
 		{args: []string{"info", "staticcheck"}, want: []string{"Go", "Go 1.26+"}},
+		{args: []string{"info", "black"}, want: []string{"Python", "Python 3.11+"}},
 		{args: []string{"search", "kotlin"}, want: []string{"ktlint"}},
 		{args: []string{"search", "r"}, want: []string{"air"}},
 		{args: []string{"info", "csharpier"}, want: []string{"C#", ".NET 10"}},

@@ -32,7 +32,7 @@ jobs:
       - name: Install native build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake libncurses-dev autoconf automake libtool bison flex pkg-config
+          sudo apt-get install -y build-essential g++-14 cmake libncurses-dev autoconf automake libtool bison flex pkg-config
 
       - name: Install Go
         uses: actions/setup-go@v5
@@ -64,6 +64,7 @@ jobs:
           "$RUNNER_TEMP/tell" pkg search | tee "$RUNNER_TEMP/catalogue.txt"
           grep -q tokei "$RUNNER_TEMP/catalogue.txt"
           grep -q google-java-format "$RUNNER_TEMP/catalogue.txt"
+          grep -q black "$RUNNER_TEMP/catalogue.txt"
           "$RUNNER_TEMP/tell" pkg info rg
           "$RUNNER_TEMP/tell" pkg info staticcheck
 

@@ -33,7 +33,7 @@ tell pkg update
 tell pkg remove rg
 ```
 
-The 28-entry starter catalogue includes utilities and formatters/linters for Rust, C, C++, C#, Go, Python, JavaScript, TypeScript, Java, Kotlin, PHP, Ruby, Haskell, Dart, Lua, Swift, R, shell scripts, SQL, JSON, YAML, TOML, Markdown, HTML, XML, and CSS.
+The 29-entry starter catalogue includes utilities and formatters/linters for Rust, C, C++, C#, Go, Python, JavaScript, TypeScript, Java, Kotlin, PHP, Ruby, Haskell, Dart, Lua, Swift, R, shell scripts, SQL, JSON, YAML, TOML, Markdown, HTML, XML, and CSS.
 
 | Package | Languages / purpose |
 |---|---|
@@ -79,7 +79,7 @@ Some tools have additional runtime behavior. For example, dprint requires a `dpr
 
 ## Validation status
 
-Each entry exposes a validation label through `tell pkg info NAME`. The initial Rust starter set (`bat`, `fd`, `hyperfine`, `rg`, and `tokei`) has passed real build, execution, listing, and removal checks on Ubuntu Linux. The additional 23 catalogue recipes are included with explicit toolchain requirements and remain marked as awaiting CI validation until the package integration workflow has exercised them.
+Each entry exposes a validation label through `tell pkg info NAME`. The initial Rust starter set (`bat`, `fd`, `hyperfine`, `rg`, and `tokei`) has passed real build, execution, listing, and removal checks on Ubuntu Linux. The additional 24 catalogue recipes are included with explicit toolchain requirements and remain marked as awaiting CI validation until the package integration workflow has exercised them.
 
 ## Lunafile format
 
