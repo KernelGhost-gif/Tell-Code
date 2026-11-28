@@ -192,8 +192,8 @@ Try the execution modes:
 
 ```sh
 tell --engine interp examples/features.tell
-tell --engine jit native/examples/native-typed.tell
-tell --engine auto --jit-threshold 24 --jit-stats native/examples/native-typed.tell
+tell --typed --engine jit native/examples/jit-numeric.tell
+tell --typed --engine auto --jit-threshold 24 --jit-stats native/examples/jit-numeric.tell
 ```
 
 The JIT is intentionally conservative: it currently targets a small, straight-line numeric function subset with explicit `number` or `decimal` signatures. Unsupported functions stay on the interpreter path. It is an early execution tier, not a whole-program optimizing compiler. See [Execution Engines](docs/EXECUTION_ENGINES.md) for the supported operations and benchmark caveats.
@@ -220,7 +220,7 @@ Tell is growing beyond one interpreter. These components are related, but they a
 
 The primary implementation for everyday Tell programs. It includes the interpreter, REPL, CLI, type/declaration checks, the initial bytecode compiler/VM, and the first native JIT tier.
 
-- [Go runtime source](native/)
+- [Go runtime CLI source](native/cmd/tell/main.go)
 - [CLI reference](docs/CLI_REFERENCE.md)
 - [Execution engine guide](docs/EXECUTION_ENGINES.md)
 
