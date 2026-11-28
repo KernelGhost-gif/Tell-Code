@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -40,6 +42,7 @@ var nativePackageProviders = map[string]bool{
 	"julia":    true,
 	"r":        true,
 	"opam":     true,
+	"conan":    true,
 	"mint":     true,
 	"luarocks": true,
 }
@@ -323,6 +326,22 @@ func nativeCommandPlan(action string, pkg nativePackage, home string, lookPath f
 		}
 		return []nativeCommand{command("opam", args)}, nil
 
+	case "conan":
+		cacheHome := filepath.Join(root, "conan-home")
+		outputFolder := conanPackageOutputFolder(home, pkg)
+		env := []string{"CONAN_HOME=" + cacheHome}
+		steps := []nativeCommand{}
+		if action != "remove" {
+			steps = append(steps, command("conan", []string{"profile", "detect", "--force"}, env...))
+			args := []string{"install", "--requires", pkg.Name, "--build=missing", "--output-folder", outputFolder, "--generator", "CMakeDeps", "--generator", "CMakeToolchain"}
+			if action == "update" {
+				args = append(args, "--update")
+			}
+			steps = append(steps, command("conan", args, env...))
+			return steps, nil
+		}
+		return []nativeCommand{command("conan", []string{"remove", pkg.Name, "--confirm"}, env...)}, nil
+
 	case "mint":
 		env := []string{
 			"MINT_PATH=" + filepath.Join(root, "mint"),
@@ -429,6 +448,8 @@ func runNativePackageAction(
 			fmt.Fprintf(stdout, "Load it in Julia with using %s.\n", pkg.Name)
 		case "opam":
 			fmt.Fprintln(stdout, "The package is installed in the active OPAM switch; initialize its environment with eval \"$(opam env)\".")
+		case "conan":
+			fmt.Fprintf(stdout, "Conan package metadata and CMake generators are in %s.\n", conanPackageOutputFolder(home, pkg))
 		case "luarocks":
 			fmt.Fprintf(stdout, "Add %s to PATH to run installed Lua tools.\n", filepath.Join(nativePackageRoot(home), "luarocks", "bin"))
 		default:
@@ -622,4 +643,11 @@ func runNativePackageSearch(
 		return reportPackageCommandError(err, stderr)
 	}
 	return 0
+}
+
+
+func conanPackageOutputFolder(home string, pkg nativePackage) string {
+	sum := sha256.Sum256([]byte(pkg.Provider + ":" + pkg.Name))
+	slug := hex.EncodeToString(sum[:8])
+	return filepath.Join(nativePackageRoot(home), "conan", slug)
 }

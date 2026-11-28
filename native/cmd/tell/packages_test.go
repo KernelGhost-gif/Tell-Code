@@ -678,3 +678,53 @@ func TestRNativePackageSearchPlanBuildsSafeCRANQuery(t *testing.T) {
 		t.Fatalf("R search expression is incomplete: %q", plan.Args[2])
 	}
 }
+
+
+func TestConanPlansIsolatedCAndCppDependencies(t *testing.T) {
+	home := t.TempDir()
+	pkg := nativePackage{Provider: "conan", Name: "fmt/11.0.2"}
+	lookPath := func(string) (string, error) { return "/fake/conan", nil }
+
+	install, err := nativeCommandPlan("install", pkg, home, lookPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(install) != 2 {
+		t.Fatalf("Conan install should detect a profile then resolve the package: %#v", install)
+	}
+	if !reflect.DeepEqual(install[0].Args, []string{"profile", "detect", "--force"}) {
+		t.Fatalf("Conan profile command = %#v", install[0].Args)
+	}
+	wantInstall := []string{"install", "--requires", "fmt/11.0.2", "--build=missing", "--output-folder", conanPackageOutputFolder(home, pkg), "--generator", "CMakeDeps", "--generator", "CMakeToolchain"}
+	if !reflect.DeepEqual(install[1].Args, wantInstall) {
+		t.Fatalf("Conan package command = %#v, want %#v", install[1].Args, wantInstall)
+	}
+	if !containsEnvironment(install[1].Env, "CONAN_HOME="+filepath.Join(nativePackageRoot(home), "conan-home")) {
+		t.Fatalf("Conan cache is not isolated: %#v", install[1].Env)
+	}
+
+	update, err := nativeCommandPlan("update", pkg, home, lookPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(update) != 2 || !containsArg(update[1].Args, "--update") {
+		t.Fatalf("Conan update plan = %#v", update)
+	}
+
+	remove, err := nativeCommandPlan("remove", pkg, home, lookPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(remove) != 1 || !reflect.DeepEqual(remove[0].Args, []string{"remove", "fmt/11.0.2", "--confirm"}) {
+		t.Fatalf("Conan remove plan = %#v", remove)
+	}
+}
+
+func containsArg(args []string, expected string) bool {
+	for _, arg := range args {
+		if arg == expected {
+			return true
+		}
+	}
+	return false
+}
