@@ -140,7 +140,7 @@ func TestPackageInstallRegistersLanguageSpecificRecipe(t *testing.T) {
 	if status != 0 || len(calls) != 2 {
 		t.Fatalf("status=%d calls=%#v", status, calls)
 	}
-	if len(calls[0]) != 5 || calls[0][0] != "add" || calls[0][1] != "php-cs-fixer" {
+	if len(calls[0]) != 6 || calls[0][0] != "add" || calls[0][1] != "php-cs-fixer" {
 		t.Fatalf("unexpected PHP recipe registration call: %#v", calls)
 	}
 	if calls[1][0] != "install" || calls[1][1] != "php-cs-fixer" {

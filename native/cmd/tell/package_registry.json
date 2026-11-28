@@ -158,7 +158,7 @@
     "validation": "Recipe added; awaiting CI validation",
     "url": "https://github.com/mvdan/gofumpt.git",
     "config": "",
-    "compile": "go build -o \"$HOME/.local/luna/gofumpt\" .",
+    "compile": "mkdir -p \"$HOME/.local/luna\" && go build -o \"$HOME/.local/luna/gofumpt\" .",
     "install": "mkdir -p ~/.local/luna",
     "executable": "gofumpt"
   },
@@ -203,7 +203,7 @@
     "url": "https://github.com/ndmitchell/hlint.git",
     "config": "",
     "compile": "cabal update && cabal build exe:hlint",
-    "install": "cabal install . --installdir=\"$HOME/.local/luna\" --install-method=copy",
+    "install": "mkdir -p \"$HOME/.local/luna\" && cabal install . --installdir=\"$HOME/.local/luna\" --install-method=copy",
     "executable": "hlint"
   },
   {
@@ -419,7 +419,7 @@
     "validation": "Recipe added; awaiting CI validation",
     "url": "https://github.com/mvdan/sh.git",
     "config": "",
-    "compile": "go build -o \"$HOME/.local/luna/shfmt\" ./cmd/shfmt",
+    "compile": "mkdir -p \"$HOME/.local/luna\" && go build -o \"$HOME/.local/luna/shfmt\" ./cmd/shfmt",
     "install": "mkdir -p ~/.local/luna",
     "executable": "shfmt"
   },
@@ -463,7 +463,7 @@
     "validation": "Recipe added; awaiting CI validation",
     "url": "https://github.com/dominikh/go-tools.git",
     "config": "",
-    "compile": "go build -o \"$HOME/.local/luna/staticcheck\" ./cmd/staticcheck",
+    "compile": "mkdir -p \"$HOME/.local/luna\" && go build -o \"$HOME/.local/luna/staticcheck\" ./cmd/staticcheck",
     "install": "mkdir -p ~/.local/luna",
     "executable": "staticcheck"
   },
@@ -549,7 +549,7 @@
     "validation": "Recipe added; awaiting CI validation",
     "url": "https://github.com/dart-lang/dart_style.git",
     "config": "",
-    "compile": "dart pub get && dart compile exe bin/format.dart -o \"$HOME/.local/luna/dart-format\"",
+    "compile": "mkdir -p \"$HOME/.local/luna\" && dart pub get && dart compile exe bin/format.dart -o \"$HOME/.local/luna/dart-format\"",
     "install": "test -x \"$HOME/.local/luna/dart-format\"",
     "executable": "dart-format"
   },
@@ -573,7 +573,7 @@
     "url": "https://github.com/koalaman/shellcheck.git",
     "config": "",
     "compile": "cabal update && cabal build exe:shellcheck",
-    "install": "cabal install . --installdir=\"$HOME/.local/luna\" --install-method=copy",
+    "install": "mkdir -p \"$HOME/.local/luna\" && cabal install . --installdir=\"$HOME/.local/luna\" --install-method=copy",
     "executable": "shellcheck"
   }
 ]
