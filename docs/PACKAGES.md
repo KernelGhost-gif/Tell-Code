@@ -4,7 +4,7 @@ Tell's native CLI can delegate package operations to [Luna](https://github.com/N
 
 ## Install Luna
 
-Install Luna by following its [upstream instructions](https://github.com/Neonwave175/Luna). The upstream project currently requires Python 3.10 or newer, Zsh, pip, Git, and the build tools needed by the packages you install. Make sure the resulting `luna` command is on your `PATH`.
+Install Luna by following its [upstream instructions](https://github.com/Neonwave175/Luna). The upstream project currently requires Python 3.10 or newer, Zsh, pip, wget, Git, Rich, and the build tools needed by the packages you install. Make sure the resulting `luna` command is on your `PATH`.
 
 Verify that the command is available:
 
