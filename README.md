@@ -9,7 +9,7 @@ Write readable instructions. Run real programs.</p>
   <a href="https://github.com/KernelGhost-gif/Tell-Code/actions/workflows/native.yml"><img src="https://github.com/KernelGhost-gif/Tell-Code/actions/workflows/native.yml/badge.svg?branch=main" alt="Native runtime CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8b7cff.svg" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/version-0.3.7-ffad7a.svg" alt="Tell version 0.3.7">
-  <img src="https://img.shields.io/badge/platforms-Linux%20·%20macOS%20·%20Windows-35b7a4.svg" alt="Linux, macOS and Windows">
+  <img src="https://img.shields.io/badge/platforms-Linux%20%2F%20macOS%20%2F%20Windows-35b7a4.svg" alt="Linux, macOS and Windows">
 </p>
 
 <p>
@@ -311,14 +311,7 @@ Open an [issue](https://github.com/KernelGhost-gif/Tell-Code/issues) or submit a
 
 <div align="center">
 
-**Like the idea? Explore the code, try a program, and tell us what you think.**
-
-<a href="https://github.com/KernelGhost-gif/Tell-Code">
-  <img src="https://img.shields.io/badge/Explore_the_repository-181a2b?style=for-the-badge&logo=github" alt="Explore Tell-Code">
-</a>
-<a href="https://github.com/KernelGhost-gif/Tell-Code/stargazers">
-  <img src="https://img.shields.io/badge/Star_the_project-f4c95d?style=for-the-badge&logo=github&logoColor=181a2b" alt="Star Tell-Code">
-</a>
+**Interested in Tell?** Try an example, open an issue, or [give the project a star](https://github.com/KernelGhost-gif/Tell-Code/stargazers).
 
 </div>
 
