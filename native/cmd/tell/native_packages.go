@@ -48,6 +48,7 @@ var nativePackageProviders = map[string]bool{
 	"deno":     true,
 	"bun":      true,
 	"nimble":   true,
+	"dub":      true,
 }
 
 func parseNativePackageSpec(spec string) (nativePackage, bool, error) {
@@ -398,6 +399,20 @@ func nativeCommandPlan(action string, pkg nativePackage, home string, lookPath f
 			args = []string{"--nimbleDir:" + nimbleDir, "--accept", "install", "-g", "--refresh", pkg.Name}
 		}
 		return []nativeCommand{command("nimble", args)}, nil
+
+	case "dub":
+		env := []string{"DUB_HOME=" + filepath.Join(root, "dub")}
+		fetch := command("dub", []string{"fetch", pkg.Name, "--cache=user", "--recursive"}, env...)
+		remove := command("dub", []string{"remove", pkg.Name, "--version=*", "--non-interactive"}, env...)
+		switch action {
+		case "install":
+			return []nativeCommand{fetch}, nil
+		case "remove":
+			return []nativeCommand{command("dub", []string{"remove", pkg.Name, "--non-interactive"}, env...)}, nil
+		case "update":
+			return []nativeCommand{remove, fetch}, nil
+		}
+
 	}
 	return nil, fmt.Errorf("unsupported native package provider %q", pkg.Provider)
 }
@@ -492,6 +507,8 @@ func runNativePackageAction(
 			fmt.Fprintf(stdout, "Add %s to PATH to run installed Bun tools.\n", filepath.Join(nativePackageRoot(home), "bun", "bin"))
 		case "nimble":
 			fmt.Fprintf(stdout, "Add %s to PATH to run installed Nim tools.\n", filepath.Join(nativePackageRoot(home), "nimble", "bin"))
+		case "dub":
+			fmt.Fprintf(stdout, "DUB library packages are cached under %s; add them to a D project with dub.json dependencies.\n", filepath.Join(nativePackageRoot(home), "dub", "packages"))
 		default:
 			fmt.Fprintf(stdout, "Add %s to PATH to run installed tools.\n", filepath.Join(nativePackageRoot(home), "bin"))
 		}
@@ -645,6 +662,8 @@ func nativePackageSearchPlan(provider, query string) (nativeCommand, error) {
 		return nativeCommand{Program: "opam", Args: []string{"search", "--short", query}}, nil
 	case "nimble":
 		return nativeCommand{Program: "nimble", Args: []string{"search", query}}, nil
+	case "dub":
+		return nativeCommand{Program: "dub", Args: []string{"search", query}}, nil
 	case "luarocks":
 		return nativeCommand{Program: "luarocks", Args: []string{"search", query}}, nil
 	case "mix":

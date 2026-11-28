@@ -47,6 +47,7 @@ tell pkg install coursier:scalafmt
 tell pkg install mint:realm/SwiftLint@0.60.0 luarocks:luafilesystem
 tell pkg install conan:fmt/11.0.2
 tell pkg install deno:npm:cowsay bun:cowsay nimble:nake
+tell pkg install dub:vibe-d
 tell pkg list
 tell pkg update
 tell pkg remove rg
@@ -73,9 +74,9 @@ The 29-entry starter catalogue includes utilities and formatters/linters for Rus
 | `stylua` | Lua and Luau formatting |
 | `swift-format` | Swift formatting |
 
-Run `tell pkg search PROVIDER:QUERY` to search supported native registries without relying on the curated list. Full-text search is available for Cargo, npm, Composer, RubyGems, NuGet, Cabal, Coursier, OPAM, Hex/Mix, CRAN, LuaRocks, and Nimble. Go and Python currently perform exact module/package index lookups. Dart Pub, Conan, Deno, Bun, Julia, and Mint have install support but no direct CLI search command in this adapter.
+Run `tell pkg search PROVIDER:QUERY` to search supported native registries without relying on the curated list. Full-text search is available for Cargo, npm, Composer, RubyGems, NuGet, Cabal, Coursier, OPAM, Hex/Mix, CRAN, LuaRocks, Nimble, and DUB. Go and Python currently perform exact module/package index lookups. Dart Pub, Conan, Deno, Bun, Julia, and Mint have install support but no direct CLI search command in this adapter.
 
-Native registry installs are tracked separately from Luna. Supported prefixes are `cargo:`, `npm:`, `pip:` (using uv or pipx), `go:`, `gem:`, `composer:`, `nuget:`, `pub:`, `cabal:`, `mix:`, `coursier:`, `julia:`, `r:`, `opam:`, `mint:`, `luarocks:`, `conan:`, `deno:`, `bun:`, and `nimble:`. These prefixes use the matching language ecosystem manager. `cargo:`, `npm:`, `pip:`, `go:`, `gem:`, `composer:`, `nuget:`, `pub:`, `cabal:`, `mix:`, `coursier:`, `mint:`, `luarocks:`, `deno:`, `bun:`, and `nimble:` are intended for CLI tools and apps. `julia:` and `r:` add libraries to the active Julia/R environment; `conan:` installs a versioned C/C++ library into an isolated Conan cache and emits CMake generator files; `luarocks:` installs Lua rocks into a Tell-local tree; `opam:` installs into the active OPAM switch. These global/environment installs are not substitutes for project dependency declarations: use the ecosystem-native project workflow when adding a library dependency to an application.
+Native registry installs are tracked separately from Luna. Supported prefixes are `cargo:`, `npm:`, `pip:` (using uv or pipx), `go:`, `gem:`, `composer:`, `nuget:`, `pub:`, `cabal:`, `mix:`, `coursier:`, `julia:`, `r:`, `opam:`, `mint:`, `luarocks:`, `conan:`, `deno:`, `bun:`, `nimble:`, and `dub:`. These prefixes use the matching language ecosystem manager. `cargo:`, `npm:`, `pip:`, `go:`, `gem:`, `composer:`, `nuget:`, `pub:`, `cabal:`, `mix:`, `coursier:`, `mint:`, `luarocks:`, `deno:`, `bun:`, and `nimble:` are intended for CLI tools and apps. `dub:` caches D libraries in a Tell-local DUB home; add those packages to the project's `dub.json` to use them. `julia:` and `r:` add libraries to the active Julia/R environment; `conan:` installs a versioned C/C++ library into an isolated Conan cache and emits CMake generator files; `luarocks:` installs Lua rocks into a Tell-local tree; `opam:` installs into the active OPAM switch. These global/environment installs are not substitutes for project dependency declarations: use the ecosystem-native project workflow when adding a library dependency to an application.
 
 Use `tell pkg info NAME` to see the exact toolchain required by a curated package. Recipes currently target Linux. Windows, macOS, Android, and Termux package installation are not implied by the existence of Tell binaries for those platforms. Some upstream tools may build on other operating systems, but those recipes have not been validated there.
 

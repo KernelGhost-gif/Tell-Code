@@ -623,6 +623,7 @@ func TestNativeRegistrySearchUsesRegistryCommands(t *testing.T) {
 		{"pip:ruff", "pip", []string{"index", "versions", "ruff"}},
 		{"luarocks:socket", "luarocks", []string{"search", "socket"}},
 		{"nimble:nake", "nimble", []string{"search", "nake"}},
+		{"dub:vibe-d", "dub", []string{"search", "vibe-d"}},
 	}
 	for _, test := range tests {
 		t.Run(test.spec, func(t *testing.T) {
@@ -837,5 +838,55 @@ func TestDenoBunNimbleUpdateAndRemovePlans(t *testing.T) {
 	}
 	if len(nimbleRemove) != 1 || !reflect.DeepEqual(nimbleRemove[0].Args, []string{"--nimbleDir:" + filepath.Join(nativePackageRoot(home), "nimble"), "--accept", "uninstall", "nake"}) {
 		t.Fatalf("Nimble remove plan = %#v", nimbleRemove)
+	}
+}
+
+
+func TestDubPlansUseTellLocalDUBHome(t *testing.T) {
+	home := t.TempDir()
+	pkg := nativePackage{Provider: "dub", Name: "vibe-d"}
+	lookPath := func(string) (string, error) { return "/fake/dub", nil }
+	dubHome := filepath.Join(nativePackageRoot(home), "dub")
+
+	install, err := nativeCommandPlan("install", pkg, home, lookPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(install) != 1 || !reflect.DeepEqual(install[0].Args, []string{"fetch", "vibe-d", "--cache=user", "--recursive"}) {
+		t.Fatalf("DUB install plan = %#v", install)
+	}
+	if !containsEnvironment(install[0].Env, "DUB_HOME="+dubHome) {
+		t.Fatalf("DUB_HOME not isolated: %#v", install[0].Env)
+	}
+
+	update, err := nativeCommandPlan("update", pkg, home, lookPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(update) != 2 ||
+		!reflect.DeepEqual(update[0].Args, []string{"remove", "vibe-d", "--version=*", "--non-interactive"}) ||
+		!reflect.DeepEqual(update[1].Args, []string{"fetch", "vibe-d", "--cache=user", "--recursive"}) {
+		t.Fatalf("DUB update plan = %#v", update)
+	}
+	if !containsEnvironment(update[0].Env, "DUB_HOME="+dubHome) || !containsEnvironment(update[1].Env, "DUB_HOME="+dubHome) {
+		t.Fatalf("DUB update not isolated: %#v", update)
+	}
+
+	remove, err := nativeCommandPlan("remove", pkg, home, lookPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(remove) != 1 || !reflect.DeepEqual(remove[0].Args, []string{"remove", "vibe-d", "--non-interactive"}) {
+		t.Fatalf("DUB remove plan = %#v", remove)
+	}
+}
+
+func TestDubRegistrySearchPlan(t *testing.T) {
+	plan, err := nativePackageSearchPlan("dub", "vibe-d")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.Program != "dub" || !reflect.DeepEqual(plan.Args, []string{"search", "vibe-d"}) {
+		t.Fatalf("DUB search plan = %#v", plan)
 	}
 }
