@@ -1,24 +1,14 @@
 <div align="center">
 
-<img src="assets/tell-banner.svg" alt="Tell — code that reads like clear instructions" width="820">
-
-<p><strong>A sentence-first programming language with a native Go runtime.</strong><br>
-Write readable instructions. Run real programs.</p>
-
-<p>
-  <a href="https://github.com/KernelGhost-gif/Tell-Code/actions/workflows/native.yml"><img src="https://github.com/KernelGhost-gif/Tell-Code/actions/workflows/native.yml/badge.svg?branch=main" alt="Native runtime CI"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8b7cff.svg" alt="MIT License"></a>
-  <img src="https://img.shields.io/badge/version-0.3.7-ffad7a.svg" alt="Tell version 0.3.7">
-  <img src="https://img.shields.io/badge/platforms-Linux%20%2F%20macOS%20%2F%20Windows-35b7a4.svg" alt="Linux, macOS and Windows">
-</p>
+<img src="assets/tell-banner-dark.svg" alt="Tell Code" width="100%">
 
 <p>
   <a href="#quick-start">Quick start</a> ·
-  <a href="#the-language">The language</a> ·
+  <a href="#the-language">Language</a> ·
   <a href="#what-you-get">Features</a> ·
   <a href="#how-it-works">How it works</a> ·
-  <a href="#documentation">Documentation</a> ·
-  <a href="#contributing">Contributing</a>
+  <a href="#documentation">Docs</a> ·
+  <a href="#contributing">Contribute</a>
 </p>
 
 </div>
