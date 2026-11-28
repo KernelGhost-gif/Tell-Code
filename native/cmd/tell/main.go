@@ -32,10 +32,16 @@ func main() {
 	maxLoopIterations := flag.Int("max-loop-iterations", defaults.MaxLoopIterations, "maximum iterations in one loop or range")
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "Tell %s - a sentence-first programming language\n\n", version)
-		fmt.Fprintf(flag.CommandLine.Output(), "Usage: tell [run|check|test|build|format|repl|new|init] [options] <program.tell|program.tbc|->\n       tell --version\n\nOptions:\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "Usage: tell [run|check|test|build|format|repl|new|init|pkg] [options] <program.tell|program.tbc|->\n       tell pkg <install|remove|list|update|sync> [arguments]\n       tell --version\n\nOptions:\n")
 		flag.PrintDefaults()
 	}
 	args := os.Args[1:]
+	if len(args) > 0 && args[0] == "pkg" {
+		if status := runPackageCommand(args[1:], os.Stdout, os.Stderr); status != 0 {
+			os.Exit(status)
+		}
+		return
+	}
 	replMode := len(args) > 0 && args[0] == "repl"
 	formatMode := len(args) > 0 && args[0] == "format"
 	buildMode := len(args) > 0 && args[0] == "build"
