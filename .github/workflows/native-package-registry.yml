@@ -89,7 +89,7 @@ jobs:
           test -x "$HOME/.local/tell/deno/bin/cowsay"
           test -x "$HOME/.local/tell/bun/bin/cowsay"
           test -x "$HOME/.local/tell/nimble/bin/nake"
-          find "$HOME/.local/tell/dub/packages" -maxdepth 1 -type d -name 'vibe-d-*' | grep -q .
+          find "$HOME/.local/tell/dub/packages/vibe-d" -mindepth 1 -maxdepth 1 -type d | grep -q .
           "$HOME/.local/tell/bin/typos" --version
           "$HOME/.local/tell/bin/prettier" --version
           "$HOME/.local/tell/bin/ruff" --version
@@ -118,7 +118,7 @@ jobs:
           "$HOME/.local/tell/bin/ruff" --version
           "$HOME/.local/tell/bin/gopls" version
           "$HOME/.local/tell/nimble/bin/nake" --help
-          find "$HOME/.local/tell/dub/packages" -maxdepth 1 -type d -name 'vibe-d-*' | grep -q .
+          find "$HOME/.local/tell/dub/packages/vibe-d" -mindepth 1 -maxdepth 1 -type d | grep -q .
 
       - name: Remove through Tell and verify cleanup
         run: |
@@ -133,7 +133,7 @@ jobs:
           test ! -e "$HOME/.local/tell/deno/bin/cowsay"
           test ! -e "$HOME/.local/tell/bun/bin/cowsay"
           test ! -e "$HOME/.local/tell/nimble/bin/nake"
-          test -z "$(find "$HOME/.local/tell/dub/packages" -maxdepth 1 -type d -name 'vibe-d-*' -print -quit)"
+          test ! -d "$HOME/.local/tell/dub/packages/vibe-d" || test -z "$(find "$HOME/.local/tell/dub/packages/vibe-d" -mindepth 1 -maxdepth 1 -type d -print -quit)"
           test ! -e "$HOME/.local/tell/bin/typos"
           test ! -e "$HOME/.local/tell/bin/prettier"
           test ! -e "$HOME/.local/tell/bin/ruff"
