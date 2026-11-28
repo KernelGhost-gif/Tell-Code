@@ -23,8 +23,8 @@ func TestPackageCommandsForwardToLuna(t *testing.T) {
 		args []string
 		want []string
 	}{
-		{name: "install one package", args: []string{"install", "fmt"}, want: []string{"install", "fmt"}},
-		{name: "install multiple packages", args: []string{"install", "fmt", "ripgrep"}, want: []string{"install", "fmt", "ripgrep"}},
+		{name: "install one unlisted package", args: []string{"install", "fmt"}, want: []string{"install", "fmt"}},
+		{name: "install multiple unlisted packages", args: []string{"install", "fmt", "ripgrep"}, want: []string{"install", "fmt", "ripgrep"}},
 		{name: "remove", args: []string{"remove", "fmt"}, want: []string{"remove", "fmt"}},
 		{name: "list", args: []string{"list"}, want: []string{"list"}},
 		{name: "update", args: []string{"update"}, want: []string{"update"}},
@@ -35,7 +35,7 @@ func TestPackageCommandsForwardToLuna(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			var got []string
 			var output bytes.Buffer
-			status := runPackageCommandWith(
+			status := runPackageCommandWithHome(
 				test.args,
 				&output,
 				&output,
@@ -50,6 +50,7 @@ func TestPackageCommandsForwardToLuna(t *testing.T) {
 					_, _ = fmt.Fprintln(command.Stdout, "Luna output")
 					return nil
 				},
+				t.TempDir(),
 			)
 			if status != 0 {
 				t.Fatalf("status = %d, output = %q", status, output.String())
@@ -64,51 +65,129 @@ func TestPackageCommandsForwardToLuna(t *testing.T) {
 	}
 }
 
-func TestPackageSyncDefaultsToLunafile(t *testing.T) {
-	original, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	directory := t.TempDir()
-	if err := os.WriteFile(filepath.Join(directory, "Lunafile"), []byte("[]\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chdir(directory); err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err := os.Chdir(original); err != nil {
-			t.Errorf("restore working directory: %v", err)
+func TestPackageSearchAndInfoUseLanguageMetadataWithoutLuna(t *testing.T) {
+	for _, test := range []struct {
+		args []string
+		want []string
+	}{
+		{args: []string{"search", "haskell"}, want: []string{"hlint", "shellcheck"}},
+		{args: []string{"search", "typescript"}, want: []string{"dprint", "prettier"}},
+		{args: []string{"info", "staticcheck"}, want: []string{"Go", "Go 1.26+"}},
+		{args: []string{"info", "black"}, want: []string{"Python", "Python 3.11+"}},
+		{args: []string{"search", "kotlin"}, want: []string{"ktlint"}},
+		{args: []string{"search", "r"}, want: []string{"air"}},
+		{args: []string{"info", "csharpier"}, want: []string{"C#", ".NET 10"}},
+	} {
+		var output, diagnostics bytes.Buffer
+		status := runPackageCommandWithHome(
+			test.args,
+			&output,
+			&diagnostics,
+			func(string) (string, error) { t.Fatal("catalogue commands must not require Luna"); return "", nil },
+			func(*exec.Cmd) error { t.Fatal("catalogue commands must not launch Luna"); return nil },
+			t.TempDir(),
+		)
+		if status != 0 {
+			t.Fatalf("args=%v status=%d output=%q stderr=%q", test.args, status, output.String(), diagnostics.String())
 		}
-	}()
+		for _, wanted := range test.want {
+			if !strings.Contains(strings.ToLower(output.String()), strings.ToLower(wanted)) {
+				t.Fatalf("args=%v output=%q does not contain %q", test.args, output.String(), wanted)
+			}
+		}
+	}
+}
 
-	var got []string
-	status := runPackageCommandWith(
-		[]string{"sync"},
-		&bytes.Buffer{},
-		&bytes.Buffer{},
-		func(string) (string, error) { return "/fake/luna", nil },
+func TestPackageInstallRegistersCatalogueEntryBeforeInstalling(t *testing.T) {
+	home := t.TempDir()
+	var calls [][]string
+	var output bytes.Buffer
+	status := runPackageCommandWithHome(
+		[]string{"install", "tokei"},
+		&output,
+		&output,
+		func(name string) (string, error) {
+			if name != "luna" {
+				t.Fatalf("looked up %q, want luna", name)
+			}
+			return "/fake/bin/luna", nil
+		},
 		func(command *exec.Cmd) error {
-			got = append([]string(nil), command.Args[1:]...)
+			calls = append(calls, append([]string(nil), command.Args[1:]...))
 			return nil
 		},
+		home,
 	)
-	if status != 0 {
-		t.Fatalf("status = %d", status)
+	want := [][]string{
+		{"add", "tokei", "https://github.com/XAMPPRocky/tokei.git", "cargo build --release --locked", "", "mkdir -p ~/.local/luna && cp target/release/tokei ~/.local/luna/tokei"},
+		{"install", "tokei"},
 	}
-	if !reflect.DeepEqual(got, []string{"sync", "Lunafile"}) {
-		t.Fatalf("Luna args = %#v", got)
+	if status != 0 || !reflect.DeepEqual(calls, want) {
+		t.Fatalf("status=%d calls=%#v want=%#v output=%q", status, calls, want, output.String())
+	}
+}
+
+func TestPackageInstallRegistersLanguageSpecificRecipe(t *testing.T) {
+	home := t.TempDir()
+	var calls [][]string
+	status := runPackageCommandWithHome(
+		[]string{"install", "php-cs-fixer"},
+		&bytes.Buffer{},
+		&bytes.Buffer{},
+		func(string) (string, error) { return "/fake/bin/luna", nil },
+		func(command *exec.Cmd) error {
+			calls = append(calls, append([]string(nil), command.Args[1:]...))
+			return nil
+		},
+		home,
+	)
+	if status != 0 || len(calls) != 2 {
+		t.Fatalf("status=%d calls=%#v", status, calls)
+	}
+	if len(calls[0]) != 6 || calls[0][0] != "add" || calls[0][1] != "php-cs-fixer" {
+		t.Fatalf("unexpected PHP recipe registration call: %#v", calls)
+	}
+	if calls[1][0] != "install" || calls[1][1] != "php-cs-fixer" {
+		t.Fatalf("unexpected PHP install call: %#v", calls)
+	}
+}
+
+func TestPackageInstallKeepsExistingCustomRecipe(t *testing.T) {
+	home := t.TempDir()
+	origin := filepath.Join(home, ".local", "lunaorigin")
+	if err := os.MkdirAll(origin, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(origin, "tokei.json"), []byte("{\"custom\":true}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var calls [][]string
+	status := runPackageCommandWithHome(
+		[]string{"install", "tokei"},
+		&bytes.Buffer{},
+		&bytes.Buffer{},
+		func(string) (string, error) { return "/fake/bin/luna", nil },
+		func(command *exec.Cmd) error {
+			calls = append(calls, append([]string(nil), command.Args[1:]...))
+			return nil
+		},
+		home,
+	)
+	if status != 0 || !reflect.DeepEqual(calls, [][]string{{"install", "tokei"}}) {
+		t.Fatalf("status=%d calls=%#v", status, calls)
 	}
 }
 
 func TestPackageCommandReportsMissingLuna(t *testing.T) {
 	var stderr bytes.Buffer
-	status := runPackageCommandWith(
+	status := runPackageCommandWithHome(
 		[]string{"list"},
 		&bytes.Buffer{},
 		&stderr,
 		func(string) (string, error) { return "", exec.ErrNotFound },
 		func(*exec.Cmd) error { t.Fatal("must not run without Luna"); return nil },
+		t.TempDir(),
 	)
 	if status != 127 || !strings.Contains(stderr.String(), lunaInstallURL) {
 		t.Fatalf("status = %d, stderr = %q", status, stderr.String())
@@ -128,12 +207,13 @@ func TestPackageCommandValidationDoesNotInvokeLuna(t *testing.T) {
 	for _, args := range tests {
 		t.Run(strings.Join(args, "_"), func(t *testing.T) {
 			var stderr bytes.Buffer
-			status := runPackageCommandWith(
+			status := runPackageCommandWithHome(
 				args,
 				&bytes.Buffer{},
 				&stderr,
 				func(string) (string, error) { t.Fatal("Luna lookup should not happen"); return "", errors.New("unexpected") },
 				func(*exec.Cmd) error { t.Fatal("Luna must not run"); return nil },
+				t.TempDir(),
 			)
 			if status != 2 || stderr.Len() == 0 {
 				t.Fatalf("status = %d, stderr = %q", status, stderr.String())
@@ -144,14 +224,36 @@ func TestPackageCommandValidationDoesNotInvokeLuna(t *testing.T) {
 
 func TestPackageSyncRequiresARegularManifestFile(t *testing.T) {
 	var stderr bytes.Buffer
-	status := runPackageCommandWith(
+	status := runPackageCommandWithHome(
 		[]string{"sync", filepath.Join(t.TempDir(), "missing.json")},
 		&bytes.Buffer{},
 		&stderr,
 		func(string) (string, error) { t.Fatal("Luna lookup should not happen"); return "", nil },
 		func(*exec.Cmd) error { t.Fatal("Luna must not run"); return nil },
+		t.TempDir(),
 	)
 	if status != 2 || !strings.Contains(stderr.String(), "cannot read manifest") {
 		t.Fatalf("status = %d, stderr = %q", status, stderr.String())
+	}
+}
+
+func TestEmbeddedPackageCatalogueIsValidAndUnique(t *testing.T) {
+	entries, err := loadPackageCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) < 20 {
+		t.Fatalf("catalogue only has %d entries; expected broad language coverage", len(entries))
+	}
+	seen := make(map[string]bool, len(entries))
+	for _, entry := range entries {
+		key := strings.ToLower(entry.Name)
+		if seen[key] {
+			t.Fatalf("duplicate package: %s", entry.Name)
+		}
+		seen[key] = true
+		if len(entry.Languages) == 0 || len(entry.Requirements) == 0 || entry.Validation == "" {
+			t.Fatalf("package %s is missing language, requirement, or validation metadata", entry.Name)
+		}
 	}
 }

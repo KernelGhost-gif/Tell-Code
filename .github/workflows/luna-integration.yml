@@ -20,8 +20,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  install-real-package:
-    name: Install and execute a real package through Tell
+  curated-linux-packages:
+    name: Build and exercise curated Linux packages
     runs-on: ubuntu-24.04
     steps:
       - name: Check out Tell
@@ -29,12 +29,17 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential g++-14 cmake libncurses-dev autoconf automake libtool bison flex pkg-config
+
       - name: Install Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.23.x"
+          go-version: "1.26.x"
 
-      - name: Install Python and Luna prerequisites
+      - name: Install Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -47,42 +52,50 @@ jobs:
           python -m pip install --user git+https://github.com/Neonwave175/Luna.git
           python -m pip install --user rich
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.local/luna" >> "$GITHUB_PATH"
           luna --help
 
       - name: Build the Tell CLI
         working-directory: native
         run: go build -trimpath -o "$RUNNER_TEMP/tell" ./cmd/tell
 
-      - name: Create a Luna manifest for a real upstream package
+      - name: Search and inspect the embedded catalogue
         run: |
-          cat > "$RUNNER_TEMP/Lunafile" <<'EOF'
-          [
-            {
-              "Name": "tokei",
-              "URL": "https://github.com/XAMPPRocky/tokei.git",
-              "Config": "",
-              "Compile": "cargo build --release --locked",
-              "Install": "mkdir -p ~/.local/luna && cp target/release/tokei ~/.local/luna/tokei"
-            }
-          ]
-          EOF
-          python -m json.tool "$RUNNER_TEMP/Lunafile"
+          "$RUNNER_TEMP/tell" pkg search | tee "$RUNNER_TEMP/catalogue.txt"
+          grep -q tokei "$RUNNER_TEMP/catalogue.txt"
+          grep -q google-java-format "$RUNNER_TEMP/catalogue.txt"
+          grep -q black "$RUNNER_TEMP/catalogue.txt"
+          "$RUNNER_TEMP/tell" pkg info rg
+          "$RUNNER_TEMP/tell" pkg info staticcheck
 
-      - name: Install upstream Tokei through tell pkg sync
+      - name: Register, build, and install the validated starter packages
         run: |
-          "$RUNNER_TEMP/tell" pkg sync "$RUNNER_TEMP/Lunafile"
-          test -x "$HOME/.local/luna/tokei"
-          "$HOME/.local/luna/tokei" --version
+          "$RUNNER_TEMP/tell" pkg install tokei rg fd bat hyperfine
+          "$RUNNER_TEMP/tell" pkg install btop cmatrix jq fastfetch
+          "$RUNNER_TEMP/tell" pkg install shfmt gofumpt staticcheck
+          "$RUNNER_TEMP/tell" pkg install ruff black stylua dprint
+          for binary in tokei rg fd bat hyperfine btop cmatrix jq fastfetch shfmt gofumpt staticcheck ruff black stylua dprint; do
+            test -x "$HOME/.local/luna/$binary"
+            "$HOME/.local/luna/$binary" --version
+          done
 
-      - name: Exercise tell pkg install and list
+      - name: Exercise Luna listing
         run: |
-          "$RUNNER_TEMP/tell" pkg install tokei
           "$RUNNER_TEMP/tell" pkg list | tee "$RUNNER_TEMP/luna-list.txt"
-          grep -q tokei "$RUNNER_TEMP/luna-list.txt"
-          "$HOME/.local/luna/tokei" --version
+          for package in tokei rg fd bat hyperfine btop cmatrix jq fastfetch shfmt gofumpt staticcheck ruff black stylua dprint; do
+            grep -q "$package" "$RUNNER_TEMP/luna-list.txt"
+          done
 
-      - name: Exercise tell pkg remove
+      - name: Remove packages through Tell
         run: |
-          "$RUNNER_TEMP/tell" pkg remove tokei
-          test ! -e "$HOME/.local/luna/tokei"
-          test ! -d "$HOME/.local/lunasource/tokei"
+          for package in tokei rg fd bat hyperfine btop cmatrix jq fastfetch shfmt gofumpt staticcheck ruff black stylua dprint; do
+            "$RUNNER_TEMP/tell" pkg remove "$package"
+            test ! -e "$HOME/.local/luna/$package"
+            test ! -d "$HOME/.local/lunasource/$package"
+          done
+
+      - name: Show the remaining recipe-only language entries
+        run: |
+          for package in google-java-format ktlint csharpier air php-cs-fixer rubocop hlint shellcheck dart-format swift-format prettier neovim sqlfluff; do
+            "$RUNNER_TEMP/tell" pkg info "$package"
+          done
