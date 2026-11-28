@@ -1,416 +1,394 @@
-# Tell
+<div align="center">
 
-**Tell is a sentence-first programming language.** Its goal is to make code read like clear instructions written in ordinary language, while keeping familiar programming capabilities underneath.
+<img src="assets/tell-banner.svg" alt="Tell — code that reads like clear instructions" width="100%">
 
-Tell's primary runtime is the standalone Go executable. The Python interpreter is deprecated and remains available only as a compatibility bridge while existing projects migrate. New language features target Go; new desktop editor work targets Rust/GPUI Studio.
+<p><strong>A sentence-first programming language with a native Go runtime.</strong><br>
+Readable instructions on the surface. A real language implementation underneath.</p>
 
-Current version: **0.3.7**.
+<p>
+  <a href="https://github.com/KernelGhost-gif/Tell-Code/actions/workflows/native.yml"><img src="https://github.com/KernelGhost-gif/Tell-Code/actions/workflows/native.yml/badge.svg?branch=main" alt="Native runtime CI"></a>
+  <a href="https://github.com/KernelGhost-gif/Tell-Code/actions/workflows/tellc.yml"><img src="https://github.com/KernelGhost-gif/Tell-Code/actions/workflows/tellc.yml/badge.svg?branch=main" alt="TellC CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8b7cff.svg" alt="MIT License"></a>
+  <img src="https://img.shields.io/badge/version-0.3.7-ffad7a.svg" alt="Tell version 0.3.7">
+  <img src="https://img.shields.io/badge/native%20runtime-Go%201.22%2B-00ADD8?logo=go&logoColor=white" alt="Go 1.22 or newer">
+  <img src="https://img.shields.io/badge/builds-6%20OS%2FCPU%20targets-35b7a4.svg" alt="Six OS and CPU build targets">
+  <a href="https://github.com/KernelGhost-gif/Tell-Code/stargazers"><img src="https://img.shields.io/github/stars/KernelGhost-gif/Tell-Code?style=social" alt="GitHub stars"></a>
+</p>
 
-Tell can optionally call functions from installed Python modules and JavaScript/Node.js modules from either runtime. Foreign calls cross a JSON boundary and run in a separate process. See [foreign-language interoperability](docs/INTEROPERABILITY.md), [the Python example](examples/python_interop.tell), and [the JavaScript example](examples/javascript_interop.tell).
+<p>
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#the-tell-way">The Tell way</a> ·
+  <a href="#what-works-today">Features</a> ·
+  <a href="#the-toolchain">Toolchain</a> ·
+  <a href="#documentation">Docs</a> ·
+  <a href="#contributing">Contribute</a>
+</p>
 
-The experimental [TellC compiler](TellC/README.md) uses LLVM to build native executables from a separate, strongly typed Tell dialect. It is distinct from the Go runtime's bytecode compiler.
+</div>
+
+---
+
+## What if code read more like instructions?
+
+Most programming languages make you learn their syntax before you can express an idea. **Tell starts from the other direction:** write clear, sentence-shaped instructions, while keeping the structure and predictability of a real programming language.
+
+`Let`, `Set`, `Say`, `If`, `Otherwise`, `For each`, `To`, and `Give back` are not decoration. They are part of a defined grammar interpreted by a real runtime.
+
+Tell is not an AI prompt parser. It does not guess what a sentence means, and it is not ordinary English pretending to be code. It is a programming language with syntax rules, functions, collections, modules, diagnostics, tests, and multiple execution paths.
 
 ## A first program
 
 ```tell
 Let colleague be "Avery".
 Let workspace be "Customer Operations".
-Say "Welcome, {colleague}. Your {workspace} workspace is ready.".
+
+Say "Welcome, {colleague}."
+Say "Your {workspace} workspace is ready."
 ```
 
 Output:
 
 ```text
-Welcome, Avery. Your Customer Operations workspace is ready.
+Welcome, Avery.
+Your Customer Operations workspace is ready.
 ```
 
-## Run Tell natively
+Readable enough to explain itself. Structured enough for a machine to execute.
 
-The Go executable runs ordinary `.tell` programs without Python installed. Programs that explicitly import Python modules need a Python runtime; see [Python interoperability](docs/INTEROPERABILITY.md).
+## Quick start
 
-See [examples/language-core.tell](examples/language-core.tell) for Unicode identifiers, named arguments, short-circuit logic, and an otherwise-if chain.
+### 1. Download Tell
 
-Download the executable for your operating system from the `releases/` folder or the GitHub Actions build artifact.
+The repository includes native Go executables for six OS/CPU combinations. Choose the one that matches your machine:
 
-| File | Platform |
+| Platform | Download |
 |---|---|
-| `tell-linux-amd64` | Linux x86-64 |
-| `tell-linux-arm64` | Linux ARM64 |
-| `tell-darwin-amd64` | macOS Intel |
-| `tell-darwin-arm64` | macOS Apple Silicon |
-| `tell-windows-amd64.exe` | Windows x86-64 |
-| `tell-windows-arm64.exe` | Windows ARM64 |
+| Linux x86-64 | [tell-linux-amd64](https://github.com/KernelGhost-gif/Tell-Code/raw/refs/heads/main/releases/tell-linux-amd64) |
+| Linux ARM64 | [tell-linux-arm64](https://github.com/KernelGhost-gif/Tell-Code/raw/refs/heads/main/releases/tell-linux-arm64) |
+| macOS Intel | [tell-darwin-amd64](https://github.com/KernelGhost-gif/Tell-Code/raw/refs/heads/main/releases/tell-darwin-amd64) |
+| macOS Apple Silicon | [tell-darwin-arm64](https://github.com/KernelGhost-gif/Tell-Code/raw/refs/heads/main/releases/tell-darwin-arm64) |
+| Windows x86-64 | [tell-windows-amd64.exe](https://github.com/KernelGhost-gif/Tell-Code/raw/refs/heads/main/releases/tell-windows-amd64.exe) |
+| Windows ARM64 | [tell-windows-arm64.exe](https://github.com/KernelGhost-gif/Tell-Code/raw/refs/heads/main/releases/tell-windows-arm64.exe) |
 
-On Linux or macOS, make the file executable once, then run it:
+For example, download and run the Linux x86-64 binary:
 
-```bash
-chmod +x ./tell-linux-amd64
-./tell-linux-amd64 examples/hello.tell
-./tell-linux-amd64 repl
-./tell-linux-amd64 --check examples/features.tell
-./tell-linux-amd64 --version
+```sh
+curl -fL \
+  -o tell \
+  https://github.com/KernelGhost-gif/Tell-Code/raw/refs/heads/main/releases/tell-linux-amd64
+
+chmod +x tell
+./tell examples/hello.tell
 ```
 
-On Windows, run from PowerShell:
+On Windows PowerShell:
 
 ```powershell
-.\tell-windows-amd64.exe examples\hello.tell
-.\tell-windows-amd64.exe repl
-.\tell-windows-amd64.exe --check examples\features.tell
-.\tell-windows-amd64.exe --version
+Invoke-WebRequest -Uri "https://github.com/KernelGhost-gif/Tell-Code/raw/refs/heads/main/releases/tell-windows-amd64.exe" -OutFile "tell.exe"
+.\tell.exe examples\hello.tell
 ```
 
-The executable is self-contained. It does not invoke Python, a shell, or a separately installed Go runtime. Use the matching OS/CPU build; macOS and Windows builds are cross-compiled in CI and should also be smoke-tested on those operating systems before a production release.
+The native executable does not need Python or a separate Go installation. Python and Node.js are required only when a program explicitly calls their interoperability bridges. The checked-in binaries are convenient snapshots; build from your checkout when you need an executable that exactly matches your source. Verify a binary with `tell --version`. SHA-256 checksums are in [`releases/SHA256SUMS`](releases/SHA256SUMS).
 
-The native runtime can compile the documented core subset to stack bytecode and run it:
+### 2. Run, check, and explore
 
-```text
+```sh
+tell examples/hello.tell          # run a program
+tell check examples/features.tell # check without executing
+tell repl                         # open the interactive shell
+tell test examples                # run Tell source tests
+tell format examples/hello.tell   # format a source file
+tell --version                    # show the runtime version
+```
+
+The native REPL keeps variables and functions between entries, accepts multiline blocks, prints `Say` output immediately, and remembers the most recent bare expression result as `_`.
+
+### 3. Build portable bytecode
+
+```sh
 tell build examples/hello.tell
 tell run examples/hello.tbc
 ```
 
-Use `tell build source.tell --output output.tbc` to choose the artifact path. The compiler supports functions, recursion, closures, core control flow, local modules embedded in the artifact, `Try`/`Raise`, and the initial class model with constructors, fields, methods, single inheritance, and overrides. `Finally` and other language features remain unsupported in bytecode; see the [CLI reference](docs/CLI_REFERENCE.md) for its exact subset and limits. [examples/compiled-objects.tell](examples/compiled-objects.tell) demonstrates an object program that can be run by either interpreter or compiled to bytecode by the native runtime.
+The Go runtime can compile the documented language subset into a versioned stack-bytecode artifact. Local `.tell` dependencies are embedded in the artifact. This is ahead-of-time compilation to Tell bytecode, **not** native machine-code compilation and not a standalone executable.
 
-## Typed Tell on the native Go runtime
+## The Tell way
 
-The Go runtime supports an opt-in typed dialect with type-first declarations
-and explicit function signatures:
+The syntax is intentionally familiar, but it is still precise.
 
-~~~tell
-to factorial(number: n) out number:
-    if n <= 1:
-        give back 1
-    end if
-    give back n * factorial(n - 1)
-end function
-
-let number answer be factorial(5)
-say answer
-~~~
-
-Use `tell --typed native/examples/native-typed.tell` to require explicit
-types for variables, function parameters, and return values. The same strict
-validation is available through `tell check --typed` and `tell build --typed`.
-Typed parameter and return contracts are enforced during normal execution
-and preserved in bytecode. Existing dynamic Tell programs remain supported
-without `--typed`; see the [typed Go dialect guide](docs/TYPED_TELL.md).
-
-## Native Go execution engines
-
-The Go runtime offers direct interpretation, AOT compilation to portable
-`.tbc` bytecode, and an initial native JIT tier for hot typed numeric
-functions:
-
-~~~sh
-tell program.tell
-tell build program.tell
-tell --engine jit program.tell
-tell --engine auto --jit-threshold 24 --jit-stats program.tell
-~~~
-
-The JIT currently targets Linux x86-64 and a restricted typed numeric
-function subset; everything else keeps running in the interpreter. The
-portable `.tbc` build is not a standalone native executable. See the
-[execution engine guide](docs/EXECUTION_ENGINES.md) for details and benchmarks.
-
-## Compile native executables with TellC
-
-TellC is an experimental C++ compiler that translates its typed dialect through LLVM into a native executable. Its dialect is separate from the dynamically typed language used by the Go and Python runtimes; programs are not necessarily interchangeable. For example:
-
-```tell
-to factorial(number: n) out number:
-    if n <= 1:
-        return 1
-    end if
-    return n * factorial(n - 1)
-end function
-
-let number result be factorial(5)
-say result
-```
-
-Declarations specify a type, function and method parameters use `type: name`, and every function declares a result with `out type` (or `out void`). The compiler checks initializers, arguments, and returns, and requires a value-returning function to return on every path. Built-in types include `number` (signed 64-bit integer), `decimal` (64-bit floating point), `text`, and `bool`. Newlines end statements; semicolons can separate statements on one line. Keywords and built-in type names are case insensitive; object type names are case sensitive.
-
-TellC compiles typed functions, objects, loops, resizable typed lists, and basic console and file I/O. Object members can be private (`own`) or public (`others`), as shown in the [object example](TellC/examples/objects.tell). See the [TellC guide](TellC/README.md) for supported operations and library linking.
-
-On Apple silicon, build the standalone compiler from the repository root with CMake, Ninja, Xcode command-line tools, and a matching LLVM 24 source tree:
-
-```sh
-LLVM_SOURCE=/path/to/llvm-project ./scripts/build-tellc-macos.sh
-build/tellc-macos-arm64/tellc/tellc TellC/examples/factorial.tell -o factorial
-./factorial
-```
-
-The example prints `120`. The standalone compiler embeds LLVM code generation and the Mach-O linker; it and its output target macOS 11 or later. The [standalone Linux build](TellC/docs/BUILDING.md#standalone-linux) produces static x86-64 and ARM64 compilers that can each emit executables for either architecture. Build details, dependencies, and tests are in the [TellC guide](TellC/README.md), [build guide](TellC/docs/BUILDING.md), and [test guide](TellC/docs/TESTING.md). `tellc source.tell` defaults to `a.out` (or `a.exe` on Windows); use `-o` to choose the output and `tellc --llvm-version` to inspect its LLVM version.
-
-On Windows x64, build TellC natively with Visual Studio 2022 and an installed LLVM toolchain using `scripts/build-tellc-windows.ps1`. See the [Windows build instructions](TellC/docs/BUILDING.md#native-windows-x64-build).
-
-## Legacy Python runtime (deprecated)
-
-Python 3.10 or newer is required only for this legacy compatibility runtime. New development should target the native Go runtime.
-
-```bash
-python tell.py examples/hello.tell
-python -m tell run examples/hello.tell
-python -m tell check examples/hello.tell
-python -m tell run --max-call-depth 128 --max-loop-iterations 50000 examples/hello.tell
-cat examples/hello.tell | python -m tell run -
-python tell.py --check examples/features.tell
-python tell.py --version
-```
-
-Or install the package:
-
-```bash
-python -m pip install .
-tell examples/hello.tell
-```
-
-## Native desktop editor
-
-The replacement editor is the early Rust/GPUI application in [studio/](studio/README.md). It opens one Tell source file, supports basic editing and saving, and runs the native Go executable. Build it from the repository root:
-
-~~~sh
-cargo run --manifest-path studio/Cargo.toml -- path/to/program.tell
-~~~
-
-Set TELL_NATIVE_EXECUTABLE to the Go executable path when it is not available as tell on PATH. This is an initial editor foundation, not yet a full Zed-style IDE; tabs, diagnostics, language-server integration, undo/redo, and project navigation remain future work.
-
-The Python/Tk IDE is deprecated and remains temporarily available as a compatibility fallback through python -m tell ide, which prints a deprecation warning. New installations no longer include the separate tell-ide console command. See the [migration guide](docs/IDE.md).
-
-## Language features
-
-| Feature | Native Go runtime | Python runtime |
-|---|---:|---:|
-| Variables and assignment | Yes | Yes |
-| Arithmetic and word operators | Yes | Yes |
-| Text interpolation | Yes | Yes |
-| If / otherwise-if / otherwise | Yes | Yes |
-| While, repeat, for-each loops | Yes | Yes |
-| Functions and recursion | Yes | Yes |
-| Named arguments for Tell-defined functions, constructors, methods | Yes | Yes |
-| Default and variadic function parameters | Yes | Yes |
-| Unicode identifiers (letters, numbers, underscore) | Yes | Yes |
-| Persistent multiline REPL | Yes | Yes |
-| Lists and dictionaries | Yes | Yes |
-| Multiple assignment and eager functional collections | Yes | Yes |
-| Input and output | Yes | Yes |
-| Basic file read/write/append | Yes | Yes |
-| Try / error handling | Yes | Yes |
-| Math, random, JSON, statistics, date/time libraries | Core functions | Python-backed allowlist |
-| Full Python module ecosystem | Optional Python process bridge | Python imports in-process |
-| JavaScript/Node.js module functions | Optional Node.js process bridge | Optional Node.js process bridge |
-| Constructors, fields, instance methods, single inheritance | Yes | Yes |
-| Local `.tell` modules with public exports and import caching | Yes | Yes |
-| Static methods, access modifiers, multiple inheritance | Planned | Planned |
-| Async, package manager | Planned | Planned |
-
-The Go runtime is the primary implementation and the Python runtime is maintained only for compatibility during migration. Cross-runtime differences remain; use the Go executable for new projects. This is an evolving language, not a claim of complete Python compatibility.
-
-## Syntax guide
-
-### Variables and output
-
-```tell
-Let score be 10.
-Set score to score plus 5.
-Say "Your score is {score}.".
-```
-
-### Expressions
-
-| Tell phrase | Meaning |
+| Tell | Meaning |
 |---|---|
-| `a plus b` | Addition |
-| `a minus b` | Subtraction |
-| `a times b` | Multiplication |
-| `a divided by b` | Division |
-| `a modulo b` | Remainder |
-| `a to the power of b` | Exponentiation |
-| `a is equal to b` | Equality |
-| `a is not equal to b` | Inequality |
-| `a is greater than b` | Greater than |
-| `a is at least b` | Greater than or equal to |
-| `a is less than b` | Less than |
-| `a is at most b` | Less than or equal to |
+| `Let score be 10.` | Declare a variable |
+| `Set score to score plus 5.` | Update a value |
+| `Say "Hello".` | Print output |
+| `If ready:` / `Otherwise:` | Choose a path |
+| `Otherwise if condition:` | Add another branch |
+| `For each item in items:` | Iterate over a collection |
+| `Repeat 3 times:` | Repeat a fixed number of times |
+| `To greet(name):` | Declare a function |
+| `Give back value.` | Return a value |
+| `Use the module "helpers.tell" as helpers.` | Import a local Tell module |
+
+Word operators work alongside ordinary symbols:
+
+| Tell expression | Familiar equivalent |
+|---|---|
+| `a plus b` | `a + b` |
+| `a times b` | `a * b` |
+| `a divided by b` | `a / b` |
+| `a is equal to b` | `a == b` |
+| `a is at least b` | `a >= b` |
 | `a and b`, `a or b`, `not a` | Boolean logic |
 
-The shorthand `count is 3` is also accepted. Ordinary arithmetic symbols are accepted too.
+Periods at the end of statements are optional. Indentation keeps blocks readable, while explicit `End if.`, `End loop.`, and `End function.` terminators make their boundaries clear.
 
-### Decisions
+### Functions, loops, and collections
 
-```tell
-If temperature is greater than 30:
-    Say "It is hot.".
-Otherwise:
-    Say "It is not too hot.".
-End if.
-```
-
-### Loops
+The documented runtime subset includes functions, recursion, closures, named/default/variadic parameters, lists, tuples, sets, dictionaries, multiple assignment, slicing, and eager collection operations such as `map`, `filter`, and `reduce`.
 
 ```tell
-Repeat 3 times:
-    Say "Round {the current repetition number}.".
-End repeat.
-
-For each colour in ["red", "green", "blue"]:
-    Say colour.
-End loop.
-
-While count is less than 5:
-    Set count to count plus 1.
-End while.
-```
-
-Use `Stop this loop.` to break, or `Skip to the next repetition.` to continue.
-
-### Functions
-
-```tell
-To add(first, second):
-    Give back first plus second.
+To average(values):
+    Let total be 0.
+    For each value in values:
+        Set total to total plus value.
+    End loop.
+    Give back total divided by len(values).
 End function.
 
-Let total be the result of add with 4 and 8.
-Say total.
+Let scores be [12, 18, 24, 30].
+Let result be the result of average with scores.
+Say "Average score: {result}."
 ```
 
-Parameters may also be written as `To add with first and second:`. Functions can call themselves recursively.
+There is also basic error handling, local `.tell` modules, file read/write/append operations, and a growing standard library. The [language specification](docs/LANGUAGE_SPECIFICATION.md) documents the shared core and calls out runtime-specific differences.
 
-### Input and collections
+## What works today
+
+The **native Go runtime is Tell's primary implementation** and the recommended target for new programs.
+
+| Capability | Current state |
+|---|---|
+| Native source interpreter | Main execution path |
+| Interactive multiline REPL | Available |
+| Source checking, formatting, and Tell test runner | Available |
+| Functions, recursion, closures, collections, and basic classes | Available in the documented subset |
+| Local `.tell` modules | Available; no package registry yet |
+| Conservative type/declaration checks | Available through `--types` |
+| Portable stack bytecode and VM | Available for a documented subset |
+| Native JIT tier in the Go runtime | Initial Linux x86-64 numeric subset |
+| Python and JavaScript module calls | Available through optional process bridges |
+| TellC LLVM compiler | Separate experimental typed dialect |
+| Tell Studio desktop editor | Early Rust/GPUI editor foundation |
+
+### Three execution paths in the Go runtime
+
+| Engine | What it does |
+|---|---|
+| Interpreter | Executes source directly; the compatibility default |
+| AOT bytecode | Compiles the supported subset into portable `.tbc` artifacts for the Go VM |
+| JIT / automatic tiering | Compiles eligible hot typed numeric functions to native code on Linux x86-64 |
+
+Try the execution modes:
+
+```sh
+tell --engine interp examples/features.tell
+tell --engine jit native/examples/native-typed.tell
+tell --engine auto --jit-threshold 24 --jit-stats native/examples/native-typed.tell
+```
+
+The JIT is intentionally conservative: it currently targets a small, straight-line numeric function subset with explicit `number` or `decimal` signatures. Unsupported functions stay on the interpreter path. It is an early execution tier, not a whole-program optimizing compiler. See [Execution Engines](docs/EXECUTION_ENGINES.md) for the supported operations and benchmark caveats.
+
+### Optional Python and JavaScript interoperability
+
+Tell can call public functions from installed Python modules and JavaScript/Node.js modules. That lets a Tell program reuse existing libraries rather than reimplementing everything.
 
 ```tell
-Ask "What is your name? " and save the answer as name.
-Let colours be ["red", "blue"].
-Add "green" to colours.
-Remove "red" from colours.
-Set the item at position 0 in colours to "purple".
+Use the Python library called statistics as stats.
+Say stats.mean([12, 18, 24, 30]).
 
-Let profile be {"name": "Ada", "age": 36}.
-Set the key "age" in profile to 37.
-Say profile["age"].
-
-Let width, height be [640, 480].
-Set width, height to [800, 600].
-Say [width, height].
+Use the JavaScript library called node:path as paths.
+Say paths.basename("/projects/tell/main.tell").
 ```
 
-Built-ins include `len`, `range`, `sum`, `min`, `max`, `sorted`, `reversed`, `map`, `filter`, `reduce`, `abs`, `round`, `average`, `first`, `last`, `any`, `all`, `type_of`, `random_number`, `number`, `sqrt`, `floor`, and `ceiling`. See the [collections guide](docs/COLLECTIONS.md) for the shared functional operations and their semantics.
+Python and Node.js must be installed, and any third-party packages must already be available to those runtimes. Foreign calls run in separate processes and exchange JSON-compatible values. This is interoperability, **not** a universal multi-language runtime or a way to import arbitrary C++, Rust, JVM, or .NET code. Read the [interoperability contract](docs/INTEROPERABILITY.md) before relying on a bridge.
 
-### Standard libraries
+## The toolchain
 
-The native runtime provides these standard libraries:
+Tell is growing beyond one interpreter. These components are related, but they are not interchangeable.
 
-```tell
-Use the math library as maths.
-Say maths.sqrt(144).
+### Tell — the native Go runtime
 
-Use the json library.
-Let data be json.loads("{\"answer\": 42}").
-Say data["answer"].
-```
+The primary implementation for everyday Tell programs. It includes the interpreter, REPL, CLI, type/declaration checks, the initial bytecode compiler/VM, and the first native JIT tier.
 
-Both runtimes provide the `csv` module with `parse(text)` and `stringify(rows)` operations. CSV values are text cells and stringify uses LF line endings. The standard-library modules are `math`, `random`, `statistics`, `json`, `datetime`, and `csv`; exact exports can vary between runtimes. See the [standard library reference](docs/STANDARD_LIBRARY.md).
+- [Go runtime source](native/)
+- [CLI reference](docs/CLI_REFERENCE.md)
+- [Execution engine guide](docs/EXECUTION_ENGINES.md)
 
-Tell files can also import another `.tell` file relative to the importing source file:
+### TellC — an experimental LLVM compiler
 
-```tell
-Use the module "helpers.tell" as helpers.
-Say helpers.triple(7).
-```
+TellC is a separate C++17 compiler for a strongly typed Tell dialect. It generates LLVM IR and can produce native executables; supported LLVM configurations also provide JIT execution. Its syntax and type model are distinct from the dynamically typed Go runtime, so a program written for one dialect is not automatically compatible with the other.
 
-Imports execute once per interpreter and export public top-level names. Names beginning with `_` are private. Circular imports are rejected. `tell build` compiles and embeds local module dependencies recursively, so a `.tbc` artifact does not need the source modules at runtime. See the [module guide](docs/MODULES.md) and [CLI reference](docs/CLI_REFERENCE.md). There is no package registry or dependency installer.
+TellC also has a C-ABI foreign-function interface for calling compatible prebuilt C/C++ libraries through exported wrappers. It does not compile arbitrary C++ source or expose C++ classes/templates directly.
 
-### Files
+- [TellC overview](TellC/README.md)
+- [TellC architecture](TellC/docs/ARCHITECTURE.md)
+- [Build instructions](TellC/docs/BUILDING.md)
+- [Test coverage](TellC/docs/TESTING.md)
 
-```tell
-Write "Hello from Tell!" to the file "hello.txt".
-Read the file "hello.txt" into message.
-Say message.
-Append " Another line." to the file "hello.txt".
-```
+### Tell Studio — an early native editor
 
-File paths are relative to the folder from which Tell is launched. Only run programs you trust, especially when they read or write files.
+Tell Studio is a Rust application built with the GPUI framework. The current foundation opens one Tell file, supports basic editing and saving, and runs it through the native Go executable. It is not yet a full IDE: multi-tab projects, undo/redo, diagnostics, syntax highlighting, LSP integration, and debugging remain future work.
 
-### Error handling
+- [Tell Studio details](studio/README.md)
 
-```tell
-Try:
-    Let answer be 10 divided by 0.
-If something goes wrong:
-    Say "Something went wrong: {error_message}".
-End try.
-```
+### The legacy Python runtime
+
+The Python interpreter remains as a deprecated compatibility path for existing programs. New language development targets the Go runtime; the Python implementation is not the primary direction.
+
+## A few examples to explore
+
+| Example | What to look for |
+|---|---|
+| [hello.tell](examples/hello.tell) | The smallest complete program |
+| [language-core.tell](examples/language-core.tell) | Core syntax and language behavior |
+| [features.tell](examples/features.tell) | Functions, loops, branches, and math |
+| [factorial.tell](examples/factorial.tell) | Recursion |
+| [guessing_game.tell](examples/guessing_game.tell) | Interactive input |
+| [sets.tell](examples/sets.tell) | Set operations |
+| [tuples.tell](examples/tuples.tell) | Tuples and unpacking |
+| [modules.tell](examples/modules.tell) | Local module imports |
+| [python_interop.tell](examples/python_interop.tell) | Python bridge |
+| [javascript_interop.tell](examples/javascript_interop.tell) | JavaScript bridge |
+| [compiled-objects.tell](examples/compiled-objects.tell) | Object model and bytecode subset |
+
+The repository also includes a shared [conformance corpus](conformance/README.md) used to compare behavior across implementations.
 
 ## Build from source
 
-Create a project with `tell new hello-world`, then run `tell run hello-world/main.tell` and `tell test hello-world`. Use `tell init` to scaffold files in the current directory.
+### Build the Go executable
 
-### Build the native executable for your current OS
+Install Go 1.22 or newer:
 
-Install Go 1.22 or newer, then:
-
-```bash
+```sh
 cd native
 go test ./...
+go vet ./...
 go build -o tell ./cmd/tell
 ./tell ../examples/hello.tell
 ```
 
-### Cross-compile all supported binaries from Linux, macOS, or WSL
+### Cross-build all six native binaries
 
-Install Go 1.22 or newer and run:
+From the repository root:
 
-```bash
+```sh
 ./scripts/build-all.sh
 ```
 
-The script uses `CGO_ENABLED=0`, so the outputs do not depend on a C runtime or external Go installation. It creates the six executables in `releases/` and writes a `SHA256SUMS` file.
+The script cross-compiles Linux, macOS, and Windows targets for amd64 and arm64 with `CGO_ENABLED=0`. It writes the six executables, a `SHA256SUMS` file, an SPDX software bill of materials, and third-party notices into `releases/`.
 
 ### Run the tests
 
-```bash
-./scripts/test-native.sh
+```sh
+# Native Go runtime
+cd native
+go test ./...
+go test -race ./...
+go vet ./...
+
+# Python compatibility runtime and project tests
+cd ..
 python -m unittest discover -s tests -v
+
+# Tell source-level tests
+./releases/tell-linux-amd64 test examples
 ```
 
-Tell source tests use `Check that expression.` assertions and filenames ending in `_test.tell`. Run `python -m tell test` or `tell test` to discover them below the current directory; pass a directory or a single `.tell` file to narrow the run.
+The CI workflows also run shared runtime conformance fixtures and build TellC in its configured platform jobs.
 
-The Python command above tests the preserved Python implementation; it is not required to run native Tell programs.
-
-## Project layout
+## Project map
 
 ```text
 Tell-Code/
-├── .github/workflows/      # Native CI and cross-platform builds
-├── examples/               # Sample .tell programs
-├── native/                 # Standalone Go runtime and tests
-│   ├── cmd/tell/            # Native CLI entry point
-│   └── internal/tell/       # Parser, evaluator, and runtime
-├── TellC/                  # Experimental LLVM compiler and typed dialect
-├── scripts/                # Build and test helpers
-├── tell/                   # Python interpreter
-├── tests/                  # Python interpreter tests
-├── releases/                   # Prebuilt native executables
-├── tell.py                 # Python convenience launcher
-└── pyproject.toml           # Python package metadata
+├── .github/workflows/   # Runtime, compiler, editor, and release automation
+├── assets/              # README artwork
+├── conformance/         # Shared behavior fixtures
+├── docs/                # Language, CLI, runtime, and engineering docs
+├── examples/            # Runnable Tell programs
+├── native/              # Primary Go runtime, VM, compiler, and JIT
+├── TellC/               # Experimental C++ / LLVM compiler
+├── studio/              # Early Rust / GPUI desktop editor
+├── tell/                # Legacy Python compatibility runtime
+├── tests/               # Python and project tests
+├── scripts/             # Build, packaging, and test helpers
+└── releases/            # Checked-in native binaries and metadata
 ```
 
-The supported core is described in [`docs/LANGUAGE_SPECIFICATION.md`](docs/LANGUAGE_SPECIFICATION.md), with the [CLI reference](docs/CLI_REFERENCE.md), [collections guide](docs/COLLECTIONS.md), [standard library reference](docs/STANDARD_LIBRARY.md), [variable and runtime type behavior](docs/VARIABLES_AND_TYPES.md), and the implemented object subset in [`docs/OBJECTS_AND_CLASSES.md`](docs/OBJECTS_AND_CLASSES.md). Architecture, security boundaries, and known gaps are documented in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/SECURITY.md`](docs/SECURITY.md), and [`docs/ENGINEERING_AUDIT.md`](docs/ENGINEERING_AUDIT.md). The shared programs in `conformance/core.json` run in both runtime test suites.
+## Documentation
 
-Tagging a version as `v*` runs both test suites, cross-builds the six native targets, generates checksums, and publishes a GitHub Release using the workflow's `GITHUB_TOKEN` with `contents: write` permission.
+| Guide | What it covers |
+|---|---|
+| [Language specification](docs/LANGUAGE_SPECIFICATION.md) | Grammar and documented core behavior |
+| [Typed Tell](docs/TYPED_TELL.md) | Opt-in typed dialect on the Go runtime |
+| [CLI reference](docs/CLI_REFERENCE.md) | Commands, flags, REPL, and bytecode limits |
+| [Collections](docs/COLLECTIONS.md) | Lists, tuples, sets, dictionaries, and operations |
+| [Standard library](docs/STANDARD_LIBRARY.md) | Built-in and library APIs |
+| [Modules](docs/MODULES.md) | Local source modules and exports |
+| [Interoperability](docs/INTEROPERABILITY.md) | Python and Node.js process bridges |
+| [Execution engines](docs/EXECUTION_ENGINES.md) | Interpreter, bytecode VM, JIT, and limitations |
+| [Objects and classes](docs/OBJECTS_AND_CLASSES.md) | Implemented object model |
+| [Architecture](docs/ARCHITECTURE.md) | Runtime structure and boundaries |
+| [Security](docs/SECURITY.md) | Execution effects and trust boundaries |
+| [Engineering audit](docs/ENGINEERING_AUDIT.md) | Known gaps and implementation status |
 
 ## Roadmap
 
-- **0.2:** Native runtime and multi-platform standalone binaries.
-- **0.3:** Stronger grammar, better diagnostics, more consistent standard-library behavior.
-- **0.4:** Deliver a fully working LLVM based compiler that runs Tell programs with just in time (JIT) compilation and builds standalone executables with ahead of time (AOT) compilation.
-- **0.5:** Package manager and debugger.
-- **0.6:** Extend the class model with access controls and static members, and expand the compatibility suite.
+Tell is an evolving language. Some areas are implemented; others are still being designed or built.
 
-Tell is designed to make programming more approachable without making the language depend on guesswork. Its syntax is intentionally sentence-like, but constrained enough that every instruction has a predictable meaning.
+- Expand the shared grammar and conformance coverage across runtimes.
+- Grow the bytecode compiler and VM while keeping its supported subset explicit.
+- Extend the native JIT beyond its initial numeric-function tier.
+- Develop TellC's typed dialect, compiler, and platform support.
+- Grow Tell Studio from a single-file editor foundation toward a fuller development environment.
+- Explore package management, debugging, and language tooling.
+
+These are directions, not claims that those features already exist. The [engineering audit](docs/ENGINEERING_AUDIT.md) and [progress notes](docs/PROGRESS.md) provide more detail on current gaps.
+
+## A note on safety
+
+Tell is an interpreter, **not a sandbox**. Programs run with the permissions of the user who launches them and can perform file operations. Python/Node.js modules run with the host runtime's permissions too. Do not execute untrusted Tell programs or import untrusted modules as if they were isolated. See [Security](docs/SECURITY.md).
+
+## Contributing
+
+Contributions, bug reports, language ideas, examples, and thoughtful criticism are welcome.
+
+1. Read the [language specification](docs/LANGUAGE_SPECIFICATION.md) before proposing syntax changes.
+2. Check the [engineering audit](docs/ENGINEERING_AUDIT.md) for known limitations.
+3. Add or update tests with behavior changes.
+4. Run the Go and Python test suites relevant to your change.
+5. Keep experimental features and unsupported syntax clearly labelled.
+
+Open an [issue](https://github.com/KernelGhost-gif/Tell-Code/issues) for bugs or proposals, or submit a [pull request](https://github.com/KernelGhost-gif/Tell-Code/pulls).
+
+---
+
+<div align="center">
+
+### If Tell's idea interests you, give it a star.
+
+A star helps other developers discover the project, and feedback helps shape what the language becomes.
+
+<a href="https://github.com/KernelGhost-gif/Tell-Code">
+  <img src="https://img.shields.io/badge/Explore-Tell_Code-20233d?style=for-the-badge&logo=github" alt="Explore Tell Code">
+</a>
+<a href="https://github.com/KernelGhost-gif/Tell-Code/stargazers">
+  <img src="https://img.shields.io/badge/Star-this%20project-f4c95d?style=for-the-badge&logo=github" alt="Star this project">
+</a>
+
+**Readable code. Real execution. A language still being built.**
+
+</div>
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+Tell is released under the [MIT License](LICENSE).
