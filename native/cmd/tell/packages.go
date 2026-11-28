@@ -1,7 +1,7 @@
 package main
 
 import (
-	"embed"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,17 +22,16 @@ type packageCatalogEntry struct {
 	Name         string   `json:"name"`
 	Description  string   `json:"description"`
 	Category     string   `json:"category"`
+	Languages    []string `json:"languages"`
 	Platforms    []string `json:"platforms"`
 	Requirements []string `json:"requirements"`
+	Validation   string   `json:"validation"`
 	URL          string   `json:"url"`
 	Config       string   `json:"config"`
 	Compile      string   `json:"compile"`
 	Install      string   `json:"install"`
 	Executable   string   `json:"executable"`
 }
-
-// Keep the embed import explicit: the catalogue is shipped inside the Tell binary.
-var _ embed.FS
 
 func loadPackageCatalog() ([]packageCatalogEntry, error) {
 	var entries []packageCatalogEntry
@@ -42,8 +41,8 @@ func loadPackageCatalog() ([]packageCatalogEntry, error) {
 	seen := make(map[string]bool, len(entries))
 	for _, entry := range entries {
 		name := strings.ToLower(strings.TrimSpace(entry.Name))
-		if name == "" || entry.URL == "" || entry.Compile == "" || entry.Install == "" {
-			return nil, fmt.Errorf("invalid package catalogue entry %q: name, url, compile, and install are required", entry.Name)
+		if name == "" || entry.URL == "" || entry.Compile == "" || entry.Install == "" || len(entry.Languages) == 0 {
+			return nil, fmt.Errorf("invalid package catalogue entry %q: name, url, compile, install, and languages are required", entry.Name)
 		}
 		if seen[name] {
 			return nil, fmt.Errorf("duplicate package catalogue entry %q", entry.Name)
@@ -65,15 +64,15 @@ func packageCatalogIndex(entries []packageCatalogEntry) map[string]packageCatalo
 }
 
 func printPackageUsage(writer io.Writer) {
-	fmt.Fprintln(writer, "Tell package commands (catalogue + Luna)")
+	fmt.Fprintln(writer, "Tell package commands (curated catalogue + Luna)")
 	fmt.Fprintln(writer, "")
 	fmt.Fprintln(writer, "Usage: tell pkg <command> [arguments]")
 	fmt.Fprintln(writer, "")
 	fmt.Fprintln(writer, "Commands:")
-	fmt.Fprintln(writer, "  search [query]             Search Tell's curated package catalogue")
-	fmt.Fprintln(writer, "  info <name>                Show package details and requirements")
+	fmt.Fprintln(writer, "  search [query]             Search packages, descriptions, and languages")
+	fmt.Fprintln(writer, "  info <name>                Show package details and build requirements")
 	fmt.Fprintln(writer, "  add <name>                 Register a catalogue recipe with Luna")
-	fmt.Fprintln(writer, "  install <name> [name...]   Register catalogue entries if needed, then install")
+	fmt.Fprintln(writer, "  install <name> [name...]   Register catalogue recipes, then install")
 	fmt.Fprintln(writer, "  remove <name>              Remove a package")
 	fmt.Fprintln(writer, "  list                       List packages registered with Luna")
 	fmt.Fprintln(writer, "  update                     Update installed packages")
@@ -136,11 +135,13 @@ func runPackageCommandWithHome(
 		}
 		matches := 0
 		for _, entry := range catalog {
-			haystack := strings.ToLower(strings.Join([]string{entry.Name, entry.Description, entry.Category}, " "))
+			fields := []string{entry.Name, entry.Description, entry.Category}
+			fields = append(fields, entry.Languages...)
+			haystack := strings.ToLower(strings.Join(fields, " "))
 			if query != "" && !strings.Contains(haystack, query) {
 				continue
 			}
-			fmt.Fprintf(stdout, "  %-12s %s [%s]\n", entry.Name, entry.Description, strings.Join(entry.Platforms, ", "))
+			fmt.Fprintf(stdout, "  %-18s %s [%s]\n", entry.Name, entry.Description, strings.Join(entry.Languages, ", "))
 			matches++
 		}
 		if matches == 0 {
@@ -160,8 +161,10 @@ func runPackageCommandWithHome(
 		}
 		fmt.Fprintf(stdout, "%s — %s\n", entry.Name, entry.Description)
 		fmt.Fprintf(stdout, "Category: %s\n", entry.Category)
-		fmt.Fprintf(stdout, "Platforms: %s (CI validation currently runs on Ubuntu Linux)\n", strings.Join(entry.Platforms, ", "))
+		fmt.Fprintf(stdout, "Languages: %s\n", strings.Join(entry.Languages, ", "))
+		fmt.Fprintf(stdout, "Platforms: %s\n", strings.Join(entry.Platforms, ", "))
 		fmt.Fprintf(stdout, "Requirements: %s\n", strings.Join(entry.Requirements, ", "))
+		fmt.Fprintf(stdout, "Validation: %s\n", entry.Validation)
 		fmt.Fprintf(stdout, "Source: %s\n", entry.URL)
 		fmt.Fprintf(stdout, "Executable: %s\n", entry.Executable)
 		return 0

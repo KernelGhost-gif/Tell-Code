@@ -65,13 +65,14 @@ func TestPackageCommandsForwardToLuna(t *testing.T) {
 	}
 }
 
-func TestPackageSearchAndInfoDoNotRequireLuna(t *testing.T) {
+func TestPackageSearchAndInfoUseLanguageMetadataWithoutLuna(t *testing.T) {
 	for _, test := range []struct {
 		args []string
-		want string
+		want []string
 	}{
-		{args: []string{"search", "benchmark"}, want: "hyperfine"},
-		{args: []string{"info", "rg"}, want: "ripgrep"},
+		{args: []string{"search", "haskell"}, want: []string{"hlint", "shellcheck"}},
+		{args: []string{"search", "typescript"}, want: []string{"dprint", "prettier"}},
+		{args: []string{"info", "staticcheck"}, want: []string{"Go", "Go 1.26+"}},
 	} {
 		var output, diagnostics bytes.Buffer
 		status := runPackageCommandWithHome(
@@ -82,8 +83,13 @@ func TestPackageSearchAndInfoDoNotRequireLuna(t *testing.T) {
 			func(*exec.Cmd) error { t.Fatal("catalogue commands must not launch Luna"); return nil },
 			t.TempDir(),
 		)
-		if status != 0 || !strings.Contains(strings.ToLower(output.String()), strings.ToLower(test.want)) {
+		if status != 0 {
 			t.Fatalf("args=%v status=%d output=%q stderr=%q", test.args, status, output.String(), diagnostics.String())
+		}
+		for _, wanted := range test.want {
+			if !strings.Contains(strings.ToLower(output.String()), strings.ToLower(wanted)) {
+				t.Fatalf("args=%v output=%q does not contain %q", test.args, output.String(), wanted)
+			}
 		}
 	}
 }
@@ -114,6 +120,31 @@ func TestPackageInstallRegistersCatalogueEntryBeforeInstalling(t *testing.T) {
 	}
 	if status != 0 || !reflect.DeepEqual(calls, want) {
 		t.Fatalf("status=%d calls=%#v want=%#v output=%q", status, calls, want, output.String())
+	}
+}
+
+func TestPackageInstallRegistersLanguageSpecificRecipe(t *testing.T) {
+	home := t.TempDir()
+	var calls [][]string
+	status := runPackageCommandWithHome(
+		[]string{"install", "php-cs-fixer"},
+		&bytes.Buffer{},
+		&bytes.Buffer{},
+		func(string) (string, error) { return "/fake/bin/luna", nil },
+		func(command *exec.Cmd) error {
+			calls = append(calls, append([]string(nil), command.Args[1:]...))
+			return nil
+		},
+		home,
+	)
+	if status != 0 || len(calls) != 2 {
+		t.Fatalf("status=%d calls=%#v", status, calls)
+	}
+	if len(calls[0]) != 5 || calls[0][0] != "add" || calls[0][1] != "php-cs-fixer" {
+		t.Fatalf("unexpected PHP recipe registration call: %#v", calls)
+	}
+	if calls[1][0] != "install" || calls[1][1] != "php-cs-fixer" {
+		t.Fatalf("unexpected PHP install call: %#v", calls)
 	}
 }
 
@@ -199,5 +230,26 @@ func TestPackageSyncRequiresARegularManifestFile(t *testing.T) {
 	)
 	if status != 2 || !strings.Contains(stderr.String(), "cannot read manifest") {
 		t.Fatalf("status = %d, stderr = %q", status, stderr.String())
+	}
+}
+
+func TestEmbeddedPackageCatalogueIsValidAndUnique(t *testing.T) {
+	entries, err := loadPackageCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) < 20 {
+		t.Fatalf("catalogue only has %d entries; expected broad language coverage", len(entries))
+	}
+	seen := make(map[string]bool, len(entries))
+	for _, entry := range entries {
+		key := strings.ToLower(entry.Name)
+		if seen[key] {
+			t.Fatalf("duplicate package: %s", entry.Name)
+		}
+		seen[key] = true
+		if len(entry.Languages) == 0 || len(entry.Requirements) == 0 || entry.Validation == "" {
+			t.Fatalf("package %s is missing language, requirement, or validation metadata", entry.Name)
+		}
 	}
 }

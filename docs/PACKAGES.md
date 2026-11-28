@@ -1,6 +1,6 @@
 # Package management
 
-Tell's native CLI uses [Luna](https://github.com/Neonwave175/Luna) as its package build/install backend. Tell adds a small curated catalogue on top; it does not bundle Luna or replace its package engine.
+Tell's native CLI uses [Luna](https://github.com/Neonwave175/Luna) as its package build/install backend. Tell adds an embedded, curated catalogue with recipes for common developer tools across multiple language ecosystems. It does not bundle Luna or replace its package engine.
 
 ## Install Luna
 
@@ -20,24 +20,36 @@ The catalogue is embedded in the Tell CLI binary, so searching it does not requi
 
 ```sh
 tell pkg search
-tell pkg search text
-tell pkg info rg
-tell pkg install rg
-tell pkg install fd bat hyperfine tokei
+tell pkg search python
+tell pkg search typescript
+tell pkg info ruff
+tell pkg install rg fd bat hyperfine tokei
+tell pkg install jq btop fastfetch
+tell pkg install gofumpt staticcheck shfmt
 tell pkg list
 tell pkg update
 tell pkg remove rg
 ```
 
-| Catalogue name | Utility | Installed command |
-|---|---|---|
-| `bat` | Syntax-highlighted `cat` replacement | `bat` |
-| `fd` | Fast alternative to `find` | `fd` |
-| `hyperfine` | Command-line benchmark runner | `hyperfine` |
-| `rg` | ripgrep recursive text search | `rg` |
-| `tokei` | Source-code line counter | `tokei` |
+The catalogue includes utilities and formatters/linters for Rust, C, C++, Go, Python, JavaScript, TypeScript, Java, PHP, Ruby, Haskell, Dart, Lua, Swift, shell scripts, SQL, JSON, YAML, TOML, Markdown, HTML, and CSS.
 
-All five starter recipes build from upstream Git repositories with `cargo build --release --locked`. They currently target Linux and require Git plus the Rust stable toolchain (Cargo). The package integration workflow validates actual installs on Ubuntu Linux; other operating systems and Android/Termux are not yet CI-validated.
+| Package | Languages / purpose |
+|---|---|
+| `bat`, `fd`, `hyperfine`, `rg`, `tokei` | Rust-built terminal and code tools |
+| `btop`, `cmatrix`, `fastfetch`, `jq`, `neovim` | C/C++ system, terminal, JSON, and editor tools |
+| `gofumpt`, `staticcheck` | Go formatting and static analysis |
+| `shfmt`, `shellcheck` | Shell formatting and static analysis |
+| `ruff`, `black` | Python linting and formatting |
+| `prettier`, `dprint` | JavaScript, TypeScript, and common web/data formats |
+| `google-java-format` | Java formatting |
+| `php-cs-fixer` | PHP formatting |
+| `rubocop` | Ruby linting and formatting |
+| `hlint` | Haskell analysis |
+| `dart-format` | Dart formatting |
+| `stylua` | Lua and Luau formatting |
+| `swift-format` | Swift formatting |
+
+Use `tell pkg info NAME` to see the exact toolchain required by a package. Recipes currently target Linux. Windows, macOS, Android, and Termux package installation are not implied by the existence of Tell binaries for those platforms. Some upstream tools may build on other operating systems, but those recipes have not been validated there.
 
 The first `tell pkg install NAME` automatically registers a bundled catalogue recipe with Luna, then asks Luna to build and install it. `tell pkg add NAME` only registers the recipe. If a recipe with that name already exists in `~/.local/lunaorigin`, Tell keeps it rather than overwriting your custom configuration. Packages not in Tell's catalogue are still passed directly to Luna, so existing Luna packages and custom recipes continue to work.
 
@@ -47,15 +59,22 @@ After installation, add Luna's binary directory to your shell path:
 export PATH="$HOME/.local/luna:$PATH"
 ```
 
-For example:
+Examples:
 
 ```sh
 rg --version
-fd --version
-bat --version
-hyperfine --version
-tokei --version
+ruff --version
+black --version
+prettier --version
+staticcheck -version
+swift-format --version
 ```
+
+Some tools have additional runtime behavior. For example, dprint requires a `dprint.json` file and configured plugins for the specific formats you use. Java, PHP, Ruby, Haskell, Swift, and Dart entries require their named runtime/build toolchains to be installed before package installation.
+
+## Validation status
+
+Each entry exposes a validation label through `tell pkg info NAME`. The initial Rust starter set (`bat`, `fd`, `hyperfine`, `rg`, and `tokei`) has passed real build, execution, listing, and removal checks on Ubuntu Linux. Other recipes are included with explicit toolchain requirements and remain marked as awaiting CI validation until the package integration workflow has exercised them.
 
 ## Lunafile format
 
@@ -85,8 +104,8 @@ Save this as `Lunafile` and run `tell pkg sync` from the project root. The `Name
 
 **Only install recipes and sync Lunafiles whose sources and commands you trust.** Luna clones source repositories and executes configure, compile, and install commands through a shell with the current user's permissions. A malicious or compromised recipe can therefore run arbitrary commands as that user.
 
-Tell registers catalogue recipes only after an explicit `tell pkg add` or `tell pkg install` command. It does not run package hooks during `tell run`, `tell build`, or project creation. The embedded starter recipes follow upstream default branches and are not pinned to immutable commits; review recipe changes and source updates before installing in sensitive environments.
+Tell registers catalogue recipes only after an explicit `tell pkg add` or `tell pkg install` command. It does not run package hooks during `tell run`, `tell build`, or project creation. The embedded recipes follow upstream default branches and are not pinned to immutable commits; review recipe changes and source updates before installing in sensitive environments.
 
 ## Integration validation
 
-The [Luna package integration workflow](../.github/workflows/luna-integration.yml) uses Tell's embedded catalogue to register, compile, execute, list, and remove every starter package on Ubuntu Linux.
+The [Luna package integration workflow](../.github/workflows/luna-integration.yml) builds the native CLI and executes the validated starter subset through Luna. The initial Tokei package test passed on 2026-11-28 with Tokei 15.0.0; the expanded workflow verifies additional language toolchains as those jobs are enabled.

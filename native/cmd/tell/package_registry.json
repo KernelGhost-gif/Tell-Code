@@ -1,10 +1,20 @@
 [
   {
     "name": "bat",
-    "description": "A cat clone with syntax highlighting and Git integration",
-    "category": "terminal and developer tools",
-    "platforms": ["Linux"],
-    "requirements": ["Git", "Rust stable and Cargo"],
+    "description": "Syntax-highlighted file viewer with Git integration",
+    "category": "File and terminal tools",
+    "languages": [
+      "Rust",
+      "Shell"
+    ],
+    "platforms": [
+      "Linux"
+    ],
+    "requirements": [
+      "Git",
+      "Rust stable + Cargo"
+    ],
+    "validation": "CI verified on Ubuntu",
     "url": "https://github.com/sharkdp/bat.git",
     "config": "",
     "compile": "cargo build --release --locked",
@@ -12,11 +22,119 @@
     "executable": "bat"
   },
   {
+    "name": "btop",
+    "description": "Resource monitor for CPU, memory, disks, network, and processes",
+    "category": "System tools",
+    "languages": [
+      "C++"
+    ],
+    "platforms": [
+      "Linux"
+    ],
+    "requirements": [
+      "Git",
+      "C++ compiler",
+      "make"
+    ],
+    "validation": "Recipe added; awaiting CI validation",
+    "url": "https://github.com/aristocratos/btop.git",
+    "config": "",
+    "compile": "make -j2",
+    "install": "mkdir -p ~/.local/luna && cp bin/btop ~/.local/luna/btop",
+    "executable": "btop"
+  },
+  {
+    "name": "cmatrix",
+    "description": "Terminal Matrix-style animation",
+    "category": "Terminal tools",
+    "languages": [
+      "C"
+    ],
+    "platforms": [
+      "Linux"
+    ],
+    "requirements": [
+      "Git",
+      "C compiler",
+      "CMake",
+      "ncurses development headers"
+    ],
+    "validation": "Recipe added; awaiting CI validation",
+    "url": "https://github.com/abishekvashok/cmatrix.git",
+    "config": "",
+    "compile": "cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=\"$HOME/.local/luna-stage\" && cmake --build build --parallel 2 && cmake --install build",
+    "install": "mkdir -p ~/.local/luna && cp \"$HOME/.local/luna-stage/bin/cmatrix\" ~/.local/luna/cmatrix",
+    "executable": "cmatrix"
+  },
+  {
+    "name": "dprint",
+    "description": "Pluggable formatter for JS/TS, JSON, Markdown, TOML, YAML, and more",
+    "category": "Formatters",
+    "languages": [
+      "JavaScript",
+      "TypeScript",
+      "JSON",
+      "Markdown",
+      "TOML",
+      "YAML",
+      "HTML",
+      "CSS",
+      "SQL",
+      "Rust"
+    ],
+    "platforms": [
+      "Linux"
+    ],
+    "requirements": [
+      "Git",
+      "Rust stable + Cargo"
+    ],
+    "validation": "Recipe added; awaiting CI validation",
+    "url": "https://github.com/dprint/dprint.git",
+    "config": "",
+    "compile": "cargo build --release --locked -p dprint",
+    "install": "mkdir -p ~/.local/luna && cp target/release/dprint ~/.local/luna/dprint",
+    "executable": "dprint"
+  },
+  {
+    "name": "fastfetch",
+    "description": "System information and hardware summary tool",
+    "category": "System tools",
+    "languages": [
+      "C"
+    ],
+    "platforms": [
+      "Linux"
+    ],
+    "requirements": [
+      "Git",
+      "C compiler",
+      "CMake",
+      "pkg-config"
+    ],
+    "validation": "Recipe added; awaiting CI validation",
+    "url": "https://github.com/fastfetch-cli/fastfetch.git",
+    "config": "",
+    "compile": "cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --parallel 2",
+    "install": "mkdir -p ~/.local/luna && cp build/fastfetch ~/.local/luna/fastfetch",
+    "executable": "fastfetch"
+  },
+  {
     "name": "fd",
-    "description": "A fast, user-friendly alternative to find",
-    "category": "file search",
-    "platforms": ["Linux"],
-    "requirements": ["Git", "Rust stable and Cargo"],
+    "description": "Fast, user-friendly alternative to find",
+    "category": "File search",
+    "languages": [
+      "Rust",
+      "Shell"
+    ],
+    "platforms": [
+      "Linux"
+    ],
+    "requirements": [
+      "Git",
+      "Rust stable + Cargo"
+    ],
+    "validation": "CI verified on Ubuntu",
     "url": "https://github.com/sharkdp/fd.git",
     "config": "",
     "compile": "cargo build --release --locked",
@@ -24,11 +142,86 @@
     "executable": "fd"
   },
   {
+    "name": "gofumpt",
+    "description": "Stricter Go source formatter",
+    "category": "Formatters and linters",
+    "languages": [
+      "Go"
+    ],
+    "platforms": [
+      "Linux"
+    ],
+    "requirements": [
+      "Git",
+      "Go 1.26+"
+    ],
+    "validation": "Recipe added; awaiting CI validation",
+    "url": "https://github.com/mvdan/gofumpt.git",
+    "config": "",
+    "compile": "go build -o \"$HOME/.local/luna/gofumpt\" .",
+    "install": "mkdir -p ~/.local/luna",
+    "executable": "gofumpt"
+  },
+  {
+    "name": "google-java-format",
+    "description": "Google Java Style source formatter",
+    "category": "Formatters",
+    "languages": [
+      "Java"
+    ],
+    "platforms": [
+      "Linux"
+    ],
+    "requirements": [
+      "Git",
+      "JDK 21+",
+      "Maven"
+    ],
+    "validation": "Recipe added; awaiting CI validation",
+    "url": "https://github.com/google/google-java-format.git",
+    "config": "",
+    "compile": "mvn -pl core -am -DskipTests package",
+    "install": "mkdir -p ~/.local/luna && printf '%s\\n' '#!/bin/sh' 'JAR=\"$(find \"$HOME/.local/lunasource/google-java-format/core/target\" -name \"*-all-deps.jar\" -print -quit)\"' 'exec java --add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED -jar \"$JAR\" \"$@\"' > ~/.local/luna/google-java-format && chmod +x ~/.local/luna/google-java-format",
+    "executable": "google-java-format"
+  },
+  {
+    "name": "hlint",
+    "description": "Static analysis and suggestions for Haskell code",
+    "category": "Formatters and linters",
+    "languages": [
+      "Haskell"
+    ],
+    "platforms": [
+      "Linux"
+    ],
+    "requirements": [
+      "Git",
+      "GHC 9.12+",
+      "Cabal"
+    ],
+    "validation": "Recipe added; awaiting CI validation",
+    "url": "https://github.com/ndmitchell/hlint.git",
+    "config": "",
+    "compile": "cabal update && cabal build exe:hlint",
+    "install": "cabal install . --installdir=\"$HOME/.local/luna\" --install-method=copy",
+    "executable": "hlint"
+  },
+  {
     "name": "hyperfine",
     "description": "Command-line benchmarking tool",
-    "category": "benchmarking",
-    "platforms": ["Linux"],
-    "requirements": ["Git", "Rust stable and Cargo"],
+    "category": "Benchmarking",
+    "languages": [
+      "Rust",
+      "Shell"
+    ],
+    "platforms": [
+      "Linux"
+    ],
+    "requirements": [
+      "Git",
+      "Rust stable + Cargo"
+    ],
+    "validation": "CI verified on Ubuntu",
     "url": "https://github.com/sharkdp/hyperfine.git",
     "config": "",
     "compile": "cargo build --release --locked",
@@ -36,11 +229,128 @@
     "executable": "hyperfine"
   },
   {
+    "name": "jq",
+    "description": "Lightweight command-line JSON processor",
+    "category": "Data tools",
+    "languages": [
+      "C",
+      "JSON"
+    ],
+    "platforms": [
+      "Linux"
+    ],
+    "requirements": [
+      "Git",
+      "C compiler",
+      "autoconf",
+      "automake",
+      "libtool",
+      "make",
+      "flex",
+      "bison"
+    ],
+    "validation": "Recipe added; awaiting CI validation",
+    "url": "https://github.com/jqlang/jq.git",
+    "config": "",
+    "compile": "git submodule update --init --depth 1 && autoreconf -i && ./configure --with-oniguruma=builtin --prefix=\"$HOME/.local/luna-stage\" && make -j2 && make install",
+    "install": "mkdir -p ~/.local/luna && cp \"$HOME/.local/luna-stage/bin/jq\" ~/.local/luna/jq",
+    "executable": "jq"
+  },
+  {
+    "name": "neovim",
+    "description": "Extensible terminal text editor",
+    "category": "Editors",
+    "languages": [
+      "C",
+      "Lua"
+    ],
+    "platforms": [
+      "Linux"
+    ],
+    "requirements": [
+      "Git",
+      "CMake",
+      "make",
+      "Ninja",
+      "gettext",
+      "libtool",
+      "autoconf",
+      "automake",
+      "C compiler"
+    ],
+    "validation": "Recipe added; awaiting CI validation",
+    "url": "https://github.com/neovim/neovim.git",
+    "config": "",
+    "compile": "make CMAKE_BUILD_TYPE=Release CMAKE_EXTRA_FLAGS=\"-DCMAKE_INSTALL_PREFIX=$PWD/.install-root\" install",
+    "install": "mkdir -p ~/.local/luna && printf '%s\\n' '#!/bin/sh' 'exec \"$HOME/.local/lunasource/neovim/.install-root/bin/nvim\" \"$@\"' > ~/.local/luna/neovim && chmod +x ~/.local/luna/neovim",
+    "executable": "neovim"
+  },
+  {
+    "name": "php-cs-fixer",
+    "description": "Automatically fixes PHP coding standards",
+    "category": "Formatters and linters",
+    "languages": [
+      "PHP"
+    ],
+    "platforms": [
+      "Linux"
+    ],
+    "requirements": [
+      "Git",
+      "PHP 8+",
+      "Composer"
+    ],
+    "validation": "Recipe added; awaiting CI validation",
+    "url": "https://github.com/PHP-CS-Fixer/PHP-CS-Fixer.git",
+    "config": "",
+    "compile": "composer install --no-dev --prefer-dist --no-interaction --no-progress --no-scripts",
+    "install": "mkdir -p ~/.local/luna && printf '%s\\n' '#!/bin/sh' 'exec php \"$HOME/.local/lunasource/php-cs-fixer/php-cs-fixer\" \"$@\"' > ~/.local/luna/php-cs-fixer && chmod +x ~/.local/luna/php-cs-fixer",
+    "executable": "php-cs-fixer"
+  },
+  {
+    "name": "prettier",
+    "description": "Opinionated formatter for JavaScript, TypeScript, JSON, CSS, HTML, and Markdown",
+    "category": "Formatters",
+    "languages": [
+      "JavaScript",
+      "TypeScript",
+      "JSON",
+      "CSS",
+      "HTML",
+      "Markdown",
+      "YAML"
+    ],
+    "platforms": [
+      "Linux"
+    ],
+    "requirements": [
+      "Git",
+      "Node.js 20+",
+      "Corepack + Yarn"
+    ],
+    "validation": "Recipe added; awaiting CI validation",
+    "url": "https://github.com/prettier/prettier.git",
+    "config": "",
+    "compile": "corepack enable && yarn install --immutable && yarn build",
+    "install": "mkdir -p ~/.local/luna && printf '%s\\n' '#!/bin/sh' 'exec node \"$HOME/.local/lunasource/prettier/bin/prettier.cjs\" \"$@\"' > ~/.local/luna/prettier && chmod +x ~/.local/luna/prettier",
+    "executable": "prettier"
+  },
+  {
     "name": "rg",
     "description": "ripgrep — fast recursive text search",
-    "category": "text search",
-    "platforms": ["Linux"],
-    "requirements": ["Git", "Rust stable and Cargo"],
+    "category": "Text search",
+    "languages": [
+      "Rust",
+      "Shell"
+    ],
+    "platforms": [
+      "Linux"
+    ],
+    "requirements": [
+      "Git",
+      "Rust stable + Cargo"
+    ],
+    "validation": "CI verified on Ubuntu",
     "url": "https://github.com/BurntSushi/ripgrep.git",
     "config": "",
     "compile": "cargo build --release --locked",
@@ -48,15 +358,222 @@
     "executable": "rg"
   },
   {
+    "name": "rubocop",
+    "description": "Ruby static analysis and automatic code formatter",
+    "category": "Formatters and linters",
+    "languages": [
+      "Ruby"
+    ],
+    "platforms": [
+      "Linux"
+    ],
+    "requirements": [
+      "Git",
+      "Ruby 3+",
+      "RubyGems"
+    ],
+    "validation": "Recipe added; awaiting CI validation",
+    "url": "https://github.com/rubocop/rubocop.git",
+    "config": "",
+    "compile": "gem build rubocop.gemspec",
+    "install": "mkdir -p \"$HOME/.local/lunasource/rubocop/.gems\" \"$HOME/.local/luna\" && gem install --install-dir \"$HOME/.local/lunasource/rubocop/.gems\" --no-document rubocop-*.gem && printf '%s\\n' '#!/bin/sh' 'export GEM_HOME=\"$HOME/.local/lunasource/rubocop/.gems\"' 'export GEM_PATH=\"$GEM_HOME\"' 'exec \"$GEM_HOME/bin/rubocop\" \"$@\"' > ~/.local/luna/rubocop && chmod +x ~/.local/luna/rubocop",
+    "executable": "rubocop"
+  },
+  {
+    "name": "ruff",
+    "description": "Extremely fast Python linter and formatter",
+    "category": "Formatters and linters",
+    "languages": [
+      "Python",
+      "Rust"
+    ],
+    "platforms": [
+      "Linux"
+    ],
+    "requirements": [
+      "Git",
+      "Rust stable + Cargo"
+    ],
+    "validation": "Recipe added; awaiting CI validation",
+    "url": "https://github.com/astral-sh/ruff.git",
+    "config": "",
+    "compile": "cargo build --release --locked --manifest-path crates/ruff/Cargo.toml --bin ruff",
+    "install": "mkdir -p ~/.local/luna && cp target/release/ruff ~/.local/luna/ruff",
+    "executable": "ruff"
+  },
+  {
+    "name": "shfmt",
+    "description": "Shell script parser and formatter",
+    "category": "Formatters and linters",
+    "languages": [
+      "Shell",
+      "Go"
+    ],
+    "platforms": [
+      "Linux"
+    ],
+    "requirements": [
+      "Git",
+      "Go 1.26+"
+    ],
+    "validation": "Recipe added; awaiting CI validation",
+    "url": "https://github.com/mvdan/sh.git",
+    "config": "",
+    "compile": "go build -o \"$HOME/.local/luna/shfmt\" ./cmd/shfmt",
+    "install": "mkdir -p ~/.local/luna",
+    "executable": "shfmt"
+  },
+  {
+    "name": "sqlfluff",
+    "description": "SQL linter and formatter with multiple SQL dialects",
+    "category": "Formatters and linters",
+    "languages": [
+      "SQL",
+      "Python"
+    ],
+    "platforms": [
+      "Linux"
+    ],
+    "requirements": [
+      "Git",
+      "Python 3.10+",
+      "pip and venv"
+    ],
+    "validation": "Recipe added; awaiting CI validation",
+    "url": "https://github.com/sqlfluff/sqlfluff.git",
+    "config": "",
+    "compile": "python3 -m venv .venv && .venv/bin/pip install --upgrade pip && .venv/bin/pip install .",
+    "install": "mkdir -p ~/.local/luna && printf '%s\\n' '#!/bin/sh' 'exec \"$HOME/.local/lunasource/sqlfluff/.venv/bin/sqlfluff\" \"$@\"' > ~/.local/luna/sqlfluff && chmod +x ~/.local/luna/sqlfluff",
+    "executable": "sqlfluff"
+  },
+  {
+    "name": "staticcheck",
+    "description": "Go static analysis tool",
+    "category": "Formatters and linters",
+    "languages": [
+      "Go"
+    ],
+    "platforms": [
+      "Linux"
+    ],
+    "requirements": [
+      "Git",
+      "Go 1.26+"
+    ],
+    "validation": "Recipe added; awaiting CI validation",
+    "url": "https://github.com/dominikh/go-tools.git",
+    "config": "",
+    "compile": "go build -o \"$HOME/.local/luna/staticcheck\" ./cmd/staticcheck",
+    "install": "mkdir -p ~/.local/luna",
+    "executable": "staticcheck"
+  },
+  {
+    "name": "stylua",
+    "description": "Code formatter for Lua and Luau",
+    "category": "Formatters and linters",
+    "languages": [
+      "Lua",
+      "Luau",
+      "Rust"
+    ],
+    "platforms": [
+      "Linux"
+    ],
+    "requirements": [
+      "Git",
+      "Rust stable + Cargo"
+    ],
+    "validation": "Recipe added; awaiting CI validation",
+    "url": "https://github.com/JohnnyMorganz/StyLua.git",
+    "config": "",
+    "compile": "cargo build --release --locked --bin stylua",
+    "install": "mkdir -p ~/.local/luna && cp target/release/stylua ~/.local/luna/stylua",
+    "executable": "stylua"
+  },
+  {
+    "name": "swift-format",
+    "description": "Swift source formatter and linter",
+    "category": "Formatters and linters",
+    "languages": [
+      "Swift"
+    ],
+    "platforms": [
+      "Linux"
+    ],
+    "requirements": [
+      "Git",
+      "Swift 6+"
+    ],
+    "validation": "Recipe added; awaiting CI validation",
+    "url": "https://github.com/swiftlang/swift-format.git",
+    "config": "",
+    "compile": "swift build -c release",
+    "install": "mkdir -p ~/.local/luna && cp .build/release/swift-format ~/.local/luna/swift-format",
+    "executable": "swift-format"
+  },
+  {
     "name": "tokei",
     "description": "Count lines of code across programming languages",
-    "category": "code analysis",
-    "platforms": ["Linux"],
-    "requirements": ["Git", "Rust stable and Cargo"],
+    "category": "Code analysis",
+    "languages": [
+      "Rust"
+    ],
+    "platforms": [
+      "Linux"
+    ],
+    "requirements": [
+      "Git",
+      "Rust stable + Cargo"
+    ],
+    "validation": "CI verified on Ubuntu",
     "url": "https://github.com/XAMPPRocky/tokei.git",
     "config": "",
     "compile": "cargo build --release --locked",
     "install": "mkdir -p ~/.local/luna && cp target/release/tokei ~/.local/luna/tokei",
     "executable": "tokei"
+  },
+  {
+    "name": "dart-format",
+    "description": "Opinionated Dart source formatter",
+    "category": "Formatters",
+    "languages": [
+      "Dart"
+    ],
+    "platforms": [
+      "Linux"
+    ],
+    "requirements": [
+      "Git",
+      "Dart SDK 3.13+"
+    ],
+    "validation": "Recipe added; awaiting CI validation",
+    "url": "https://github.com/dart-lang/dart_style.git",
+    "config": "",
+    "compile": "dart pub get && dart compile exe bin/format.dart -o \"$HOME/.local/luna/dart-format\"",
+    "install": "test -x \"$HOME/.local/luna/dart-format\"",
+    "executable": "dart-format"
+  },
+  {
+    "name": "shellcheck",
+    "description": "Static analysis tool for shell scripts",
+    "category": "Formatters and linters",
+    "languages": [
+      "Shell",
+      "Haskell"
+    ],
+    "platforms": [
+      "Linux"
+    ],
+    "requirements": [
+      "Git",
+      "GHC",
+      "Cabal"
+    ],
+    "validation": "Recipe added; awaiting CI validation",
+    "url": "https://github.com/koalaman/shellcheck.git",
+    "config": "",
+    "compile": "cabal update && cabal build exe:shellcheck",
+    "install": "cabal install . --installdir=\"$HOME/.local/luna\" --install-method=copy",
+    "executable": "shellcheck"
   }
 ]
