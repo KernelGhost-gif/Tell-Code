@@ -1,0 +1,62 @@
+[
+  {
+    "name": "bat",
+    "description": "A cat clone with syntax highlighting and Git integration",
+    "category": "terminal and developer tools",
+    "platforms": ["Linux"],
+    "requirements": ["Git", "Rust stable and Cargo"],
+    "url": "https://github.com/sharkdp/bat.git",
+    "config": "",
+    "compile": "cargo build --release --locked",
+    "install": "mkdir -p ~/.local/luna && cp target/release/bat ~/.local/luna/bat",
+    "executable": "bat"
+  },
+  {
+    "name": "fd",
+    "description": "A fast, user-friendly alternative to find",
+    "category": "file search",
+    "platforms": ["Linux"],
+    "requirements": ["Git", "Rust stable and Cargo"],
+    "url": "https://github.com/sharkdp/fd.git",
+    "config": "",
+    "compile": "cargo build --release --locked",
+    "install": "mkdir -p ~/.local/luna && cp target/release/fd ~/.local/luna/fd",
+    "executable": "fd"
+  },
+  {
+    "name": "hyperfine",
+    "description": "Command-line benchmarking tool",
+    "category": "benchmarking",
+    "platforms": ["Linux"],
+    "requirements": ["Git", "Rust stable and Cargo"],
+    "url": "https://github.com/sharkdp/hyperfine.git",
+    "config": "",
+    "compile": "cargo build --release --locked",
+    "install": "mkdir -p ~/.local/luna && cp target/release/hyperfine ~/.local/luna/hyperfine",
+    "executable": "hyperfine"
+  },
+  {
+    "name": "rg",
+    "description": "ripgrep — fast recursive text search",
+    "category": "text search",
+    "platforms": ["Linux"],
+    "requirements": ["Git", "Rust stable and Cargo"],
+    "url": "https://github.com/BurntSushi/ripgrep.git",
+    "config": "",
+    "compile": "cargo build --release --locked",
+    "install": "mkdir -p ~/.local/luna && cp target/release/rg ~/.local/luna/rg",
+    "executable": "rg"
+  },
+  {
+    "name": "tokei",
+    "description": "Count lines of code across programming languages",
+    "category": "code analysis",
+    "platforms": ["Linux"],
+    "requirements": ["Git", "Rust stable and Cargo"],
+    "url": "https://github.com/XAMPPRocky/tokei.git",
+    "config": "",
+    "compile": "cargo build --release --locked",
+    "install": "mkdir -p ~/.local/luna && cp target/release/tokei ~/.local/luna/tokei",
+    "executable": "tokei"
+  }
+]
