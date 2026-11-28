@@ -378,7 +378,11 @@ func TestNativePackageInstallSupportsScopedNpmAndPythonTools(t *testing.T) {
 			if got == nil || got.Path != test.wantProgram {
 				t.Fatalf("command = %#v, want executable %q", got, test.wantProgram)
 			}
-			expectedArgs := append([]string(nil), test.wantArgs...)\n\t\t\tfor i := range expectedArgs {\n\t\t\t\texpectedArgs[i] = strings.ReplaceAll(expectedArgs[i], filepath.Join("HOME", ".local", "tell"), nativePackageRoot(home))\n\t\t\t}\n\t\t\tif !reflect.DeepEqual(got.Args[1:], expectedArgs) {
+			expectedArgs := append([]string(nil), test.wantArgs...)
+			for i := range expectedArgs {
+				expectedArgs[i] = strings.ReplaceAll(expectedArgs[i], filepath.Join("HOME", ".local", "tell"), nativePackageRoot(home))
+			}
+			if !reflect.DeepEqual(got.Args[1:], expectedArgs) {
 				t.Fatalf("args = %#v, want %#v", got.Args[1:], expectedArgs)
 			}
 			if test.spec == "go:golang.org/x/tools/gopls" {
