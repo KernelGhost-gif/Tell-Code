@@ -45,6 +45,9 @@ var nativePackageProviders = map[string]bool{
 	"conan":    true,
 	"mint":     true,
 	"luarocks": true,
+	"deno":     true,
+	"bun":      true,
+	"nimble":   true,
 }
 
 func parseNativePackageSpec(spec string) (nativePackage, bool, error) {
@@ -364,6 +367,37 @@ func nativeCommandPlan(action string, pkg nativePackage, home string, lookPath f
 			args = []string{"install", "--force", "--tree", tree, pkg.Name}
 		}
 		return []nativeCommand{command("luarocks", args)}, nil
+
+	case "deno":
+		denoRoot := filepath.Join(root, "deno")
+		binary := nativePackageBinaryName(pkg)
+		args := []string{"install", "--global", "--root", denoRoot, "--name", binary, pkg.Name}
+		if action == "remove" {
+			args = []string{"remove", "--global", "--root", denoRoot, binary}
+		} else if action == "update" {
+			args = []string{"install", "--global", "--force", "--root", denoRoot, "--name", binary, pkg.Name}
+		}
+		return []nativeCommand{command("deno", args)}, nil
+
+	case "bun":
+		env := []string{"BUN_INSTALL=" + filepath.Join(root, "bun")}
+		args := []string{"install", "--global", pkg.Name}
+		if action == "remove" {
+			args = []string{"remove", "--global", pkg.Name}
+		} else if action == "update" {
+			args = []string{"update", "--global", pkg.Name}
+		}
+		return []nativeCommand{command("bun", args, env...)}, nil
+
+	case "nimble":
+		nimbleDir := filepath.Join(root, "nimble")
+		args := []string{"--nimbleDir:" + nimbleDir, "install", "-g", pkg.Name}
+		if action == "remove" {
+			args = []string{"--nimbleDir:" + nimbleDir, "uninstall", pkg.Name}
+		} else if action == "update" {
+			args = []string{"--nimbleDir:" + nimbleDir, "install", "-g", "--refresh", pkg.Name}
+		}
+		return []nativeCommand{command("nimble", args)}, nil
 	}
 	return nil, fmt.Errorf("unsupported native package provider %q", pkg.Provider)
 }
@@ -452,6 +486,12 @@ func runNativePackageAction(
 			fmt.Fprintf(stdout, "Conan package metadata and CMake generators are in %s.\n", conanPackageOutputFolder(home, pkg))
 		case "luarocks":
 			fmt.Fprintf(stdout, "Add %s to PATH to run installed Lua tools.\n", filepath.Join(nativePackageRoot(home), "luarocks", "bin"))
+		case "deno":
+			fmt.Fprintf(stdout, "Add %s to PATH to run installed Deno tools.\n", filepath.Join(nativePackageRoot(home), "deno", "bin"))
+		case "bun":
+			fmt.Fprintf(stdout, "Add %s to PATH to run installed Bun tools.\n", filepath.Join(nativePackageRoot(home), "bun", "bin"))
+		case "nimble":
+			fmt.Fprintf(stdout, "Add %s to PATH to run installed Nim tools.\n", filepath.Join(nativePackageRoot(home), "nimble", "bin"))
 		default:
 			fmt.Fprintf(stdout, "Add %s to PATH to run installed tools.\n", filepath.Join(nativePackageRoot(home), "bin"))
 		}
