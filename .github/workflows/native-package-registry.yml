@@ -52,22 +52,51 @@ jobs:
           python -m pip install --user uv
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: jiro4989/setup-nim-action@v2
+        with:
+          nim-version: stable
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: dlang-community/setup-dlang@v2
+        with:
+          compiler: dmd
+
       - name: Build Tell
         working-directory: native
         run: go build -trimpath -o "$RUNNER_TEMP/tell" ./cmd/tell
 
-      - name: Install from seven language registries
+      - name: Install from eight language registries
         run: |
-          "$RUNNER_TEMP/tell" pkg install cargo:typos-cli npm:prettier pip:ruff go:golang.org/x/tools/gopls
+          dub --version
+          nimble --version
+          "$RUNNER_TEMP/tell" pkg install cargo:typos-cli npm:prettier pip:ruff go:golang.org/x/tools/gopls deno:npm:cowsay bun:cowsay nimble:nake dub:vibe-d
           echo "$HOME/.local/tell/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.local/tell/deno/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.local/tell/bun/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.local/tell/nimble/bin" >> "$GITHUB_PATH"
           test -x "$HOME/.local/tell/bin/typos"
           test -x "$HOME/.local/tell/bin/prettier"
           test -x "$HOME/.local/tell/bin/ruff"
           test -x "$HOME/.local/tell/bin/gopls"
+          test -x "$HOME/.local/tell/deno/bin/cowsay"
+          test -x "$HOME/.local/tell/bun/bin/cowsay"
+          test -x "$HOME/.local/tell/nimble/bin/nake"
+          find "$HOME/.local/tell/dub/packages" -maxdepth 1 -type d -name 'vibe-d-*' | grep -q .
           "$HOME/.local/tell/bin/typos" --version
           "$HOME/.local/tell/bin/prettier" --version
           "$HOME/.local/tell/bin/ruff" --version
           "$HOME/.local/tell/bin/gopls" version
+          printf "native registry test\\n" | "$HOME/.local/tell/deno/bin/cowsay"
+          printf "native registry test\\n" | "$HOME/.local/tell/bun/bin/cowsay"
+          "$HOME/.local/tell/nimble/bin/nake" --help
 
       - name: Verify native package state
         run: |
@@ -76,6 +105,10 @@ jobs:
           grep -q 'npm:prettier' "$RUNNER_TEMP/native-packages.txt"
           grep -q 'pip:ruff' "$RUNNER_TEMP/native-packages.txt"
           grep -q 'go:golang.org/x/tools/gopls' "$RUNNER_TEMP/native-packages.txt"
+          grep -q 'deno:npm:cowsay' "$RUNNER_TEMP/native-packages.txt"
+          grep -q 'bun:cowsay' "$RUNNER_TEMP/native-packages.txt"
+          grep -q 'nimble:nake' "$RUNNER_TEMP/native-packages.txt"
+          grep -q 'dub:vibe-d' "$RUNNER_TEMP/native-packages.txt"
 
       - name: Update tracked native packages
         run: |
@@ -84,6 +117,8 @@ jobs:
           "$HOME/.local/tell/bin/prettier" --version
           "$HOME/.local/tell/bin/ruff" --version
           "$HOME/.local/tell/bin/gopls" version
+          "$HOME/.local/tell/nimble/bin/nake" --help
+          find "$HOME/.local/tell/dub/packages" -maxdepth 1 -type d -name 'vibe-d-*' | grep -q .
 
       - name: Remove through Tell and verify cleanup
         run: |
@@ -91,6 +126,14 @@ jobs:
           "$RUNNER_TEMP/tell" pkg remove npm:prettier
           "$RUNNER_TEMP/tell" pkg remove pip:ruff
           "$RUNNER_TEMP/tell" pkg remove go:golang.org/x/tools/gopls
+          "$RUNNER_TEMP/tell" pkg remove deno:npm:cowsay
+          "$RUNNER_TEMP/tell" pkg remove bun:cowsay
+          "$RUNNER_TEMP/tell" pkg remove nimble:nake
+          "$RUNNER_TEMP/tell" pkg remove dub:vibe-d
+          test ! -e "$HOME/.local/tell/deno/bin/cowsay"
+          test ! -e "$HOME/.local/tell/bun/bin/cowsay"
+          test ! -e "$HOME/.local/tell/nimble/bin/nake"
+          test -z "$(find "$HOME/.local/tell/dub/packages" -maxdepth 1 -type d -name 'vibe-d-*' -print -quit)"
           test ! -e "$HOME/.local/tell/bin/typos"
           test ! -e "$HOME/.local/tell/bin/prettier"
           test ! -e "$HOME/.local/tell/bin/ruff"
