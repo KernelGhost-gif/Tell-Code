@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -35,6 +36,10 @@ var nativePackageProviders = map[string]bool{
 	"pub":      true,
 	"cabal":    true,
 	"mix":      true,
+	"coursier": true,
+	"julia":    true,
+	"r":        true,
+	"opam":     true,
 }
 
 func parseNativePackageSpec(spec string) (nativePackage, bool, error) {
@@ -276,9 +281,45 @@ func nativeCommandPlan(action string, pkg nativePackage, home string, lookPath f
 
 	case "mix":
 		if action == "remove" {
-			return []nativeCommand{command("mix", []string{"archive.uninstall", pkg.Name})}, nil
+			return []nativeCommand{command("mix", []string{"archive.uninstall", pkg.Name, "--force"})}, nil
 		}
 		return []nativeCommand{command("mix", []string{"archive.install", "hex", pkg.Name, "--force"})}, nil
+
+	case "coursier":
+		args := []string{"install", pkg.Name, "--install-dir", binDir}
+		if action == "remove" {
+			args = []string{"uninstall", pkg.Name, "--install-dir", binDir}
+		} else if action == "update" {
+			args = []string{"update", pkg.Name, "--install-dir", binDir}
+		}
+		return []nativeCommand{command("cs", args)}, nil
+
+	case "julia":
+		packageName := strconv.Quote(pkg.Name)
+		expression := "using Pkg; Pkg.add(" + packageName + ")"
+		if action == "remove" {
+			expression = "using Pkg; Pkg.rm(" + packageName + ")"
+		} else if action == "update" {
+			expression = "using Pkg; Pkg.update(" + packageName + ")"
+		}
+		return []nativeCommand{command("julia", []string{"--startup-file=no", "--history-file=no", "-e", expression})}, nil
+
+	case "r":
+		packageName := strconv.Quote(pkg.Name)
+		expression := "install.packages(" + packageName + ", repos=" + strconv.Quote("https://cloud.r-project.org") + ")"
+		if action == "remove" {
+			expression = "remove.packages(" + packageName + ")"
+		}
+		return []nativeCommand{command("Rscript", []string{"--vanilla", "-e", expression})}, nil
+
+	case "opam":
+		args := []string{"install", "--yes", pkg.Name}
+		if action == "remove" {
+			args = []string{"remove", "--yes", pkg.Name}
+		} else if action == "update" {
+			args = []string{"upgrade", "--yes", pkg.Name}
+		}
+		return []nativeCommand{command("opam", args)}, nil
 	}
 	return nil, fmt.Errorf("unsupported native package provider %q", pkg.Provider)
 }
@@ -356,7 +397,16 @@ func runNativePackageAction(
 	switch action {
 	case "install":
 		fmt.Fprintf(stdout, "Installed %s:%s through its native package manager.\n", pkg.Provider, pkg.Name)
-		fmt.Fprintf(stdout, "Add %s to PATH to run installed tools.\n", filepath.Join(nativePackageRoot(home), "bin"))
+		switch pkg.Provider {
+		case "r":
+			fmt.Fprintf(stdout, "Load it in R with library(%q).\n", pkg.Name)
+		case "julia":
+			fmt.Fprintf(stdout, "Load it in Julia with using %s.\n", pkg.Name)
+		case "opam":
+			fmt.Fprintln(stdout, "The package is installed in the active OPAM switch; initialize its environment with eval \"$(opam env)\".")
+		default:
+			fmt.Fprintf(stdout, "Add %s to PATH to run installed tools.\n", filepath.Join(nativePackageRoot(home), "bin"))
+		}
 	case "remove":
 		fmt.Fprintf(stdout, "Removed %s:%s.\n", pkg.Provider, pkg.Name)
 	case "update":

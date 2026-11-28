@@ -39,6 +39,8 @@ tell pkg install nuget:dotnet-format
 tell pkg install pub:very_good_cli
 tell pkg install cabal:hlint
 tell pkg install mix:phoenix_new
+tell pkg install coursier:scalafmt
+tell pkg install julia:JSON3 r:styler opam:ocamlformat
 tell pkg list
 tell pkg update
 tell pkg remove rg
@@ -65,7 +67,7 @@ The 29-entry starter catalogue includes utilities and formatters/linters for Rus
 | `stylua` | Lua and Luau formatting |
 | `swift-format` | Swift formatting |
 
-Native registry installs are tracked separately from Luna. Supported prefixes are `cargo:`, `npm:`, `pip:` (using uv or pipx), `go:`, `gem:`, `composer:`, `nuget:`, `pub:`, `cabal:`, and `mix:`. These prefixes install command-line applications through the corresponding language ecosystem manager. They are not substitutes for project dependency declarations: use the ecosystem-native project workflow when adding a library dependency to an application.
+Native registry installs are tracked separately from Luna. Supported prefixes are `cargo:`, `npm:`, `pip:` (using uv or pipx), `go:`, `gem:`, `composer:`, `nuget:`, `pub:`, `cabal:`, `mix:`, `coursier:`, `julia:`, `r:`, and `opam:`. These prefixes use the matching language ecosystem manager. `cargo:`, `npm:`, `pip:`, `go:`, `gem:`, `composer:`, `nuget:`, `pub:`, `cabal:`, `mix:`, and `coursier:` are intended for CLI tools and apps. `julia:` and `r:` add libraries to the active Julia/R environment; `opam:` installs into the active OPAM switch. These global/environment installs are not substitutes for project dependency declarations: use the ecosystem-native project workflow when adding a library dependency to an application.
 
 Use `tell pkg info NAME` to see the exact toolchain required by a curated package. Recipes currently target Linux. Windows, macOS, Android, and Termux package installation are not implied by the existence of Tell binaries for those platforms. Some upstream tools may build on other operating systems, but those recipes have not been validated there.
 

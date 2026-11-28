@@ -350,6 +350,30 @@ func TestNativePackageInstallSupportsScopedNpmAndPythonTools(t *testing.T) {
 			wantProgram: "/fake/go",
 			wantArgs: []string{"install", "golang.org/x/tools/gopls@latest"},
 		},
+		{
+			spec: "coursier:scalafmt",
+			lookups: map[string]string{"cs": "/fake/cs"},
+			wantProgram: "/fake/cs",
+			wantArgs: []string{"install", "scalafmt", "--install-dir", filepath.Join("HOME", ".local", "tell", "bin")},
+		},
+		{
+			spec: "julia:JSON3",
+			lookups: map[string]string{"julia": "/fake/julia"},
+			wantProgram: "/fake/julia",
+			wantArgs: []string{"--startup-file=no", "--history-file=no", "-e", `using Pkg; Pkg.add("JSON3")`},
+		},
+		{
+			spec: "r:styler",
+			lookups: map[string]string{"Rscript": "/fake/Rscript"},
+			wantProgram: "/fake/Rscript",
+			wantArgs: []string{"--vanilla", "-e", `install.packages("styler", repos="https://cloud.r-project.org")`},
+		},
+		{
+			spec: "opam:ocamlformat",
+			lookups: map[string]string{"opam": "/fake/opam"},
+			wantProgram: "/fake/opam",
+			wantArgs: []string{"install", "--yes", "ocamlformat"},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.spec, func(t *testing.T) {
