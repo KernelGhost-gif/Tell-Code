@@ -189,7 +189,7 @@ Explore [more examples](examples/) or read the [language specification](docs/LAN
 | Errors and tests | `Try` / `Raise`, source diagnostics, `Check that` and a Tell source-test runner |
 | Standard library | Math, random, statistics, JSON, date/time and CSV APIs, with runtime-specific differences |
 | CLI | Run, check, format, test, REPL, project scaffolding and bytecode build |
-| Packages | Embedded cross-language catalogue with search, info, add and optional Luna install, remove, list, update and manifest sync |
+| Packages | Embedded cross-language catalogue, native registry installs (Cargo, npm, Python, Go, Ruby, PHP, .NET, Dart, Haskell, Elixir), and Luna recipes |
 | Type checks | Optional conservative checks for statically knowable declarations and values |
 
 See [Collections](docs/COLLECTIONS.md), [Objects and Classes](docs/OBJECTS_AND_CLASSES.md), and the [Standard Library](docs/STANDARD_LIBRARY.md) for details.
