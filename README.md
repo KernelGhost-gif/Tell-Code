@@ -189,7 +189,7 @@ Explore [more examples](examples/) or read the [language specification](docs/LAN
 | Errors and tests | `Try` / `Raise`, source diagnostics, `Check that` and a Tell source-test runner |
 | Standard library | Math, random, statistics, JSON, date/time and CSV APIs, with runtime-specific differences |
 | CLI | Run, check, format, test, REPL, project scaffolding and bytecode build |
-| Packages | Optional Luna adapter for install, remove, list, update and manifest sync |
+| Packages | Embedded cross-language catalogue with search, info, add and optional Luna install, remove, list, update and manifest sync |
 | Type checks | Optional conservative checks for statically knowable declarations and values |
 
 See [Collections](docs/COLLECTIONS.md), [Objects and Classes](docs/OBJECTS_AND_CLASSES.md), and the [Standard Library](docs/STANDARD_LIBRARY.md) for details.
@@ -360,7 +360,7 @@ cd .. && python -m unittest discover -s tests -v
 
 Tell is actively evolving. The current focus is improving grammar and cross-runtime conformance, expanding the bytecode VM, growing the JIT's supported subset, and developing TellC and Tell Studio.
 
-A few things are **not** implemented yet: there is no package manager, dependency resolver, debugger or complete language server. The native bytecode compiler supports a documented subset, and the JIT supports only a narrow numeric subset. The Python runtime is deprecated. The [engineering audit](docs/ENGINEERING_AUDIT.md) tracks known gaps.
+A few things are **not** implemented yet: Tell has no native package engine or dependency resolver (package builds and installs use the optional Luna backend and curated catalogue), debugger or complete language server. The native bytecode compiler supports a documented subset, and the JIT supports only a narrow numeric subset. The Python runtime is deprecated. The [engineering audit](docs/ENGINEERING_AUDIT.md) tracks known gaps.
 
 Tell is an interpreter, **not a sandbox**. Programs and foreign modules run with the permissions of the user who launches them. Do not execute untrusted code as if it were isolated; read the [security notes](docs/SECURITY.md).
 
