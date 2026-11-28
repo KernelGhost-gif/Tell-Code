@@ -374,6 +374,18 @@ func TestNativePackageInstallSupportsScopedNpmAndPythonTools(t *testing.T) {
 			wantProgram: "/fake/opam",
 			wantArgs: []string{"install", "--yes", "ocamlformat"},
 		},
+		{
+			spec: "mint:realm/SwiftLint@0.60.0",
+			lookups: map[string]string{"mint": "/fake/mint"},
+			wantProgram: "/fake/mint",
+			wantArgs: []string{"install", "realm/SwiftLint@0.60.0"},
+		},
+		{
+			spec: "luarocks:luafilesystem",
+			lookups: map[string]string{"luarocks": "/fake/luarocks"},
+			wantProgram: "/fake/luarocks",
+			wantArgs: []string{"install", "--tree", filepath.Join("HOME", ".local", "tell", "luarocks"), "luafilesystem"},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.spec, func(t *testing.T) {
@@ -408,6 +420,11 @@ func TestNativePackageInstallSupportsScopedNpmAndPythonTools(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got.Args[1:], expectedArgs) {
 				t.Fatalf("args = %#v, want %#v", got.Args[1:], expectedArgs)
+			}
+			if test.spec == "mint:realm/SwiftLint@0.60.0" {
+				if !containsEnvironment(got.Env, "MINT_PATH="+filepath.Join(home, ".local", "tell", "mint")) || !containsEnvironment(got.Env, "MINT_LINK_PATH="+filepath.Join(home, ".local", "tell", "bin")) {
+					t.Fatalf("Mint directories were not configured: %#v", got.Env)
+				}
 			}
 			if test.spec == "go:golang.org/x/tools/gopls" {
 				wantEnv := "GOBIN=" + filepath.Join(home, ".local", "tell", "bin")
@@ -562,5 +579,102 @@ func TestNativePipInstallPersistsPipxAndUsesItForUpdates(t *testing.T) {
 	}
 	if !reflect.DeepEqual(calls, [][]string{{"install", "ruff"}, {"upgrade", "ruff"}}) {
 		t.Fatalf("pipx calls = %#v", calls)
+	}
+}
+
+
+func TestNativeRegistrySearchUsesRegistryCommands(t *testing.T) {
+	tests := []struct {
+		spec string
+		program string
+		args []string
+	}{
+		{"cargo:serde", "cargo", []string{"search", "--limit", "15", "serde"}},
+		{"npm:eslint config", "npm", []string{"search", "--parseable", "eslint config"}},
+		{"composer:monolog", "composer", []string{"search", "--format=json", "monolog"}},
+		{"gem:rails", "gem", []string{"search", "--remote", "rails"}},
+		{"nuget:Newtonsoft.Json", "dotnet", []string{"package", "search", "Newtonsoft.Json", "--format", "json", "--source", "https://api.nuget.org/v3/index.json"}},
+		{"cabal:servant", "cabal", []string{"list", "--simple-output", "servant"}},
+		{"coursier:scalafmt", "cs", []string{"search", "scalafmt"}},
+		{"opam:ocamlformat", "opam", []string{"search", "--short", "ocamlformat"}},
+		{"mix:phoenix", "mix", []string{"hex.package", "search", "phoenix"}},
+		{"go:golang.org/x/tools/gopls", "go", []string{"list", "-m", "-versions", "golang.org/x/tools/gopls"}},
+		{"pip:ruff", "pip", []string{"index", "versions", "ruff"}},
+		{"luarocks:socket", "luarocks", []string{"search", "socket"}},
+	}
+	for _, test := range tests {
+		t.Run(test.spec, func(t *testing.T) {
+			var got *exec.Cmd
+			status := runPackageCommandWithHome(
+				[]string{"search", test.spec},
+				&bytes.Buffer{},
+				&bytes.Buffer{},
+				func(name string) (string, error) {
+					if name != test.program {
+						return "", exec.ErrNotFound
+					}
+					return "/fake/" + name, nil
+				},
+				func(command *exec.Cmd) error {
+					got = command
+					return nil
+				},
+				t.TempDir(),
+			)
+			if status != 0 {
+				t.Fatalf("status = %d", status)
+			}
+			if got == nil || got.Path != "/fake/"+test.program {
+				t.Fatalf("search command = %#v, want executable /fake/%s", got, test.program)
+			}
+			if !reflect.DeepEqual(got.Args[1:], test.args) {
+				t.Fatalf("search args = %#v, want %#v", got.Args[1:], test.args)
+			}
+		})
+	}
+}
+
+func TestNativeRegistrySearchRejectsEmptyAndUnsupportedQueries(t *testing.T) {
+	for _, spec := range []string{"cargo:", "npm:\u0000bad"} {
+		var diagnostics bytes.Buffer
+		status := runPackageCommandWithHome(
+			[]string{"search", spec},
+			&bytes.Buffer{},
+			&diagnostics,
+			func(string) (string, error) { t.Fatal("invalid query must not search"); return "", nil },
+			func(*exec.Cmd) error { t.Fatal("invalid query must not run"); return nil },
+			t.TempDir(),
+		)
+		if status != 2 || diagnostics.Len() == 0 {
+			t.Fatalf("spec=%q status=%d stderr=%q", spec, status, diagnostics.String())
+		}
+	}
+
+	var diagnostics bytes.Buffer
+	status := runPackageCommandWithHome(
+		[]string{"search", "julia:DataFrames"},
+		&bytes.Buffer{},
+		&diagnostics,
+		func(string) (string, error) { t.Fatal("unsupported search must not run"); return "", nil },
+		func(*exec.Cmd) error { t.Fatal("unsupported search must not run"); return nil },
+		t.TempDir(),
+	)
+	if status != 2 || !strings.Contains(diagnostics.String(), "registry search is not supported") {
+		t.Fatalf("status=%d stderr=%q", status, diagnostics.String())
+	}
+}
+
+
+func TestRNativePackageSearchPlanBuildsSafeCRANQuery(t *testing.T) {
+	plan, err := nativePackageSearchPlan("r", "styler")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.Program != "Rscript" || len(plan.Args) != 3 || plan.Args[0] != "--vanilla" || plan.Args[1] != "-e" {
+		t.Fatalf("unexpected R search command: %#v", plan)
+	}
+	if !strings.Contains(plan.Args[2], "available.packages") || !strings.Contains(plan.Args[2], "styler") ||
+		!strings.Contains(plan.Args[2], "https://cloud.r-project.org") {
+		t.Fatalf("R search expression is incomplete: %q", plan.Args[2])
 	}
 }

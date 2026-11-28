@@ -73,7 +73,8 @@ func printPackageUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  info <name>                Show package details and build requirements")
 	fmt.Fprintln(writer, "  add <name>                 Register a catalogue recipe with Luna")
 	fmt.Fprintln(writer, "  install <name> [name...]   Install Tell, native-registry, or Luna packages")
-	fmt.Fprintln(writer, "  native specs: cargo:, npm:, pip:, go:, gem:, composer:, nuget:, pub:, cabal:, mix:")
+	fmt.Fprintln(writer, "  native specs: cargo:, npm:, pip:, go:, gem:, composer:, nuget:, pub:, cabal:, mix:, coursier:, julia:, r:, opam:, mint:, luarocks:")
+	fmt.Fprintln(writer, "  registry search: tell pkg search <provider>:<query>")
 	fmt.Fprintln(writer, "  remove <name>              Remove a package")
 	fmt.Fprintln(writer, "  list                       List packages registered with Luna")
 	fmt.Fprintln(writer, "  update                     Update installed packages")
@@ -129,6 +130,16 @@ func runPackageCommandWithHome(
 		if len(operands) > 1 {
 			fmt.Fprintln(stderr, "tell pkg search: expected at most one query")
 			return 2
+		}
+		if len(operands) == 1 {
+			provider, query, recognized, parseErr := parseNativePackageQuery(operands[0])
+			if parseErr != nil {
+				fmt.Fprintf(stderr, "tell pkg search: %v\n", parseErr)
+				return 2
+			}
+			if recognized {
+				return runNativePackageSearch(provider, query, lookPath, runCommand, stdout, stderr)
+			}
 		}
 		query := ""
 		if len(operands) == 1 {

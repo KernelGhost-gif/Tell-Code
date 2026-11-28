@@ -24,6 +24,9 @@ tell pkg search python
 tell pkg search typescript
 tell pkg search kotlin
 tell pkg search r
+tell pkg search cargo:serde
+tell pkg search npm:eslint
+tell pkg search nuget:json
 tell pkg info ruff
 tell pkg install rg fd bat hyperfine tokei
 tell pkg install jq btop fastfetch
@@ -40,7 +43,8 @@ tell pkg install pub:very_good_cli
 tell pkg install cabal:hlint
 tell pkg install mix:phoenix_new
 tell pkg install coursier:scalafmt
-tell pkg install julia:JSON3 r:styler opam:ocamlformat
+ tell pkg install julia:JSON3 r:styler opam:ocamlformat
+tell pkg install mint:realm/SwiftLint@0.60.0 luarocks:luafilesystem
 tell pkg list
 tell pkg update
 tell pkg remove rg
@@ -67,16 +71,18 @@ The 29-entry starter catalogue includes utilities and formatters/linters for Rus
 | `stylua` | Lua and Luau formatting |
 | `swift-format` | Swift formatting |
 
-Native registry installs are tracked separately from Luna. Supported prefixes are `cargo:`, `npm:`, `pip:` (using uv or pipx), `go:`, `gem:`, `composer:`, `nuget:`, `pub:`, `cabal:`, `mix:`, `coursier:`, `julia:`, `r:`, and `opam:`. These prefixes use the matching language ecosystem manager. `cargo:`, `npm:`, `pip:`, `go:`, `gem:`, `composer:`, `nuget:`, `pub:`, `cabal:`, `mix:`, and `coursier:` are intended for CLI tools and apps. `julia:` and `r:` add libraries to the active Julia/R environment; `opam:` installs into the active OPAM switch. These global/environment installs are not substitutes for project dependency declarations: use the ecosystem-native project workflow when adding a library dependency to an application.
+Run `tell pkg search PROVIDER:QUERY` to search supported native registries without relying on the curated list. Full-text search is available for Cargo, npm, Composer, RubyGems, NuGet, Cabal, Coursier, OPAM, Hex/Mix, CRAN, and LuaRocks. Go and Python currently perform exact module/package index lookups; Julia and Mint have install support but no direct CLI search command in this adapter.
+
+Native registry installs are tracked separately from Luna. Supported prefixes are `cargo:`, `npm:`, `pip:` (using uv or pipx), `go:`, `gem:`, `composer:`, `nuget:`, `pub:`, `cabal:`, `mix:`, `coursier:`, `julia:`, `r:`, `opam:`, `mint:`, and `luarocks:`. These prefixes use the matching language ecosystem manager. `cargo:`, `npm:`, `pip:`, `go:`, `gem:`, `composer:`, `nuget:`, `pub:`, `cabal:`, `mix:`, `coursier:`, `mint:`, and `luarocks:` are intended for CLI tools and apps. `julia:` and `r:` add libraries to the active Julia/R environment; `luarocks:` installs Lua rocks into a Tell-local tree; `opam:` installs into the active OPAM switch. These global/environment installs are not substitutes for project dependency declarations: use the ecosystem-native project workflow when adding a library dependency to an application.
 
 Use `tell pkg info NAME` to see the exact toolchain required by a curated package. Recipes currently target Linux. Windows, macOS, Android, and Termux package installation are not implied by the existence of Tell binaries for those platforms. Some upstream tools may build on other operating systems, but those recipes have not been validated there.
 
 The first `tell pkg install NAME` automatically registers a bundled catalogue recipe with Luna, then asks Luna to build and install it. `tell pkg add NAME` only registers the recipe. If a recipe with that name already exists in `~/.local/lunaorigin`, Tell keeps it rather than overwriting your custom configuration. Packages not in Tell's catalogue are still passed directly to Luna, so existing Luna packages and custom recipes continue to work.
 
-After a native registry install, add Tell's native binary directory to your shell path. Luna installs continue to use Luna's binary directory:
+After a native registry install, add Tell's native binary directories to your shell path. Mint links Swift tools to `~/.local/tell/bin`; LuaRocks uses `~/.local/tell/luarocks/bin`. Luna installs continue to use Luna's binary directory:
 
 ```sh
-export PATH="$HOME/.local/tell/bin:$HOME/.local/tell/pub-cache/bin:$HOME/.local/luna:$PATH"
+export PATH="$HOME/.local/tell/bin:$HOME/.local/tell/pub-cache/bin:$HOME/.local/tell/luarocks/bin:$HOME/.local/luna:$PATH"
 ```
 
 Examples:

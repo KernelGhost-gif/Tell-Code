@@ -40,6 +40,8 @@ var nativePackageProviders = map[string]bool{
 	"julia":    true,
 	"r":        true,
 	"opam":     true,
+	"mint":     true,
+	"luarocks": true,
 }
 
 func parseNativePackageSpec(spec string) (nativePackage, bool, error) {
@@ -320,6 +322,29 @@ func nativeCommandPlan(action string, pkg nativePackage, home string, lookPath f
 			args = []string{"upgrade", "--yes", pkg.Name}
 		}
 		return []nativeCommand{command("opam", args)}, nil
+
+	case "mint":
+		env := []string{
+			"MINT_PATH=" + filepath.Join(root, "mint"),
+			"MINT_LINK_PATH=" + binDir,
+		}
+		args := []string{"install", pkg.Name}
+		if action == "remove" {
+			args = []string{"uninstall", pkg.Name}
+		} else if action == "update" {
+			args = []string{"install", pkg.Name, "--force"}
+		}
+		return []nativeCommand{command("mint", args, env...)}, nil
+
+	case "luarocks":
+		tree := filepath.Join(root, "luarocks")
+		args := []string{"install", "--tree", tree, pkg.Name}
+		if action == "remove" {
+			args = []string{"remove", "--tree", tree, pkg.Name}
+		} else if action == "update" {
+			args = []string{"install", "--force", "--tree", tree, pkg.Name}
+		}
+		return []nativeCommand{command("luarocks", args)}, nil
 	}
 	return nil, fmt.Errorf("unsupported native package provider %q", pkg.Provider)
 }
@@ -404,6 +429,8 @@ func runNativePackageAction(
 			fmt.Fprintf(stdout, "Load it in Julia with using %s.\n", pkg.Name)
 		case "opam":
 			fmt.Fprintln(stdout, "The package is installed in the active OPAM switch; initialize its environment with eval \"$(opam env)\".")
+		case "luarocks":
+			fmt.Fprintf(stdout, "Add %s to PATH to run installed Lua tools.\n", filepath.Join(nativePackageRoot(home), "luarocks", "bin"))
 		default:
 			fmt.Fprintf(stdout, "Add %s to PATH to run installed tools.\n", filepath.Join(nativePackageRoot(home), "bin"))
 		}
@@ -510,4 +537,89 @@ func runNativeAndLunaList(
 		return 127
 	}
 	return runLunaCommand(executable, []string{"list"}, stdout, stderr, runCommand)
+}
+
+
+func parseNativePackageQuery(spec string) (string, string, bool, error) {
+	provider, query, found := strings.Cut(spec, ":")
+	if !found {
+		return "", "", false, nil
+	}
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	if !nativePackageProviders[provider] {
+		return "", "", false, nil
+	}
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return provider, "", true, errors.New("search query is empty")
+	}
+	if len(query) > 256 {
+		return provider, "", true, errors.New("search query is too long")
+	}
+	for _, r := range query {
+		if unicode.IsControl(r) {
+			return provider, "", true, errors.New("search query contains a control character")
+		}
+	}
+	return provider, query, true, nil
+}
+
+func nativePackageSearchPlan(provider, query string) (nativeCommand, error) {
+	switch provider {
+	case "cargo":
+		return nativeCommand{Program: "cargo", Args: []string{"search", "--limit", "15", query}}, nil
+	case "npm":
+		return nativeCommand{Program: "npm", Args: []string{"search", "--parseable", query}}, nil
+	case "composer":
+		return nativeCommand{Program: "composer", Args: []string{"search", "--format=json", query}}, nil
+	case "gem":
+		return nativeCommand{Program: "gem", Args: []string{"search", "--remote", query}}, nil
+	case "nuget":
+		return nativeCommand{Program: "dotnet", Args: []string{"package", "search", query, "--format", "json", "--source", "https://api.nuget.org/v3/index.json"}}, nil
+	case "cabal":
+		return nativeCommand{Program: "cabal", Args: []string{"list", "--simple-output", query}}, nil
+	case "coursier":
+		return nativeCommand{Program: "cs", Args: []string{"search", query}}, nil
+	case "opam":
+		return nativeCommand{Program: "opam", Args: []string{"search", "--short", query}}, nil
+	case "luarocks":
+		return nativeCommand{Program: "luarocks", Args: []string{"search", query}}, nil
+	case "mix":
+		return nativeCommand{Program: "mix", Args: []string{"hex.package", "search", query}}, nil
+	case "go":
+		return nativeCommand{Program: "go", Args: []string{"list", "-m", "-versions", query}}, nil
+	case "pip":
+		return nativeCommand{Program: "pip", Args: []string{"index", "versions", query}}, nil
+	case "r":
+		quoted := strconv.Quote(query)
+		expression := "a <- available.packages(repos=" + strconv.Quote("https://cloud.r-project.org") + "); hits <- grepl(" + quoted + ", rownames(a), ignore.case=TRUE) | grepl(" + quoted + ", a[, 'Title'], ignore.case=TRUE); cat(rownames(a)[hits], sep='\\n')"
+		return nativeCommand{Program: "Rscript", Args: []string{"--vanilla", "-e", expression}}, nil
+	default:
+		return nativeCommand{}, fmt.Errorf("registry search is not supported by %s; install known package names with %s:<name>", provider, provider)
+	}
+}
+
+func runNativePackageSearch(
+	provider, query string,
+	lookPath func(string) (string, error),
+	runCommand func(*exec.Cmd) error,
+	stdout, stderr io.Writer,
+) int {
+	plan, err := nativePackageSearchPlan(provider, query)
+	if err != nil {
+		fmt.Fprintf(stderr, "tell pkg search: %v\n", err)
+		return 2
+	}
+	executable, err := lookPath(plan.Program)
+	if err != nil {
+		fmt.Fprintf(stderr, "tell pkg search: %s registry searches require %s on PATH\n", provider, plan.Program)
+		return 127
+	}
+	command := exec.Command(executable, plan.Args...)
+	command.Stdout = stdout
+	command.Stderr = stderr
+	if err := runCommand(command); err != nil {
+		return reportPackageCommandError(err, stderr)
+	}
+	return 0
 }
