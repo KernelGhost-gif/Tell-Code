@@ -554,8 +554,8 @@ func runNativeAndLunaList(
 		if len(packages) > 0 {
 			return 0
 		}
-		fmt.Fprintf(stderr, "tell pkg: Luna was not found on PATH. Install it from %s and try again.\n", lunaInstallURL)
-		return 127
+		fmt.Fprintln(stdout, "No native or Luna packages are registered.")
+		return 0
 	}
 	return runLunaCommand(executable, []string{"list"}, stdout, stderr, runCommand)
 }

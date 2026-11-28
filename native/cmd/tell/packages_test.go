@@ -728,3 +728,35 @@ func containsArg(args []string, expected string) bool {
 	}
 	return false
 }
+
+
+func TestNativeListWithNoPackagesAndNoLunaIsSuccessful(t *testing.T) {
+	home := t.TempDir()
+	var output, diagnostics bytes.Buffer
+	status := runPackageCommandWithHome(
+		[]string{"list"},
+		&output,
+		&diagnostics,
+		func(name string) (string, error) {
+			if name == "luna" {
+				return "", exec.ErrNotFound
+			}
+			t.Fatalf("unexpected lookup for %q", name)
+			return "", exec.ErrNotFound
+		},
+		func(*exec.Cmd) error {
+			t.Fatal("Luna must not run when it is unavailable")
+			return nil
+		},
+		home,
+	)
+	if status != 0 {
+		t.Fatalf("empty package list status = %d, stderr=%q", status, diagnostics.String())
+	}
+	if !strings.Contains(output.String(), "No native or Luna packages are registered.") {
+		t.Fatalf("empty package list message missing: %q", output.String())
+	}
+	if diagnostics.Len() != 0 {
+		t.Fatalf("unexpected diagnostics: %q", diagnostics.String())
+	}
+}
