@@ -73,7 +73,21 @@ tell init
 tell init my-project
 ```
 
-`new` creates a project subdirectory containing `tell.toml`, a runnable `main.tell`, and `tests/smoke_test.tell`. `init` adds the same files to the current directory, or uses the optional name in the generated manifest. Both commands refuse to replace existing project files. The manifest currently records the project name, initial version, and entrypoint; dependency resolution and package installation are not implemented.
+`new` creates a project subdirectory containing `tell.toml`, a runnable `main.tell`, and `tests/smoke_test.tell`. `init` adds the same files to the current directory, or uses the optional name in the generated manifest. Both commands refuse to replace existing project files. The manifest records the project name, initial version, and entrypoint; each project also gets an empty `Lunafile` JSON array for optional package declarations. `tell pkg` delegates package operations to the separately installed Luna executable.
+
+## Manage packages with Luna
+
+Tell's native CLI can delegate package operations to [Luna](https://github.com/Neonwave175/Luna). Install Luna separately and make sure its `luna` executable is available on `PATH`.
+
+```text
+tell pkg install <name> [name...]
+tell pkg remove <name>
+tell pkg list
+tell pkg update
+tell pkg sync [Lunafile]
+```
+
+With no path, `tell pkg sync` reads the current project's `Lunafile`. It is a JSON array in Luna's format; see [Package Management](PACKAGES.md) for the schema and security notes. Package operations are explicit and do not run when a Tell program is launched.
 
 ## Options
 
@@ -96,4 +110,4 @@ currently emit standalone native machine-code executables.
 
 ## Not implemented yet
 
-There is no package-management CLI, debugger, or language server. `tell new` and `tell init` scaffold a runnable project but do not resolve or install dependencies. The initial `build` command compiles only the documented native subset. `tell format` is a source formatter, not a compiler.
+There is no built-in package registry or dependency resolver. The optional `tell pkg` commands delegate to Luna; dependency installation is not automatic. A debugger and full language-server integration are also not included. The initial `build` command compiles only the documented native subset. `tell format` is a source formatter, not a compiler.

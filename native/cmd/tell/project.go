@@ -13,6 +13,7 @@ var validProjectName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]*$`)
 func projectFiles(name string) map[string]string {
 	return map[string]string{
 		"tell.toml": fmt.Sprintf("name = %q\nversion = \"0.1.0\"\nentrypoint = \"main.tell\"\n", name),
+		"Lunafile": "[]\n",
 		"main.tell": fmt.Sprintf("Say \"Hello from %s!\".\n", name),
 		filepath.Join("tests", "smoke_test.tell"): "Check that 1 plus 1 is equal to 2.\n",
 	}

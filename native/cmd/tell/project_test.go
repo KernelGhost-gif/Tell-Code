@@ -20,6 +20,10 @@ func TestCreateProjectProducesRunnableProgramAndTest(t *testing.T) {
 	if err != nil || !strings.Contains(string(manifest), "name = \"sample-app\"") {
 		t.Fatalf("manifest = %q, error = %v", manifest, err)
 	}
+	lunafile, err := os.ReadFile(filepath.Join(directory, "Lunafile"))
+	if err != nil || strings.TrimSpace(string(lunafile)) != "[]" {
+		t.Fatalf("Lunafile = %q, error = %v", lunafile, err)
+	}
 	program, err := os.ReadFile(filepath.Join(directory, "main.tell"))
 	if err != nil {
 		t.Fatal(err)
